@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,8 @@ type KubernetesExecutor struct {
 	// 用于取消当前执行的命令
 	currentExecCancel context.CancelFunc
 	mu                sync.RWMutex
+	// 资源限制
+	resources *corev1.ResourceRequirements
 }
 
 // NewKubernetesExecutor 创建新的Kubernetes执行器
@@ -134,6 +137,7 @@ func (k *KubernetesExecutor) Prepare(ctx context.Context) error {
 
 // Destruction 销毁Kubernetes环境
 // 删除Pod
+// 使用独立的背景上下文确保即使调用者的上下文已取消，也能完成清理
 func (k *KubernetesExecutor) Destruction(ctx context.Context) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -142,15 +146,25 @@ func (k *KubernetesExecutor) Destruction(ctx context.Context) error {
 		return nil
 	}
 
+	// 使用独立的背景上下文和超时，确保清理操作能完成
+	// 即使调用者的上下文已被取消（如用户中断执行）
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	// 删除Pod
 	deletePolicy := metav1.DeletePropagationBackground
 	gracePeriod := int64(10)
-	err := k.client.CoreV1().Pods(k.namespace).Delete(ctx, k.podName, metav1.DeleteOptions{
+	err := k.client.CoreV1().Pods(k.namespace).Delete(cleanupCtx, k.podName, metav1.DeleteOptions{
 		PropagationPolicy:  &deletePolicy,
 		GracePeriodSeconds: &gracePeriod,
 	})
 
 	if err != nil {
+		// 如果 Pod 已被删除（NotFound），不算错误
+		if strings.Contains(err.Error(), "not found") {
+			k.podName = ""
+			return nil
+		}
 		return fmt.Errorf("failed to delete pod: %w", err)
 	}
 
@@ -160,9 +174,10 @@ func (k *KubernetesExecutor) Destruction(ctx context.Context) error {
 
 // Transfer 在Kubernetes Pod中执行命令
 // 只支持 string 类型的命令
+// inputChan 用于接收交互式输入数据，可为 nil（不需要输入时）
 //
 // 当 ctx 被取消时，会立即停止执行新命令，并终止当前正在执行的命令
-func (k *KubernetesExecutor) Transfer(ctx context.Context, resultChan chan<- any, commandChan <-chan any) {
+func (k *KubernetesExecutor) Transfer(ctx context.Context, resultChan chan<- any, commandChan <-chan any, inputChan <-chan []byte) {
 	// 创建一个可取消的内部上下文，用于控制当前命令的执行
 	execCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -188,7 +203,7 @@ func (k *KubernetesExecutor) Transfer(ctx context.Context, resultChan chan<- any
 			continue
 		}
 		// 执行命令（携带步骤名称）
-		k.executeCommandStreaming(execCtx, cmdWrapper.Command, cmdWrapper.StepName, resultChan)
+		k.executeCommandStreaming(execCtx, cmdWrapper.Command, cmdWrapper.StepName, resultChan, inputChan)
 	}
 }
 
@@ -241,6 +256,11 @@ func (k *KubernetesExecutor) buildPodSpec() *corev1.Pod {
 	// 设置卷挂载
 	if len(volumeMounts) > 0 {
 		container.VolumeMounts = volumeMounts
+	}
+
+	// 设置资源限制
+	if k.resources != nil {
+		container.Resources = *k.resources
 	}
 
 	// 构建Pod配置
@@ -322,12 +342,12 @@ func (k *KubernetesExecutor) waitForPodRunning(ctx context.Context) error {
 }
 
 // executeCommandStreaming 执行命令并实时流式输出
-func (k *KubernetesExecutor) executeCommandStreaming(ctx context.Context, command string, stepName string, resultChan chan<- any) {
+func (k *KubernetesExecutor) executeCommandStreaming(ctx context.Context, command string, stepName string, resultChan chan<- any, inputChan <-chan []byte) {
 	startTime := time.Now()
 
 	err := k.executeCommandInPodStreaming(ctx, command, func(data []byte) {
 		resultChan <- data
-	})
+	}, inputChan)
 
 	// 发送最终结果
 	resultChan <- &executor.StepResult{
@@ -342,7 +362,7 @@ func (k *KubernetesExecutor) executeCommandStreaming(ctx context.Context, comman
 
 // executeCommandInPodStreaming 在Pod中执行命令并实时流式输出
 // 当 ctx 被取消时，会向进程发送 Ctrl+C 信号 (\x03)
-func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, command string, outputCallback func([]byte)) error {
+func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, command string, outputCallback func([]byte), inputChan <-chan []byte) error {
 	k.mu.RLock()
 	podName := k.podName
 	namespace := k.namespace
@@ -375,7 +395,7 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 	// 设置TTY和流选项
 	req = req.Param("stdout", "true")
 	req = req.Param("stderr", "true")
-	// 必须启用stdin才能发送Ctrl+C
+	// 必须启用stdin才能发送Ctrl+C或交互式输入
 	req = req.Param("stdin", "true")
 	req = req.Param("tty", fmt.Sprintf("%v", useTTY))
 
@@ -391,7 +411,7 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 		useTTY:   useTTY,
 	}
 
-	// 创建stdin pipe，用于发送Ctrl+C
+	// 创建stdin pipe，用于发送Ctrl+C和交互式输入
 	stdinReader, stdinWriter := io.Pipe()
 
 	// 创建一个内部可取消的上下文
@@ -419,6 +439,29 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 		}
 	}()
 
+	// 如果有输入通道，启动输入写入 goroutine
+	if inputChan != nil {
+		go func() {
+			defer stdinWriter.Close()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-execCtx.Done():
+					return
+				case data, ok := <-inputChan:
+					if !ok {
+						return
+					}
+					if len(data) > 0 {
+						stdinWriter.Write(data)
+					}
+				}
+			}
+		}()
+	}
+
 	// 执行命令
 	streamOptions := remotecommand.StreamOptions{
 		Stdin:  stdinReader,
@@ -430,7 +473,7 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 	// 如果启用TTY，设置终端大小
 	if useTTY && ttyWidth > 0 && ttyHeight > 0 {
 		streamOptions.TerminalSizeQueue = &fixedTerminalSize{
-			width:  uint16(ttyWidth),
+			width: uint16(ttyWidth),
 			height: uint16(ttyHeight),
 		}
 	}
@@ -499,10 +542,44 @@ func (f *fixedTerminalSize) Next() *remotecommand.TerminalSize {
 func (k *KubernetesExecutor) detectShell() string {
 	// 根据镜像类型选择shell
 	image := k.image
-	if containsIgnoreCase(image, "alpine") || containsIgnoreCase(image, "busybox") {
+
+	// 提取镜像名称（去掉 registry 前缀和 tag 后缀）
+	// 例如: hub.rat.dev/library/alpine:latest -> alpine
+	imageName := extractImageName(image)
+
+	if containsIgnoreCase(imageName, "alpine") || containsIgnoreCase(imageName, "busybox") {
 		return "/bin/sh"
 	}
 	return "/bin/bash"
+}
+
+// extractImageName 从完整镜像名称中提取镜像名称部分
+// 例如: "hub.rat.dev/library/alpine:latest" -> "alpine"
+func extractImageName(image string) string {
+	if image == "" {
+		return ""
+	}
+
+	// 去掉 tag 部分
+	if idx := strings.LastIndex(image, ":"); idx != -1 {
+		// 检查是否是端口（如 localhost:5000）而非 tag
+		afterColon := image[idx+1:]
+		if !strings.Contains(afterColon, "/") {
+			image = image[:idx]
+		}
+	}
+
+	// 去掉 digest 部分 (@sha256:...)
+	if idx := strings.Index(image, "@"); idx != -1 {
+		image = image[:idx]
+	}
+
+	// 提取最后一部分（镜像名称）
+	if idx := strings.LastIndex(image, "/"); idx != -1 {
+		return image[idx+1:]
+	}
+
+	return image
 }
 
 // containsIgnoreCase 不区分大小写包含检查
@@ -596,6 +673,13 @@ func (k *KubernetesExecutor) setPodReadyTimeout(timeout time.Duration) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.podReadyTimeout = timeout
+}
+
+// setResources 设置资源限制
+func (k *KubernetesExecutor) setResources(resources *corev1.ResourceRequirements) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.resources = resources
 }
 
 // GetPodName 获取Pod名称

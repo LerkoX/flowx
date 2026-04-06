@@ -1,5 +1,15 @@
 # 更新日志
 
+## [Unreleased] - 2026-04-06
+
+- 新增交互式命令输入功能：支持在流水线执行过程中接收用户输入
+- 新增流水线运行时配置导出功能：支持导出当前运行时的完整配置
+- 新增 Docker executor 示例配置：`examples/workflows/docker_build_example.yaml`
+- 修复 K8s 执行器资源配置：支持 cpu/memory 限制配置
+- 修复 K8s 执行器 Pod 清理问题：使用独立上下文确保清理完成
+- 修复 K8s 执行器镜像名称解析：正确处理带 registry 前缀的镜像
+- 修复 Docker executor 通道阻塞和死锁问题
+
 ## [Unreleased] - 2026-04-30
 
 - 新增完整的示例代码：`examples/workflows/`（数据ETL、文件处理、天气飞书通知、CI/CD 部署）

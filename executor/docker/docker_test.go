@@ -527,7 +527,7 @@ func TestDockerExecutor_IntegrationWithDocker(t *testing.T) {
 		resultChan := make(chan any, 10)
 		commandChan := make(chan any, 1)
 
-		go exec.Transfer(ctx, resultChan, commandChan)
+		go exec.Transfer(ctx, resultChan, commandChan, nil)
 
 		// 发送测试命令 - 使用 CommandWrapper
 		testCommand := "echo 'Hello from Docker'"
@@ -586,7 +586,7 @@ func TestDockerExecutor_IntegrationWithDocker(t *testing.T) {
 		resultChan := make(chan any, 10)
 		commandChan := make(chan any, 1)
 
-		go exec.Transfer(ctx, resultChan, commandChan)
+		go exec.Transfer(ctx, resultChan, commandChan, nil)
 
 		// 发送会产生颜色输出的命令 - 使用 CommandWrapper
 		commandChan <- executor.CommandWrapper{
@@ -624,7 +624,7 @@ func TestDockerExecutor_IntegrationWithDocker(t *testing.T) {
 		resultChan := make(chan any, 20)
 		commandChan := make(chan any, 3)
 
-		go exec.Transfer(ctx, resultChan, commandChan)
+		go exec.Transfer(ctx, resultChan, commandChan, nil)
 
 		// 发送多个命令 - 使用 CommandWrapper
 		commands := []executor.CommandWrapper{
