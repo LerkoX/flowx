@@ -1,16 +1,20 @@
 package local
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/LerkoX/pipelinex/executor"
+	"gopkg.in/yaml.v3"
 )
 
 // LocalExecutor 本地执行器实现
@@ -138,9 +142,35 @@ func (l *LocalExecutor) executeCommandStreaming(ctx context.Context, command str
 		defer cancel()
 	}
 
-	err := l.executeCommandWithStreaming(execCtx, command, func(data []byte) {
+	// 输入请求事件通道
+	inputRequestChan := make(chan *executor.InputRequest, 1)
+	onInputRequest := func(req *executor.InputRequest) {
+		select {
+		case inputRequestChan <- req:
+		default:
+		}
+	}
+
+	// 启动 goroutine 处理输入请求事件
+	go func() {
+		for {
+			select {
+			case <-execCtx.Done():
+				return
+			case req := <-inputRequestChan:
+				if req != nil {
+					resultChan <- &executor.InputRequestEvent{
+						StepName: stepName,
+						Request:  req,
+					}
+				}
+			}
+		}
+	}()
+
+	err := l.executeCommandWithStreaming(execCtx, command, stepName, func(data []byte) {
 		resultChan <- data
-	}, inputChan)
+	}, inputChan, onInputRequest)
 
 	// 发送最终结果
 	resultChan <- &executor.StepResult{
@@ -154,7 +184,7 @@ func (l *LocalExecutor) executeCommandStreaming(ctx context.Context, command str
 }
 
 // executeCommandWithStreaming 执行命令并实时输出
-func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command string, outputCallback func([]byte), inputChan <-chan []byte) error {
+func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command string, stepName string, outputCallback func([]byte), inputChan <-chan []byte, onInputRequest func(*executor.InputRequest)) error {
 	l.mu.Lock()
 
 	// 创建命令
@@ -203,37 +233,42 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 	// 读取stdout
 	go func() {
 		defer wg.Done()
-		l.streamOutput(stdout, outputCallback)
+		l.streamOutput(stdout, outputCallback, stepName, onInputRequest)
 	}()
 
 	// 读取stderr
 	go func() {
 		defer wg.Done()
-		l.streamOutput(stderr, outputCallback)
+		l.streamOutput(stderr, outputCallback, stepName, nil) // stderr 不检测输入请求
 	}()
 
-	// 如果有输入通道，启动输入写入 goroutine
-	if inputChan != nil && stdin != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			defer stdin.Close()
+	// 输入处理：支持两种模式
+	// 1. 外部通过 inputChan 提供输入（预定义输入）
+	// 2. 程序请求输入（通过 InputRequestEvent）
+	stdin, err = cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdin pipe: %w", err)
+	}
 
-			for {
-				select {
-				case <-ctx.Done():
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer stdin.Close()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case data, ok := <-inputChan:
+				if !ok {
 					return
-				case data, ok := <-inputChan:
-					if !ok {
-						return
-					}
-					if len(data) > 0 {
-						stdin.Write(data)
-					}
+				}
+				if len(data) > 0 {
+					stdin.Write(data)
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	// 等待输出读取完成
 	wg.Wait()
@@ -259,17 +294,71 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 }
 
 // streamOutput 读取输出并回调
-func (l *LocalExecutor) streamOutput(reader io.Reader, callback func([]byte)) {
-	buf := make([]byte, 4096)
-	for {
-		n, err := reader.Read(buf)
-		if n > 0 && callback != nil {
-			callback(buf[:n])
+// 同时检测输入请求代码块 ```pipelinex-input
+func (l *LocalExecutor) streamOutput(reader io.Reader, callback func([]byte), stepName string, onInputRequest func(*executor.InputRequest)) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 4096), 1024*1024) // 增大缓冲区
+
+	var buffer strings.Builder
+	inInputBlock := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// 检测代码块开始
+		if strings.TrimSpace(line) == "```pipelinex-input" {
+			inInputBlock = true
+			buffer.Reset()
+			continue
 		}
-		if err != nil {
-			return
+
+		// 检测代码块结束
+		if inInputBlock && strings.TrimSpace(line) == "```" {
+			inInputBlock = false
+			// 解析输入请求
+			if onInputRequest != nil {
+				if req := parseInputRequest(buffer.String()); req != nil {
+					onInputRequest(req)
+				}
+			}
+			continue
+		}
+
+		// 在代码块内，积累内容
+		if inInputBlock {
+			buffer.WriteString(line)
+			buffer.WriteString("\n")
+			continue
+		}
+
+		// 普通输出行，传递给回调
+		if callback != nil {
+			callback(append(scanner.Bytes(), '\n'))
 		}
 	}
+}
+
+// parseInputRequest 解析输入请求代码块内容
+// 支持 YAML 或 JSON 格式
+func parseInputRequest(content string) *executor.InputRequest {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil
+	}
+
+	var req executor.InputRequest
+
+	// 尝试 YAML 格式
+	if err := yaml.Unmarshal([]byte(content), &req); err == nil && req.Type != "" {
+		return &req
+	}
+
+	// 尝试 JSON 格式
+	if err := json.Unmarshal([]byte(content), &req); err == nil && req.Type != "" {
+		return &req
+	}
+
+	return nil
 }
 
 // createCommand 根据操作系统创建命令

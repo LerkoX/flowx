@@ -1,5 +1,14 @@
 # 更新日志
 
+## [Unreleased] - 2026-04-07
+
+- 新增程序主动请求输入功能：通过输出 `{"pipelinex":"wait-input",...}` JSON 标记请求用户输入
+- 流水线自动检测输入请求标记，将节点状态设为 PAUSED
+- 新增 InputRequest 信息到 NodeRuntimeStatus，包含 prompt、type 等提示信息
+- 支持输入类型：text、password、confirm
+- 新增 wait_input_example.yaml 示例配置
+- 新增 INTERACTIVE_INPUT_V2.md 文档
+
 ## [Unreleased] - 2026-04-06
 
 - 新增交互式命令输入功能：支持在流水线执行过程中接收用户输入
