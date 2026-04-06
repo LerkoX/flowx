@@ -21,14 +21,22 @@ type ExecutorRuntimeInfo struct {
 
 // NodeRuntimeStatus 节点运行时状态
 type NodeRuntimeStatus struct {
-	Id         string                 `yaml:"id"`                      // 节点UUID
-	Status     string                 `yaml:"status"`                  // 节点状态
-	StartTime  string                 `yaml:"startTime,omitempty"`     // 开始时间
-	EndTime    string                 `yaml:"endTime,omitempty"`       // 结束时间
-	Steps      []StepRuntimeStatus    `yaml:"steps"`                   // 步骤状态列表
-	Executor   *ExecutorRuntimeInfo   `yaml:"executor,omitempty"`      // Executor 信息
-	Custom     map[string]interface{} `yaml:"custom,omitempty"`        // 自定义扩展字段
-	InputChan  chan []byte            `yaml:"-"`                     // 交互式输入通道（不序列化到YAML）
+	Id           string                 `yaml:"id"`                      // 节点UUID
+	Status       string                 `yaml:"status"`                  // 节点状态
+	StartTime    string                 `yaml:"startTime,omitempty"`     // 开始时间
+	EndTime      string                 `yaml:"endTime,omitempty"`       // 结束时间
+	Steps        []StepRuntimeStatus    `yaml:"steps"`                   // 步骤状态列表
+	Executor     *ExecutorRuntimeInfo   `yaml:"executor,omitempty"`      // Executor 信息
+	Custom       map[string]interface{} `yaml:"custom,omitempty"`        // 自定义扩展字段
+	InputChan    chan []byte            `yaml:"-"`                     // 交互式输入通道（不序列化到YAML）
+	InputRequest *InputRequestInfo      `yaml:"inputRequest,omitempty"`  // 当前输入请求信息（PAUSED状态时有效）
+}
+
+// InputRequestInfo 输入请求信息
+type InputRequestInfo struct {
+	StepName string `yaml:"stepName"` // 请求输入的步骤名称
+	Prompt   string `yaml:"prompt"`   // 显示给用户的提示信息
+	Type     string `yaml:"type"`     // 输入类型: text/password/confirm
 }
 
 // PipelineConfig 流水线配置结构

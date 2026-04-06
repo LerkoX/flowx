@@ -66,3 +66,24 @@ type CommandWrapper struct {
 	StepName string // 步骤名称
 	Command  string // 要执行的命令
 }
+
+// InputRequest 输入请求信息
+// 程序通过输出 {"pipelinex":"wait-input",...} 来请求用户输入
+type InputRequest struct {
+	Prompt  string `json:"prompt"`   // 显示给用户的提示信息
+	Type    string `json:"type"`     // 输入类型: text/password/confirm
+	Timeout int    `json:"timeout"`  // 等待超时（秒），0表示使用默认值
+}
+
+// InputRequestEvent 输入请求事件
+// 执行器检测到程序等待输入时发送此事件
+type InputRequestEvent struct {
+	StepName string       // 步骤名称
+	Request  *InputRequest // 输入请求详情
+}
+
+// InputReadyEvent 输入就绪事件
+// 通知流水线 InputChan 已准备好，可以开始发送输入
+type InputReadyEvent struct {
+	StepName string // 步骤名称
+}

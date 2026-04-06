@@ -1,0 +1,37 @@
+Version: "1.0"
+Name: wait-input-example
+Description: "交互式输入示例 - 展示程序如何通过输出请求用户输入"
+
+Param:
+  defaultName: "Guest"
+
+Graph: |
+  stateDiagram-v2
+    [*] --> InputStep
+    InputStep --> [*]
+
+Nodes:
+  InputStep:
+    name: "交互式输入步骤"
+    executor: local
+    steps:
+      - name: ask-name
+        run: |
+          echo "欢迎进入交互式输入演示！"
+          echo '```pipelinex-input'
+          echo 'prompt: 请输入您的姓名'
+          echo 'type: text'
+          echo '```'
+          read name
+          echo "你好，$name！"
+          echo '```pipelinex-input'
+          echo 'prompt: 请确认继续 (yes/no)'
+          echo 'type: confirm'
+          echo '```'
+          read confirm
+          if [ "$confirm" = "yes" ]; then
+            echo "继续执行..."
+          else
+            echo "用户取消"
+            exit 1
+          fi
