@@ -1,12 +1,15 @@
 package local
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -138,9 +141,35 @@ func (l *LocalExecutor) executeCommandStreaming(ctx context.Context, command str
 		defer cancel()
 	}
 
-	err := l.executeCommandWithStreaming(execCtx, command, func(data []byte) {
+	// 输入请求事件通道
+	inputRequestChan := make(chan *executor.InputRequest, 1)
+	onInputRequest := func(req *executor.InputRequest) {
+		select {
+		case inputRequestChan <- req:
+		default:
+		}
+	}
+
+	// 启动 goroutine 处理输入请求事件
+	go func() {
+		for {
+			select {
+			case <-execCtx.Done():
+				return
+			case req := <-inputRequestChan:
+				if req != nil {
+					resultChan <- &executor.InputRequestEvent{
+						StepName: stepName,
+						Request:  req,
+					}
+				}
+			}
+		}
+	}()
+
+	err := l.executeCommandWithStreaming(execCtx, command, stepName, func(data []byte) {
 		resultChan <- data
-	}, inputChan)
+	}, inputChan, onInputRequest)
 
 	// 发送最终结果
 	resultChan <- &executor.StepResult{
@@ -154,7 +183,7 @@ func (l *LocalExecutor) executeCommandStreaming(ctx context.Context, command str
 }
 
 // executeCommandWithStreaming 执行命令并实时输出
-func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command string, outputCallback func([]byte), inputChan <-chan []byte) error {
+func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command string, stepName string, outputCallback func([]byte), inputChan <-chan []byte, onInputRequest func(*executor.InputRequest)) error {
 	l.mu.Lock()
 
 	// 创建命令
@@ -203,37 +232,42 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 	// 读取stdout
 	go func() {
 		defer wg.Done()
-		l.streamOutput(stdout, outputCallback)
+		l.streamOutput(stdout, outputCallback, stepName, onInputRequest)
 	}()
 
 	// 读取stderr
 	go func() {
 		defer wg.Done()
-		l.streamOutput(stderr, outputCallback)
+		l.streamOutput(stderr, outputCallback, stepName, nil) // stderr 不检测输入请求
 	}()
 
-	// 如果有输入通道，启动输入写入 goroutine
-	if inputChan != nil && stdin != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			defer stdin.Close()
+	// 输入处理：支持两种模式
+	// 1. 外部通过 inputChan 提供输入（预定义输入）
+	// 2. 程序请求输入（通过 InputRequestEvent）
+	stdin, err = cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdin pipe: %w", err)
+	}
 
-			for {
-				select {
-				case <-ctx.Done():
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer stdin.Close()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case data, ok := <-inputChan:
+				if !ok {
 					return
-				case data, ok := <-inputChan:
-					if !ok {
-						return
-					}
-					if len(data) > 0 {
-						stdin.Write(data)
-					}
+				}
+				if len(data) > 0 {
+					stdin.Write(data)
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	// 等待输出读取完成
 	wg.Wait()
@@ -259,16 +293,64 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 }
 
 // streamOutput 读取输出并回调
-func (l *LocalExecutor) streamOutput(reader io.Reader, callback func([]byte)) {
-	buf := make([]byte, 4096)
-	for {
-		n, err := reader.Read(buf)
-		if n > 0 && callback != nil {
-			callback(buf[:n])
+// 同时检测输入请求标记 {"pipelinex":"wait-input",...}
+func (l *LocalExecutor) streamOutput(reader io.Reader, callback func([]byte), stepName string, onInputRequest func(*executor.InputRequest)) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 4096), 1024*1024) // 增大缓冲区
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+
+		// 检测输入请求标记
+		if onInputRequest != nil {
+			if req := detectInputRequest(line); req != nil {
+				onInputRequest(req)
+				// 不将标记行传递给回调，对用户隐藏
+				continue
+			}
 		}
-		if err != nil {
-			return
+
+		if callback != nil {
+			callback(append(line, '\n'))
 		}
+	}
+}
+
+// detectInputRequest 检测输入请求标记
+// 格式: {"pipelinex":"wait-input","prompt":"提示信息","type":"text"}
+func detectInputRequest(line []byte) *executor.InputRequest {
+	// 快速检查是否包含 pipelinex 关键字
+	if !strings.Contains(string(line), "\"pipelinex\"") {
+		return nil
+	}
+
+	// 尝试解析 JSON
+	var marker struct {
+		Pipelinex string `json:"pipelinex"`
+		Prompt    string `json:"prompt"`
+		Type      string `json:"type"`
+		Timeout   int    `json:"timeout"`
+	}
+
+	if err := json.Unmarshal(line, &marker); err != nil {
+		return nil
+	}
+
+	// 检查是否是输入请求标记
+	if marker.Pipelinex != "wait-input" {
+		return nil
+	}
+
+	// 设置默认值
+	inputType := marker.Type
+	if inputType == "" {
+		inputType = "text"
+	}
+
+	return &executor.InputRequest{
+		Prompt:  marker.Prompt,
+		Type:    inputType,
+		Timeout: marker.Timeout,
 	}
 }
 

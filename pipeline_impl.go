@@ -736,12 +736,42 @@ func (p *PipelineImpl) handleResult(ctx context.Context, node Node, _ Executor, 
 		handler.count++
 	case []byte:
 		// 实时输出
-	output := string(v)
+		output := string(v)
 		// fmt.Print(output) - removed to avoid concurrent output issues
 		handler.output = output
+	case *executor.InputRequestEvent:
+		// 程序请求用户输入
+		p.handleInputRequest(node, v)
+	case *executor.InputReadyEvent:
+		// 输入通道已就绪（可以忽略，因为我们已经创建了 InputChan）
 	}
 
 	return handler
+}
+
+// handleInputRequest 处理输入请求
+// 当程序输出 {"pipelinex":"wait-input",...} 时被调用
+func (p *PipelineImpl) handleInputRequest(node Node, event *executor.InputRequestEvent) {
+	if event == nil || event.Request == nil {
+		return
+	}
+
+	runtimeStatus := node.GetRuntimeStatus()
+	if runtimeStatus == nil {
+		return
+	}
+
+	// 更新节点状态为 PAUSED（等待输入）
+	runtimeStatus.Status = StatusPaused
+	runtimeStatus.InputRequest = &InputRequestInfo{
+		StepName: event.StepName,
+		Prompt:   event.Request.Prompt,
+		Type:     event.Request.Type,
+	}
+	node.SetRuntimeStatus(runtimeStatus)
+
+	// 触发状态更新事件（如果有事件监听器）
+	// 注意：这里不阻塞，外部程序需要通过轮询或事件监听来检测状态变化
 }
 
 // resultHandler 处理结果的辅助结构
