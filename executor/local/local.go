@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/LerkoX/pipelinex/executor"
+	"gopkg.in/yaml.v3"
 )
 
 // LocalExecutor 本地执行器实现
@@ -293,65 +294,71 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 }
 
 // streamOutput 读取输出并回调
-// 同时检测输入请求标记 {"pipelinex":"wait-input",...}
+// 同时检测输入请求代码块 ```pipelinex-input
 func (l *LocalExecutor) streamOutput(reader io.Reader, callback func([]byte), stepName string, onInputRequest func(*executor.InputRequest)) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 4096), 1024*1024) // 增大缓冲区
 
-	for scanner.Scan() {
-		line := scanner.Bytes()
+	var buffer strings.Builder
+	inInputBlock := false
 
-		// 检测输入请求标记
-		if onInputRequest != nil {
-			if req := detectInputRequest(line); req != nil {
-				onInputRequest(req)
-				// 不将标记行传递给回调，对用户隐藏
-				continue
-			}
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// 检测代码块开始
+		if strings.TrimSpace(line) == "```pipelinex-input" {
+			inInputBlock = true
+			buffer.Reset()
+			continue
 		}
 
+		// 检测代码块结束
+		if inInputBlock && strings.TrimSpace(line) == "```" {
+			inInputBlock = false
+			// 解析输入请求
+			if onInputRequest != nil {
+				if req := parseInputRequest(buffer.String()); req != nil {
+					onInputRequest(req)
+				}
+			}
+			continue
+		}
+
+		// 在代码块内，积累内容
+		if inInputBlock {
+			buffer.WriteString(line)
+			buffer.WriteString("\n")
+			continue
+		}
+
+		// 普通输出行，传递给回调
 		if callback != nil {
-			callback(append(line, '\n'))
+			callback(append(scanner.Bytes(), '\n'))
 		}
 	}
 }
 
-// detectInputRequest 检测输入请求标记
-// 格式: {"pipelinex":"wait-input","prompt":"提示信息","type":"text"}
-func detectInputRequest(line []byte) *executor.InputRequest {
-	// 快速检查是否包含 pipelinex 关键字
-	if !strings.Contains(string(line), "\"pipelinex\"") {
+// parseInputRequest 解析输入请求代码块内容
+// 支持 YAML 或 JSON 格式
+func parseInputRequest(content string) *executor.InputRequest {
+	content = strings.TrimSpace(content)
+	if content == "" {
 		return nil
 	}
 
-	// 尝试解析 JSON
-	var marker struct {
-		Pipelinex string `json:"pipelinex"`
-		Prompt    string `json:"prompt"`
-		Type      string `json:"type"`
-		Timeout   int    `json:"timeout"`
+	var req executor.InputRequest
+
+	// 尝试 YAML 格式
+	if err := yaml.Unmarshal([]byte(content), &req); err == nil && req.Type != "" {
+		return &req
 	}
 
-	if err := json.Unmarshal(line, &marker); err != nil {
-		return nil
+	// 尝试 JSON 格式
+	if err := json.Unmarshal([]byte(content), &req); err == nil && req.Type != "" {
+		return &req
 	}
 
-	// 检查是否是输入请求标记
-	if marker.Pipelinex != "wait-input" {
-		return nil
-	}
-
-	// 设置默认值
-	inputType := marker.Type
-	if inputType == "" {
-		inputType = "text"
-	}
-
-	return &executor.InputRequest{
-		Prompt:  marker.Prompt,
-		Type:    inputType,
-		Timeout: marker.Timeout,
-	}
+	return nil
 }
 
 // createCommand 根据操作系统创建命令
