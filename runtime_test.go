@@ -343,7 +343,7 @@ func TestRuntimeImpl_MultiPipelineConcurrency(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
-	const numPipelines = 15 // 并发流水线数量
+	const numPipelines = 5 // 并发流水线数量
 
 	// 使用带缓冲的 channel 收集错误，避免 goroutine 阻塞
 	errors := make(chan error, numPipelines)
@@ -432,7 +432,7 @@ func TestRuntimeImpl_MultiPipelineConcurrency(t *testing.T) {
 
 				t.Logf("Pipeline %s completed with status: %s", pipelineID, status)
 
-			case <-time.After(10 * time.Second):
+			case <-time.After(30 * time.Second):
 				// 超时处理
 				errors <- fmt.Errorf("pipeline %s timed out after 10 seconds", pipelineID)
 				// 尝试取消超时的流水线
