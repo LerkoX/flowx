@@ -245,30 +245,29 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 	// 输入处理：支持两种模式
 	// 1. 外部通过 inputChan 提供输入（预定义输入）
 	// 2. 程序请求输入（通过 InputRequestEvent）
-	stdin, err = cmd.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("failed to create stdin pipe: %w", err)
-	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer stdin.Close()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case data, ok := <-inputChan:
-				if !ok {
+	if inputChan != nil {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
 					return
-				}
-				if len(data) > 0 {
-					stdin.Write(data)
+				case data, ok := <-inputChan:
+					if !ok {
+						return
+					}
+					if len(data) > 0 {
+						stdin.Write(data)
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
+
+	// 关闭stdin，通知命令没有更多输入
+	// 必须在wg.Wait()之前关闭，否则如果命令在等待stdin EOF，会形成死锁
+	if stdin != nil {
+		stdin.Close()
+	}
 
 	// 等待输出读取完成
 	wg.Wait()

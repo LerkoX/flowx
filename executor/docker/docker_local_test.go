@@ -127,31 +127,38 @@ func TestDockerExecutor_MultiCommands(t *testing.T) {
 	}
 	close(commandChan)
 
-	// 收集结果
+	// 收集结果 - 等待所有3个StepResult都被接收
 	results := []any{}
+	stepCount := 0
 	timeout := time.After(15 * time.Second)
 
-	for len(results) < 6 { // 每个命令输出+结果=2，3个命令=6
+	// 继续接收直到收到3个StepResult或超时
+	for stepCount < 3 {
 		select {
 		case result := <-resultChan:
 			results = append(results, result)
 			if stepResult, ok := result.(*executor.StepResult); ok {
 				t.Logf("Step %s completed: error=%v", stepResult.StepName, stepResult.Error)
 				assert.NoError(t, stepResult.Error)
+				stepCount++
 			}
 		case <-timeout:
-			goto done
+			t.Fatalf("Timeout waiting for step results, received %d/%d step results, total results: %d", stepCount, 3, len(results))
 		}
 	}
-done:
 
-	// 验证至少收到了3个步骤结果
-	stepCount := 0
-	for _, r := range results {
-		if _, ok := r.(*executor.StepResult); ok {
-			stepCount++
+	// 额外等待一小段时间，确保所有输出都被接收
+	done := time.After(500 * time.Millisecond)
+drainLoop:
+	for {
+		select {
+		case result := <-resultChan:
+			results = append(results, result)
+		case <-done:
+			break drainLoop
 		}
 	}
+
 	assert.Equal(t, 3, stepCount, "Should receive 3 step results")
 	t.Logf("Total results received: %d", len(results))
 }
