@@ -26,3 +26,9 @@ type EdgeRemoval struct {
 	Source string `yaml:"source"`
 	Target string `yaml:"target"`
 }
+
+// IsEmpty 判断修改集是否为空
+func (m GraphModifications) IsEmpty() bool {
+	return len(m.AddNodes) == 0 && len(m.RemoveNodes) == 0 &&
+		len(m.AddEdges) == 0 && len(m.RemoveEdges) == 0 && m.AddGraph == ""
+}
