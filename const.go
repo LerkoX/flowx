@@ -9,6 +9,7 @@ const (
 	StatusPaused    = "PAUSED"
 	StatusUnknown   = "UNKNOWN"
 	StatusCancelled = "CANCELLED"
+	StatusStopped   = "STOPPED"
 
 	// 流水线事件常量
 	EventPipelineInit                = "pipeline-init"
@@ -20,4 +21,7 @@ const (
 	EventPipelineNodeFinish          = "pipeline-node-finish"
 	EventPipelineCancelled           = "pipeline-cancelled"
 	EventPipelineStatusUpdate        = "pipeline-status-update"
+	EventPipelinePaused              = "pipeline-paused"
+	EventPipelineResumed             = "pipeline-resumed"
+	EventPipelineGraphModified       = "pipeline-graph-modified"
 )

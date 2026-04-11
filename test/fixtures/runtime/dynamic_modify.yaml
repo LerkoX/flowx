@@ -1,0 +1,37 @@
+Version: "1.0"
+Name: dynamic-modify-test
+
+Metadate:
+  type: in-config
+  data: {}
+
+Executors:
+  local:
+    type: local
+    config: {}
+
+Param: {}
+
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> [*]
+
+Nodes:
+  A:
+    executor: local
+    steps:
+      - name: step1
+        run: "echo 'node A'"
+  B:
+    executor: local
+    steps:
+      - name: step1
+        run: "echo 'node B'"
+  C:
+    executor: local
+    steps:
+      - name: step1
+        run: "echo 'node C'"
