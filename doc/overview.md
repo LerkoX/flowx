@@ -1,0 +1,177 @@
+# Pipelinex - 项目概述
+
+## 简介
+
+Pipelinex 是一个基于 Go 语言开发的 CI/CD 流水线执行库。它使用 DAG（有向无环图）结构管理任务依赖关系，支持独立任务的并发执行，并提供可插拔的执行后端（Local、Docker、Kubernetes）。
+
+核心特性：
+
+- **DAG 流水线**：任务以有向无环图形式组织，支持复杂的依赖关系
+- **并发执行**：无依赖关系的节点自动并行运行
+- **多执行后端**：支持 Local（本地 Shell）、Docker（容器）、Kubernetes（Pod）三种执行环境
+- **条件边**：支持基于表达式的条件分支，动态控制执行路径
+- **模板引擎**：基于 pongo2 的模板渲染，支持参数引用和自引用
+- **元数据管理**：进程安全的元数据存储，支持 in-config、Redis、HTTP 三种后端
+- **输出提取**：从命令输出中提取结构化数据，供后续节点使用
+- **快照恢复**：支持导出运行状态并从检查点恢复执行
+- **事件驱动**：完整的流水线和节点生命周期事件系统
+
+## 架构总览
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      Runtime（运行时）                     │
+│  - 同步/异步执行                                          │
+│  - 流水线生命周期管理                                      │
+│  - 快照与恢复                                             │
+├─────────────────────────────────────────────────────────┤
+│                   Pipeline（流水线）                       │
+│  - DAG 图遍历（BFS）                                      │
+│  - 并发节点执行                                           │
+│  - 事件通知                                               │
+│  - 模板渲染                                               │
+├───────────────┬───────────────┬─────────────────────────┤
+│     Node      │     Edge      │    MetadataStore        │
+│  节点与步骤    │  条件边        │    元数据存储             │
+│  状态管理      │  表达式求值     │    in-config/redis/http │
+│  输出提取      │               │                         │
+├───────────────┴───────────────┴─────────────────────────┤
+│                  Executor（执行器）                        │
+│  ┌──────────┐  ┌──────────┐  ┌────────────────────┐    │
+│  │  Local   │  │  Docker  │  │    Kubernetes       │    │
+│  │ 本地Shell │  │ 容器执行  │  │    Pod 执行         │    │
+│  └──────────┘  └──────────┘  └────────────────────┘    │
+├─────────────────────────────────────────────────────────┤
+│              Template Engine（模板引擎）                    │
+│              基于 pongo2，支持条件、循环、过滤器              │
+├─────────────────────────────────────────────────────────┤
+│                 Logger（日志系统）                          │
+│           日志推送接口，支持自定义 Pusher                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+## 目录结构
+
+```
+pipelinex/
+├── pipeline.go           # Pipeline 接口定义
+├── pipeline_impl.go      # Pipeline + DAG 图实现
+├── node.go               # Node 接口定义
+├── node_impl.go          # Node 实现
+├── edge.go               # Edge 接口定义
+├── edge_impl.go          # Edge 实现（条件边）
+├── eval_context.go       # 表达式求值上下文
+├── executor.go           # Executor 类型重导出
+├── config.go             # 配置结构体定义
+├── const.go              # 常量（状态、事件）
+├── err.go                # 错误定义
+├── uuid.go               # UUID 工具函数
+├── snapshot.go           # 快照与恢复
+├── extractor.go          # 输出提取器
+├── template.go           # 模板引擎接口
+├── template_impl.go      # pongo2 模板引擎实现
+├── metadata.go           # MetadataStore 接口
+├── metadata_impl.go      # 三种存储实现
+├── runtime.go            # Runtime 接口
+├── runtime_impl.go       # Runtime 实现
+├── executor/
+│   ├── interfaces.go     # Executor/Adapter/Bridge 接口
+│   ├── provider/
+│   │   └── provider.go   # Executor 提供者（工厂模式）
+│   ├── docker/           # Docker 执行器
+│   ├── local/            # Local 执行器
+│   └── kubernetes/       # Kubernetes 执行器
+├── logger/
+│   ├── logger.go         # 日志接口与类型
+│   └── console_pusher.go # 控制台日志推送
+├── doc/                  # 文档目录
+├── test/                 # 测试
+└── config.example.yaml   # 示例配置文件
+```
+
+## 快速开始
+
+### 安装
+
+```bash
+go get github.com/LerkoX/pipelinex
+```
+
+### 基本使用
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/LerkoX/pipelinex"
+)
+
+func main() {
+    // 1. 创建运行时
+    rt := pipelinex.NewRuntime(context.Background())
+
+    // 2. 准备 YAML 配置
+    configYAML := `
+Version: "1.0"
+Name: hello-pipeline
+
+Executors:
+  local:
+    type: local
+    config:
+      shell: bash
+
+Graph: |
+  stateDiagram-v2
+    [*] --> Hello
+    Hello --> [*]
+
+Nodes:
+  Hello:
+    executor: local
+    steps:
+      - name: greet
+        run: echo "Hello, Pipelinex!"
+`
+
+    // 3. 同步执行
+    p, err := rt.RunSync(context.Background(), "hello-001", configYAML, nil)
+    if err != nil {
+        panic(err)
+    }
+
+    // 4. 等待完成
+    <-p.Done()
+    fmt.Println("Pipeline status:", p.Status())
+}
+```
+
+### 带事件监听
+
+```go
+// 创建监听器
+listener := &pipelinex.DGAListener{
+    Events: []pipelinex.Event{
+        pipelinex.EventPipelineNodeStart,
+        pipelinex.EventPipelineNodeFinish,
+    },
+    Handler: func(p pipelinex.Pipeline, event pipelinex.Event) {
+        fmt.Printf("Event: %s, Pipeline: %s\n", event, p.Id())
+    },
+}
+
+p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, listener)
+```
+
+## 相关文档
+
+- [配置参考](configuration.md) - 完整 YAML 配置字段说明
+- [流水线核心](pipeline.md) - DAG 图结构与生命周期
+- [节点与步骤](node.md) - 节点配置与多步骤执行
+- [执行器系统](executor.md) - Local/Docker/Kubernetes 执行器
+- [条件边](edge.md) - 条件表达式与分支控制
+- [模板引擎](template.md) - 模板渲染机制
+- [元数据存储](metadata.md) - 元数据管理
+- [运行时管理](runtime.md) - Runtime 接口与快照恢复
