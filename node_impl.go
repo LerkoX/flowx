@@ -69,10 +69,6 @@ func (dgaNode *DGANode) GetSteps() []Step {
 	return dgaNode.steps
 }
 
-func (dgaNode *DGANode) GetImage() string {
-	return dgaNode.image
-}
-
 func (dgaNode *DGANode) GetConfig() map[string]any {
 	return dgaNode.config
 }

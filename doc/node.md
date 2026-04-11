@@ -13,7 +13,6 @@ type Node interface {
     Set(key string, value any)                         // 写入属性
     GetExecutor() string                               // 使用的执行器名称
     GetSteps() []Step                                  // 获取步骤列表
-    GetImage() string                                  // 容器镜像
     GetConfig() map[string]any                         // 节点配置
     GetRuntimeStatus() *NodeRuntimeStatus              // 运行时状态
     SetRuntimeStatus(*NodeRuntimeStatus)               // 更新运行时状态
