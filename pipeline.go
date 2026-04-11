@@ -102,7 +102,7 @@ type Pipeline interface {
 	SetTemplateEngine(engine TemplateEngine)
 	//GetTemplateEngine 获取模板引擎
 	GetTemplateEngine() TemplateEngine
-	//Pause ��停流水线，等待当前层执行完成后暂停
+	//Pause 暂停流水线，等待当前层执行完成后暂停
 	Pause() error
 	//Resume 恢复暂停的流水线
 	Resume(ctx context.Context) error
