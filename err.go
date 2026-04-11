@@ -12,4 +12,8 @@ var (
 	ErrEdgeNotFound       = errors.New("edge not found in graph")
 	ErrNodeAlreadyRunning = errors.New("node is currently running, cannot remove")
 	ErrInvalidState       = errors.New("invalid state for this operation")
+
+	// 配置更新相关错误
+	ErrImmutableField      = errors.New("immutable field cannot be updated")
+	ErrNodeAlreadyExecuted = errors.New("node already executed, cannot remove or modify")
 )
