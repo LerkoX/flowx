@@ -40,11 +40,13 @@ edge := NewConditionalEdgeWithEngine(sourceNode, targetNode, expression, engine)
 
 ```go
 type EvaluationContext interface {
-    Get(key string) (any, bool)                      // 查找值
+    Get(key string) (any, bool)                      // ��找值
     All() map[string]any                             // 获取完整上下文
     WithNode(node Node) EvaluationContext            // 附加节点信息（返回新实例）
     WithPipeline(pipeline Pipeline) EvaluationContext // 附加流水线信息（返回新实例）
     WithParams(params map[string]any) EvaluationContext // 附加参数（返回新实例）
+    WithIteration(iteration int) EvaluationContext   // 附加迭代计数器（返回新实例）
+    Iteration() int                                  // 获取当前迭代计数器值
 }
 ```
 
@@ -59,6 +61,7 @@ type EvaluationContext interface {
 | 参数 | `Param.xxx` | 配置中定义的全局参数 |
 | 参数 | 直接键名 | Param 的键同时作为顶层键暴露 |
 | 元数据 | 展开的嵌套结构 | Metadata 中的数据，点分隔键展开为嵌套对象 |
+| 迭代计数器 | `iteration` | 当前循环迭代次数（从 0 开始），用于回边条件表达式 |
 
 ### 布尔转换
 
@@ -66,12 +69,13 @@ type EvaluationContext interface {
 
 ### 不可变性
 
-`WithNode`、`WithPipeline`、`WithParams` 返回新的实例，不修改原始上下文。
+`WithNode`、`WithPipeline`、`WithParams`、`WithIteration` 返回新的实例，不修改原始上下文。
 
 ```go
 ctx := NewEvaluationContext()
 ctxWithNode := ctx.WithNode(node)    // 新实例
 ctxWithParams := ctx.WithParams(params) // 新实例，原始 ctx 不变
+ctxWithIter := ctx.WithIteration(3)  // 新实例，iteration=3
 ```
 
 ## 条件表达式语法
@@ -232,3 +236,46 @@ Nodes:
 ```
 Validate → Build → Deploy
 ```
+
+## 回边（Back-Edge）与循环图
+
+当一条条件边在图中形成环路时，它会被标记为**回边**（back-edge），允许创建可控的循环执行。
+
+### 工作原理
+
+1. **添加边时**：如果条件边产生了环，引擎将其标记为回边并接受（无条件环则拒绝）
+2. **遍历时**：回边被排除在 forwardGraph 之外，不参与 BFS 层级计算
+3. **层级执行完毕后**：评估回边的条件表达式
+   - 条件为 true → 重置循环节点的运行时状态，从头开始下一轮迭代
+   - 条件为 false → 循环结束
+
+### iteration 变量
+
+回边条件表达式中可以使用 `iteration` 变量，它表示当前的迭代计数（从 0 开始）：
+
+```yaml
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> A: {{ iteration < 3 }}    # iteration=0,1,2 时继续，iteration=3 时停止
+    C --> D
+    D --> [*]
+```
+
+执行过程：
+
+| 迭代轮次 | 执行的节点 | 评估 C→A 时 iteration 值 | `iteration < 3` | 结果 |
+|----------|-----------|------------------------|-----------------|------|
+| 0 | A→B→C→D | 1 | true | 继续循环 |
+| 1 | A→B→C→D | 2 | true | 继续循环 |
+| 2 | A→B→C→D | 3 | false | 循环结束 |
+
+> 注意：评估回边时使用的是 `iteration + 1`（预判下一次迭代），因此 `iteration < 3` 实际执行 3 轮（iteration 0、1、2）。
+
+### 循环安全
+
+- 通过 `MaxLoopIterations` 配置（默认 100）防止无限循环
+- 超过最大迭代次数会返回错误
+- 循环节点的运行时状态在每次迭代前会被重置（包括 metadata 中该节点的前缀数据）
