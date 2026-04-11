@@ -41,15 +41,16 @@ type InputRequestInfo struct {
 
 // PipelineConfig 流水线配置结构
 type PipelineConfig struct {
-	Version   string                    `yaml:"Version"`
-	Name      string                    `yaml:"Name"`
-	Metadate  MetadataConfig            `yaml:"Metadate"`
-	AI        AIConfig                  `yaml:"AI"`
-	Param     map[string]interface{}    `yaml:"Param"`
-	Executors map[string]ExecutorConfig `yaml:"Executors"`
-	Logging   LoggingConfig             `yaml:"Logging"`
-	Graph     string                    `yaml:"Graph"`
-	Nodes     map[string]NodeConfig     `yaml:"Nodes"`
+	Version           string                    `yaml:"Version"`
+	Name              string                    `yaml:"Name"`
+	Metadate          MetadataConfig            `yaml:"Metadate"`
+	AI                AIConfig                  `yaml:"AI"`
+	Param             map[string]interface{}    `yaml:"Param"`
+	Executors         map[string]ExecutorConfig `yaml:"Executors"`
+	Logging           LoggingConfig             `yaml:"Logging"`
+	Graph             string                    `yaml:"Graph"`
+	Nodes             map[string]NodeConfig     `yaml:"Nodes"`
+	MaxLoopIterations int                       `yaml:"MaxLoopIterations"` // 循环图最大迭代次数（默认 100）
 }
 
 // MetadataConfig 元数据配置结构

@@ -1,0 +1,345 @@
+# 配置参考
+
+Pipelinex 使用 YAML 格式定义流水线配置。本文档详细说明所有配置字段。
+
+## 完整结构
+
+```yaml
+Version: "1.0"
+Name: my-pipeline
+
+Metadate:
+  type: in-config
+  description: "元数据用途说明"
+  data:
+    key1: value1
+
+AI:
+  intent: "流水线业务意图描述"
+  constraints:
+    - "约束条件"
+  template: "template-id"
+
+Param:
+  key: value
+
+Executors:
+  local:
+    type: local
+    config: {}
+
+Logging:
+  endpoint: http://log-center/api/v1/logs
+  headers: {}
+  timeout: 5s
+
+Graph: |
+  stateDiagram-v2
+    [*] --> Node1
+    Node1 --> Node2
+
+Status:
+  Node1: Finished
+
+Nodes:
+  NodeName:
+    executor: local
+    image: optional-image
+    steps: []
+```
+
+---
+
+## 1. Version
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Version` | string | 配置文件格式版本，用于引擎兼容性判断 |
+
+---
+
+## 2. Name
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Name` | string | 流水线名称，用于标识、日志和监控 |
+
+---
+
+## 3. Metadate（元数据配置）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Metadate.type` | string | 存储类型：`in-config`、`redis`、`http` |
+| `Metadate.description` | string | 可选，描述元数据用途 |
+| `Metadate.data` | map | 初始元数据键值对，支持引用 `Param` 的模板渲染 |
+
+### 示例
+
+```yaml
+Metadate:
+  type: in-config
+  data:
+    # 引用 Param 中的值
+    K8sNamespace: "{{ Param.namespace }}"
+    FullImage: "{{ Param.registry }}/myapp:{{ Param.env }}"
+    # 静态值
+    StaticValue: "this-is-static"
+```
+
+> 更多详情参见 [元数据存储](metadata.md)
+
+---
+
+## 4. AI（AI 智能字段）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `AI.intent` | string | 一句话描述流水线业务意图 |
+| `AI.constraints` | []string | 关键约束条件列表 |
+| `AI.template` | string | 模板标识符，用于复用 |
+| `AI.generatedAt` | string | 生成时间戳 |
+| `AI.version` | int | 意图版本号 |
+
+### 示例
+
+```yaml
+AI:
+  intent: "Go 微服务构建并部署到 K8s"
+  constraints:
+    - "多阶段构建"
+    - "非 root 用户运行"
+  template: "go-microservice"
+  generatedAt: "2024-01-15T10:30:00Z"
+  version: 1
+```
+
+---
+
+## 5. Param（参数定义）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Param` | map | 全局变量池，支持模板渲染和自引用 |
+
+### 特性
+
+- **基本引用**：通过 `{{ Param.xxx }}` 语法引用其他参数
+- **自引用**：一个 Param 可以引用另一个 Param 的值
+- **嵌套结构**：支持 map 和 list 嵌套
+- **未定义变量**：引用未定义变量时，模板表达式保持原样不变
+
+### 示例
+
+```yaml
+Param:
+  env: "production"
+  appName: "myapp"
+  # 自引用
+  namespace: "{{ Param.appName }}-{{ Param.env }}"         # 渲染为: myapp-production
+  registry: "myregistry.com"
+  # 多层引用
+  imageName: "{{ Param.registry }}/{{ Param.appName }}"    # 渲染为: myregistry.com/myapp
+  fullImage: "{{ Param.imageName }}:latest"                # 渲染为: myregistry.com/myapp:latest
+  # 嵌套结构
+  config:
+    replicas: 3
+    envVars:
+      - name: "ENVIRONMENT"
+        value: "{{ Param.env }}"
+```
+
+> 更多详情参见 [模板引擎](template.md)
+
+---
+
+## 6. Executors（执行器定义）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Executors` | map | 全局执行器注册表，供 Nodes 引用 |
+| `Executors.{name}.type` | string | 类型：`local`、`docker`、`kubernetes`（或 `k8s`） |
+| `Executors.{name}.description` | string | 可选，执行器用途说明 |
+| `Executors.{name}.config` | object | 执行器配置，被 Nodes 继承 |
+
+### 6.1 local 执行器
+
+```yaml
+Executors:
+  local:
+    type: local
+    config:
+      shell: bash          # 指定 shell（bash/sh/zsh）
+      workdir: /tmp/build  # 工作目录
+      env:                 # 环境变量
+        KEY: value
+      timeout: 60          # 超时秒数
+      pty: false           # 是否使用 PTY
+```
+
+### 6.2 docker 执行器
+
+```yaml
+Executors:
+  docker:
+    type: docker
+    config:
+      registry: myregistry.com     # 默认镜像仓库
+      network: host                # 容器网络模式
+      workdir: /app                # 容器工作目录
+      volumes:                     # 挂载卷
+        - /var/run/docker.sock:/var/run/docker.sock
+        - ${PWD}:/workspace
+      env:                         # 环境变量
+        GO_VERSION: "1.21"
+      tty: true                    # 启用 TTY
+      ttyWidth: 80                 # TTY 宽度
+      ttyHeight: 24                # TTY 高度
+```
+
+### 6.3 kubernetes 执行器
+
+```yaml
+Executors:
+  k8s:
+    type: kubernetes
+    config:
+      namespace: default           # K8s 命名空间
+      serviceAccount: default      # ServiceAccount
+      resources:                   # 资源限制
+        cpu: "1000m"
+        memory: "2Gi"
+      podReadyTimeout: 60          # Pod 就绪超时秒数
+      configMaps:                  # ConfigMap 挂载
+        - name: my-config
+          mountPath: /etc/config
+      secrets:                     # Secret 挂载
+        - name: my-secret
+          mountPath: /etc/secrets
+      env:
+        KEY: value
+```
+
+> 更多详情参见 [执行器系统](executor.md)
+
+---
+
+## 7. Logging（日志配置）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Logging.endpoint` | string | 日志接收服务 HTTP 接口地址 |
+| `Logging.headers` | map | 请求头（认证、租户标识等） |
+| `Logging.timeout` | duration | 单次推送超时时间 |
+| `Logging.retry` | int | 推送失败重试次数 |
+
+### 示例
+
+```yaml
+Logging:
+  endpoint: http://log-center/api/v1/logs
+  headers:
+    Authorization: Bearer xxxxxxxxx
+  timeout: 5s
+  retry: 3
+```
+
+---
+
+## 8. Graph（流程定义）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Graph` | string | Mermaid `stateDiagram-v2` 语法，定义节点执行顺序和依赖关系 |
+
+### 基本语法
+
+```yaml
+Graph: |
+  stateDiagram-v2
+    [*] --> Build
+    Build --> Test
+    Test --> Deploy
+    Deploy --> [*]
+```
+
+### 条件边
+
+边的标签中可以嵌入 pongo2 表达式作为条件：
+
+```yaml
+Graph: |
+  stateDiagram-v2
+    [*] --> Check
+    Check --> Deploy : {{ Param.env == "production" }}
+    Check --> Skip   : {{ Param.env != "production" }}
+```
+
+> 更多详情参见 [条件边](edge.md)
+
+---
+
+## 9. Status（运行时状态）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Status` | map | 节点运行时状态，键为节点名，值为状态枚举 |
+
+### 状态枚举
+
+| 值 | 含义 |
+|-----|------|
+| `Pending` | 等待执行 |
+| `Running` | 执行中 |
+| `SUCCESS` | 执行成功 |
+| `FAILED` | 执行失败 |
+| `CANCELLED` | 已取消 |
+
+---
+
+## 10. Nodes（节点配置）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Nodes.{name}.name` | string | 节点显示名称 |
+| `Nodes.{name}.description` | string | 节点功能描述 |
+| `Nodes.{name}.executor` | string | 引用 `Executors` 中的执行器名称 |
+| `Nodes.{name}.image` | string | 容器镜像（Docker/K8s 执行器使用） |
+| `Nodes.{name}.steps` | []Step | 执行步骤列表 |
+| `Nodes.{name}.extract` | object | 输出提取配置（可选） |
+
+### Step 字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `steps[].id` | string | 步骤唯一标识 |
+| `steps[].name` | string | 步骤名称 |
+| `steps[].description` | string | 步骤描述 |
+| `steps[].run` | string | 执行的 shell 命令（支持模板渲染） |
+
+### 输出提取配置
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `extract.type` | string | `"codec-block"` | 提取类型：`codec-block` 或 `regex` |
+| `extract.patterns` | map | - | 正则表达式（type=regex 时使用） |
+| `extract.maxOutputSize` | int | 1048576 (1MB) | 输出大小限制（字节） |
+
+> 更多详情参见 [节点与步骤](node.md)
+
+---
+
+## 字段引用关系
+
+```
+Param ──┬──► Metadate.data（模板渲染）
+        ├──► Nodes.steps[].run（命令参数渲染）
+        ├──► Edge 表达式（条件求值）
+        └──► Logging.headers（动态认证）
+
+Executors ──► Nodes.executor（执行器选择）
+
+Graph ──► 定义节点执行顺序和依赖关系
+
+Status ──► 控制节点是否跳过（恢复执行）
+```

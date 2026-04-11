@@ -26,15 +26,23 @@ type DGAGraph struct {
 	edgeMap  map[string]map[string]Edge // src -> dest -> Edge (快速查找)
 	sequence []string
 	hasCycle bool
+
+	// 循环图支持
+	backEdges  map[string]bool  // 被接受的回边 edgeID 集合（条件边产生的环）
+	entryNodes map[string]bool  // [*] 指向的入口节点
+	exitNodes  map[string]bool  // 指向 [*] 的出口节点
 }
 
 func NewDGAGraph() *DGAGraph {
 	return &DGAGraph{
-		nodes:    map[string]Node{},
-		edges:    map[string]Edge{},
-		graph:    map[string][]string{},
-		edgeMap:  map[string]map[string]Edge{},
-		sequence: []string{},
+		nodes:      map[string]Node{},
+		edges:      map[string]Edge{},
+		graph:      map[string][]string{},
+		edgeMap:    map[string]map[string]Edge{},
+		sequence:   []string{},
+		backEdges:  map[string]bool{},
+		entryNodes: map[string]bool{},
+		exitNodes:  map[string]bool{},
 	}
 }
 
@@ -97,134 +105,57 @@ func (dga *DGAGraph) AddEdge(edge Edge) error {
 
 	dga.hasCycle = dga.cycleCheck()
 	if dga.hasCycle {
+		// 条件边产生的环：标记为回边，允许
+		if edge.Expression() != "" {
+			dga.backEdges[edge.ID()] = true
+			return nil
+		}
+		// 无条件环：拒绝（死循环）
 		return ErrHasCycle
 	}
 	return nil
 }
 
-// Traversal 对DAG执行广度优先遍历
+// Traversal 对图执行广度优先遍历
 // 为图中的每个节点执行提供的 TraversalFn 函数
-// 支持多个起始节点并发执行
-// 支持条件边：如果边有表达式，会评估表达式决定是否遍历该边
+// 支持有环图和无环图：使用 forwardGraph（排除回边）计算层级
+// 同一层级内的节点并发执行，层级之间串行执行
 func (dga *DGAGraph) Traversal(ctx context.Context, evalCtx EvaluationContext, fn TraversalFn) error {
 	dga.mu.RLock()
 	defer dga.mu.RUnlock()
 
-	// 如果没有节点，直接返回
-	if len(dga.nodes) == 0 {
-		return nil
+	levels, err := dga.traversalStepsUnlocked(evalCtx)
+	if err != nil {
+		return err
 	}
 
-	// 计算所有节点的入度（基于原始图结构）
-	indeg := dga.getIndegrees()
-
-	// 收集所有入度为0的起始节点
-	startNodes := make([]string, 0)
-	for v, d := range indeg {
-		if d == 0 {
-			startNodes = append(startNodes, v)
-		}
-	}
-
-	if len(startNodes) == 0 {
-		return nil // 没有起始节点
-	}
-
-	visited := make(map[string]bool)
-	queue := make([]string, 0)
-
-	// 并发执行所有起始节点
-	var wg sync.WaitGroup
-	var errMu sync.Mutex
-	var firstErr error
-
-	for _, startNodeID := range startNodes {
-		nodeID := startNodeID // 避免闭包捕获问题
-		visited[nodeID] = true
-		queue = append(queue, nodeID)
-
-		wg.Add(1)
-		go func(id string) {
-			defer wg.Done()
-			if err := fn(ctx, dga.nodes[id]); err != nil {
-				errMu.Lock()
-				if firstErr == nil {
-					firstErr = err
-				}
-				errMu.Unlock()
-			}
-		}(nodeID)
-	}
-
-	// 等待所有起始节点完成
-	wg.Wait()
-	if firstErr != nil {
-		return firstErr
-	}
-
-	// BFS 遍历剩余节点
-	for len(queue) > 0 {
-		vertexFocus := queue[0]
-		queue = queue[1:]
-
-		// 为当前节点的所有邻居创建 WaitGroup
+	for _, level := range levels {
 		var wg sync.WaitGroup
 		var errMu sync.Mutex
-		var layerErr error
+		var firstErr error
 
-		for _, neighbor := range dga.graph[vertexFocus] {
-			if visited[neighbor] {
-				continue
-			}
-
-			// 获取边并评估条件
-			shouldTraverse := true
-			if edge, ok := dga.edgeMap[vertexFocus][neighbor]; ok && edge.Expression() != "" {
-				result, err := edge.Evaluate(evalCtx)
-				if err != nil {
-					return fmt.Errorf("failed to evaluate edge condition %s->%s: %w",
-						vertexFocus, neighbor, err)
-				}
-				shouldTraverse = result
-			}
-
-			// 条件不满足，跳过此边（不减少入度）
-			if !shouldTraverse {
-				continue
-			}
-
-			// 减少邻居的入度
-			indeg[neighbor]--
-
-			// 只有当入度减为0时才访问节点
-			if indeg[neighbor] == 0 {
-				visited[neighbor] = true
-				queue = append(queue, neighbor)
-
-				// 并发执行邻居节点
-				wg.Add(1)
-				go func(n string) {
-					defer wg.Done()
-					if err := fn(ctx, dga.nodes[n]); err != nil {
-						errMu.Lock()
-						if layerErr == nil {
-							layerErr = err
-						}
-						errMu.Unlock()
+		for _, nodeID := range level {
+			wg.Add(1)
+			go func(id string) {
+				defer wg.Done()
+				if err := fn(ctx, dga.nodes[id]); err != nil {
+					errMu.Lock()
+					if firstErr == nil {
+						firstErr = err
 					}
-				}(neighbor)
-			}
+					errMu.Unlock()
+				}
+			}(nodeID)
 		}
-
-		// 等待当前层的所有 goroutine 完成
 		wg.Wait()
-		if layerErr != nil {
-			return layerErr
+		if firstErr != nil {
+			return firstErr
 		}
 	}
 
 	return nil
 }
+
 
 // cycleCheck 检查有向无环图（DAG）中是否存在循环
 // 如果找到循环则返回 true，否则返回 false
@@ -273,6 +204,355 @@ func (dga *DGAGraph) HasCycle() bool {
 	return dga.hasCycle
 }
 
+// GetNode 根据节点ID查找节点
+func (dga *DGAGraph) GetNode(nodeID string) (Node, bool) {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+	node, ok := dga.nodes[nodeID]
+	return node, ok
+}
+
+// GetEdge 根据源节点和目标节点ID查找边
+func (dga *DGAGraph) GetEdge(srcID, destID string) (Edge, bool) {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+	if srcMap, ok := dga.edgeMap[srcID]; ok {
+		if edge, ok := srcMap[destID]; ok {
+			return edge, true
+		}
+	}
+	return nil, false
+}
+
+// IncomingEdges 返回指向指定节点的所有边
+func (dga *DGAGraph) IncomingEdges(nodeID string) []Edge {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+	edges := make([]Edge, 0)
+	for src, destMap := range dga.edgeMap {
+		if edge, ok := destMap[nodeID]; ok {
+			_ = src
+			edges = append(edges, edge)
+		}
+	}
+	return edges
+}
+
+// OutgoingEdges 返回从指定节点出发的所有边
+func (dga *DGAGraph) OutgoingEdges(nodeID string) []Edge {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+	edges := make([]Edge, 0)
+	if destMap, ok := dga.edgeMap[nodeID]; ok {
+		for _, edge := range destMap {
+			edges = append(edges, edge)
+		}
+	}
+	return edges
+}
+
+// RemoveVertex 删除节点及其所有关联边
+func (dga *DGAGraph) RemoveVertex(nodeID string) error {
+	dga.mu.Lock()
+	defer dga.mu.Unlock()
+
+	// 校验节点存在
+	if _, ok := dga.nodes[nodeID]; !ok {
+		return ErrNodeNotFound
+	}
+
+	// 删除以该节点为目标的边（从其他节点的 edgeMap 和 graph 中清理）
+	for src, destMap := range dga.edgeMap {
+		if edge, ok := destMap[nodeID]; ok {
+			delete(dga.edges, edge.ID())
+			delete(destMap, nodeID)
+			// 从 graph[src] 中删除 nodeID
+			dga.graph[src] = removeFromSlice(dga.graph[src], nodeID)
+		}
+	}
+
+	// 删除以该节点为源的边
+	if destMap, ok := dga.edgeMap[nodeID]; ok {
+		for _, edge := range destMap {
+			delete(dga.edges, edge.ID())
+		}
+		delete(dga.edgeMap, nodeID)
+	}
+
+	// 删除 graph 中的出边列表
+	delete(dga.graph, nodeID)
+
+	// 删除节点
+	delete(dga.nodes, nodeID)
+
+	// 从 sequence 中删除
+	dga.sequence = removeFromSlice(dga.sequence, nodeID)
+
+	// 重新计算环检测
+	dga.hasCycle = dga.cycleCheck()
+
+	return nil
+}
+
+// RemoveEdge 删除指定的边
+func (dga *DGAGraph) RemoveEdge(srcID, destID string) error {
+	dga.mu.Lock()
+	defer dga.mu.Unlock()
+
+	// 查找边
+	srcMap, ok := dga.edgeMap[srcID]
+	if !ok {
+		return ErrEdgeNotFound
+	}
+	edge, ok := srcMap[destID]
+	if !ok {
+		return ErrEdgeNotFound
+	}
+
+	// 删除
+	delete(dga.edges, edge.ID())
+	delete(srcMap, destID)
+	if len(srcMap) == 0 {
+		delete(dga.edgeMap, srcID)
+	}
+
+	// 从 graph 中删除
+	dga.graph[srcID] = removeFromSlice(dga.graph[srcID], destID)
+
+	// 重新计算环检测
+	dga.hasCycle = dga.cycleCheck()
+
+	return nil
+}
+
+// IsCyclic 返回图是否有被接受的回边（条件循环节点）
+func (dga *DGAGraph) IsCyclic() bool {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+	return len(dga.backEdges) > 0
+}
+
+// BackEdges 返回所有被接受的回边
+func (dga *DGAGraph) BackEdges() []Edge {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+	edges := make([]Edge, 0, len(dga.backEdges))
+	for edgeID := range dga.backEdges {
+		if edge, ok := dga.edges[edgeID]; ok {
+			edges = append(edges, edge)
+		}
+	}
+	return edges
+}
+
+// addEntryNode 添加入口节点（从 [*] 指向的节点）
+func (dga *DGAGraph) addEntryNode(nodeID string) {
+	dga.mu.Lock()
+	defer dga.mu.Unlock()
+	dga.entryNodes[nodeID] = true
+}
+
+// addExitNode 添加出口节点（指向 [*] 的节点）
+func (dga *DGAGraph) addExitNode(nodeID string) {
+	dga.mu.Lock()
+	defer dga.mu.Unlock()
+	dga.exitNodes[nodeID] = true
+}
+
+// EntryNodes 返回入口节点列表
+func (dga *DGAGraph) EntryNodes() []string {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+	nodes := make([]string, 0, len(dga.entryNodes))
+	for id := range dga.entryNodes {
+		nodes = append(nodes, id)
+	}
+	return nodes
+}
+
+// ExitNodes 返回出口节点列表
+func (dga *DGAGraph) ExitNodes() []string {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+	nodes := make([]string, 0, len(dga.exitNodes))
+	for id := range dga.exitNodes {
+		nodes = append(nodes, id)
+	}
+	return nodes
+}
+
+// buildForwardGraph 构建排除回边的邻接表
+func (dga *DGAGraph) buildForwardGraph() map[string][]string {
+	forwardGraph := make(map[string][]string)
+	for src, dests := range dga.graph {
+		for _, dest := range dests {
+			// 检查这条边是否是回边
+			edgeID := src + "->" + dest
+			if !dga.backEdges[edgeID] {
+				forwardGraph[src] = append(forwardGraph[src], dest)
+			}
+		}
+		// 确保没有出边的节点也在 forwardGraph 中
+		if _, ok := forwardGraph[src]; !ok {
+			forwardGraph[src] = []string{}
+		}
+	}
+	return forwardGraph
+}
+
+// LoopNodeSet 计算回边涉及的循环节点集合
+// 从回边的 target 出发，沿 forward edges BFS 到达 source 为止的所有节点
+func (dga *DGAGraph) LoopNodeSet(backEdge Edge) map[string]bool {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+
+	target := backEdge.Target().Id()
+	source := backEdge.Source().Id()
+
+	result := make(map[string]bool)
+	forwardGraph := dga.buildForwardGraph()
+
+	// BFS 从 target 出发，收集可达的所有节点
+	queue := []string{target}
+	visited := map[string]bool{target: true}
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		result[current] = true
+
+		for _, next := range forwardGraph[current] {
+			if !visited[next] {
+				visited[next] = true
+				queue = append(queue, next)
+			}
+		}
+	}
+
+	// source 也应该在集合中
+	result[source] = true
+
+	return result
+}
+
+// removeFromSlice 从字符串切片中删除指定元素
+func removeFromSlice(slice []string, item string) []string {
+	for i, v := range slice {
+		if v == item {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	return slice
+}
+
+// TraversalSteps 计算 BFS 层级执行计划
+// 返回 [][]string，每个子切片是一层可并发执行的节点ID列表
+// 支持循环图：使用 forwardGraph（排除回边）计算层级，使用 entryNodes 作为起始节点
+// traversalStepsUnlocked 计算 BFS 层级执行计划（无锁版本）
+// 供 Traversal 和 TraversalSteps 共用
+func (dga *DGAGraph) traversalStepsUnlocked(evalCtx EvaluationContext) ([][]string, error) {
+	if len(dga.nodes) == 0 {
+		return nil, nil
+	}
+
+	// 使用 forwardGraph（排除回边）计算入度
+	forwardGraph := dga.buildForwardGraph()
+	indeg := make(map[string]int)
+	for v := range dga.nodes {
+		indeg[v] = 0
+	}
+	for _, adj := range forwardGraph {
+		for _, n := range adj {
+			indeg[n]++
+		}
+	}
+
+	// 收集起始节点：优先使用 entryNodes（[*] 指向的节点），否则使用入度为0的节点
+	startNodes := make([]string, 0)
+	if len(dga.entryNodes) > 0 {
+		for id := range dga.entryNodes {
+			if _, ok := dga.nodes[id]; ok {
+				startNodes = append(startNodes, id)
+			}
+		}
+	}
+	if len(startNodes) == 0 {
+		for v, d := range indeg {
+			if d == 0 {
+				startNodes = append(startNodes, v)
+			}
+		}
+	}
+
+	if len(startNodes) == 0 {
+		return nil, nil
+	}
+
+	var levels [][]string
+	visited := make(map[string]bool)
+	queue := make([]string, 0)
+
+	// 第一层：起始节点
+	for _, id := range startNodes {
+		visited[id] = true
+		queue = append(queue, id)
+	}
+	if len(queue) > 0 {
+		levels = append(levels, append([]string{}, queue...))
+	}
+
+	// BFS 遍历（使用 forwardGraph 代替 dga.graph）
+	for len(queue) > 0 {
+		var nextLevel []string
+		for _, vertexFocus := range queue {
+			for _, neighbor := range forwardGraph[vertexFocus] {
+				if visited[neighbor] {
+					continue
+				}
+
+				// 评估条件边（跳过回边）
+				if edge, ok := dga.edgeMap[vertexFocus][neighbor]; ok && edge.Expression() != "" {
+					// 跳过回边的条件评估（回边由循环执行引擎处理）
+					if dga.backEdges[edge.ID()] {
+						continue
+					}
+					result, err := edge.Evaluate(evalCtx)
+					if err != nil {
+						return nil, fmt.Errorf("failed to evaluate edge condition %s->%s: %w",
+							vertexFocus, neighbor, err)
+					}
+					if !result {
+						continue
+					}
+				}
+
+				indeg[neighbor]--
+				if indeg[neighbor] == 0 {
+					visited[neighbor] = true
+					nextLevel = append(nextLevel, neighbor)
+				}
+			}
+		}
+
+		if len(nextLevel) > 0 {
+			levels = append(levels, nextLevel)
+		}
+		queue = nextLevel
+	}
+
+	return levels, nil
+}
+
+// TraversalSteps 计算 BFS 层级执行计划
+// 返回 [][]string，每个子切片是一层可并发执行的节点ID列表
+func (dga *DGAGraph) TraversalSteps(evalCtx EvaluationContext) [][]string {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+	levels, _ := dga.traversalStepsUnlocked(evalCtx)
+	return levels
+}
+
+
 type PipelineImpl struct {
 	id               string
 	graph            Graph
@@ -285,17 +565,25 @@ type PipelineImpl struct {
 	cancelFunc       context.CancelFunc
 	mu               sync.RWMutex
 	executorProvider ExecutorProvider
-	executors        map[string]Executor // 缓存已创建的executor
+	executors        map[string]Executor    // 缓存已创建的executor
 	param            map[string]interface{} // 存储渲染后的Param值
-	templateEngine    TemplateEngine      // 模板引擎
-	cleanupOnce      sync.Once          // 保护清理操作只执行一次
+	templateEngine   TemplateEngine         // 模板引擎
+	cleanupOnce      sync.Once              // 保护清理操作只执行一次
+	pauseMu          sync.Mutex             // 保护暂停/恢复操作的序列化
+	pauseChan        chan struct{}           // 暂停信号通道
+	resumeChan       chan struct{}           // 恢复信号通道
+	currentLevel     int                    // 记录当前执行到的BFS层级（用于暂停恢复）
+	maxLoopIter      int                    // 循环图最大迭代次数
 }
 
 func NewPipeline(ctx context.Context) Pipeline {
 	return &PipelineImpl{
-		id:        uuid.NewString(),
-		executors: make(map[string]Executor),
-		doneChan:  make(chan struct{}),
+		id:           uuid.NewString(),
+		executors:    make(map[string]Executor),
+		doneChan:     make(chan struct{}),
+		pauseChan:    make(chan struct{}),
+		resumeChan:   make(chan struct{}),
+		maxLoopIter:  100, // 默认最大迭代次数
 	}
 }
 
@@ -304,6 +592,15 @@ func (p *PipelineImpl) SetParam(param map[string]interface{}) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.param = param
+}
+
+// SetMaxLoopIterations 设置循环图最大迭代次数
+func (p *PipelineImpl) SetMaxLoopIterations(max int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if max > 0 {
+		p.maxLoopIter = max
+	}
 }
 
 // Id 返回流水线的ID
@@ -401,6 +698,7 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 	p.mu.Lock()
 	ctx, cancel := context.WithCancel(ctx)
 	p.cancelFunc = cancel
+	p.status = StatusRunning
 	p.mu.Unlock()
 
 	defer func() {
@@ -428,8 +726,6 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 	// 如果有元数据存储，加载数据到求值上下文
 	if p.metadataStore != nil {
 		params := make(map[string]any)
-		// 这里可以根据需求加载特定的元数据键
-		// 目前加载所有配置中的数据（仅in-config类型适用）
 		if inConfigStore, ok := p.metadataStore.(*InConfigMetadataStore); ok {
 			for key := range inConfigStore.data {
 				if val, err := inConfigStore.Get(ctx, key); err == nil {
@@ -442,59 +738,315 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 		}
 	}
 
-	err := p.graph.Traversal(ctx, evalCtx, func(ctx context.Context, node Node) error {
-		// 检查context是否已取消
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		// 检查是否应该跳过此节点
-		if p.shouldSkipNode(node) {
-			fmt.Printf("Skipping node %s (status: %s)\n", node.Id(), node.GetRuntimeStatus().Status)
-			p.notifyEvent(PipelineNodeFinish)
-			return nil
-		}
-
-		// 通知节点开始
-		p.notifyEvent(PipelineNodeStart)
-		fmt.Printf("Executing node: %s\n", node.Id())
-
-		// 获取节点的executor配置
-		executorName := node.GetExecutor()
-		if executorName == "" {
-			fmt.Printf("Node %s has no executor configured, skipping\n", node.Id())
-			p.notifyEvent(PipelineNodeFinish)
-			return nil
-		}
-
-		// 获取或创建executor
-		executor, err := p.getOrCreateExecutor(ctx, executorName)
+	// 获取 DGAGraph，如果非 DGAGraph 实现则降级到原始 Traversal
+	dgaGraph, ok := p.graph.(*DGAGraph)
+	if !ok {
+		err := p.graph.Traversal(ctx, evalCtx, p.makeTraversalFn(ctx))
 		if err != nil {
-			fmt.Printf("Failed to get executor for node %s: %v\n", node.Id(), err)
-			return fmt.Errorf("failed to get executor for node %s: %w", node.Id(), err)
+			p.mu.Lock()
+			p.status = StatusFailed
+			p.mu.Unlock()
+		} else {
+			p.mu.Lock()
+			p.status = StatusSuccess
+			p.mu.Unlock()
 		}
+		p.notifyEvent(PipelineFinish)
+		return err
+	}
 
-		// 执行节点
-		if err := p.executeNode(ctx, node, executor); err != nil {
-			fmt.Printf("Node %s execution failed: %v\n", node.Id(), err)
+		// 逐层 BFS 执行，同时支持有环图和无环图
+		startLevel := p.restoreTraversalState()
+		if err := p.runLevelByLevel(ctx, dgaGraph, evalCtx, startLevel); err != nil {
+			p.mu.Lock()
+			p.status = StatusFailed
+			p.mu.Unlock()
+			p.notifyEvent(PipelineFinish)
 			return err
 		}
 
-		// 通知节点完成
+	// 通知流水线完成
+	p.mu.Lock()
+	p.status = StatusSuccess
+	p.mu.Unlock()
+	p.notifyEvent(PipelineFinish)
+	return nil
+}
+
+// runLevelByLevel 逐层执行 BFS 遍��，支持暂停/恢复和循环图
+// 无环图：执行完所有层级后直接返回
+// 有环图：执行完所有层级后评估回边条件，满足则重置循环节点并继续迭代
+func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, evalCtx EvaluationContext, startLevel int) error {
+	iteration := 0
+	p.mu.RLock()
+	maxIter := p.maxLoopIter
+	p.mu.RUnlock()
+
+	for {
+		evalCtx = evalCtx.WithIteration(iteration)
+
+		// 计算初始层级
+		levels := dgaGraph.TraversalSteps(evalCtx)
+		if len(levels) == 0 {
+			return nil
+		}
+
+		var firstErr error
+		levelIdx := startLevel
+
+		for levelIdx < len(levels) {
+			// 检查暂停信号
+			select {
+			case <-p.pauseChan:
+				// 保存当前层级并进入暂停状态
+				p.mu.Lock()
+				p.currentLevel = levelIdx
+				p.status = StatusPaused
+				p.mu.Unlock()
+				p.notifyEvent(PipelinePaused)
+
+				// 等待恢复信号
+				<-p.resumeChan
+
+				// 恢复运行
+				p.mu.Lock()
+				p.status = StatusRunning
+				p.pauseChan = make(chan struct{})
+				p.resumeChan = make(chan struct{})
+				p.mu.Unlock()
+				p.notifyEvent(PipelineResumed)
+
+				// 重新计算层级（图可能已被修改）
+				levels = dgaGraph.TraversalSteps(evalCtx)
+				if levelIdx >= len(levels) {
+					return nil
+				}
+			default:
+			}
+
+			// 检查 context 是否已取消
+			select {
+			case <-ctx.Done():
+				p.mu.Lock()
+				p.status = StatusCancelled
+				p.mu.Unlock()
+				return ctx.Err()
+			default:
+			}
+
+			// 执行当前层级的所有节点
+			level := levels[levelIdx]
+			var wg sync.WaitGroup
+			var errMu sync.Mutex
+
+			for _, nodeID := range level {
+				node, exists := dgaGraph.GetNode(nodeID)
+				if !exists {
+					continue
+				}
+
+				wg.Add(1)
+				go func(n Node) {
+					defer wg.Done()
+					if err := p.executeNodeWithLifecycle(ctx, n); err != nil {
+						errMu.Lock()
+						if firstErr == nil {
+							firstErr = err
+						}
+						errMu.Unlock()
+					}
+				}(node)
+			}
+			wg.Wait()
+
+			if firstErr != nil {
+				return firstErr
+			}
+
+			levelIdx++
+
+			// 当前层执行完毕后，重新计算后续层级（确保条件边能获取到最新的 metadata）
+			if levelIdx < len(levels) {
+				levels = dgaGraph.TraversalSteps(evalCtx)
+			}
+		}
+
+		// 循环检测：评估回边条件
+		backEdges := dgaGraph.BackEdges()
+		if len(backEdges) == 0 {
+			return nil // 无环图：直接返回
+		}
+
+		shouldContinue := false
+		var activeLoopNodes map[string]bool
+
+		for _, backEdge := range backEdges {
+			evalCtxWithIter := evalCtx.WithIteration(iteration + 1) // 下一次迭代的 iteration 值
+			result, err := backEdge.Evaluate(evalCtxWithIter)
+			if err != nil {
+				return fmt.Errorf("failed to evaluate back-edge condition %s->%s: %w",
+					backEdge.Source().Id(), backEdge.Target().Id(), err)
+			}
+			if result {
+				shouldContinue = true
+				// 合并所有活跃回边的循环节点集合
+				loopNodes := dgaGraph.LoopNodeSet(backEdge)
+				if activeLoopNodes == nil {
+					activeLoopNodes = make(map[string]bool)
+				}
+				for k := range loopNodes {
+					activeLoopNodes[k] = true
+				}
+			}
+		}
+
+		if !shouldContinue {
+			return nil // 条件不满足：循环结束
+		}
+
+		iteration++
+		if iteration >= maxIter {
+			return fmt.Errorf("loop exceeded maximum iterations (%d)", maxIter)
+		}
+
+		// 重置循环节点的运行时状态，使其可以重新执行
+		p.resetLoopNodes(dgaGraph, activeLoopNodes)
+		startLevel = 0 // 从头开始遍历
+	}
+}
+
+func (p *PipelineImpl) resetLoopNodes(dgaGraph *DGAGraph, loopNodes map[string]bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for nodeID := range loopNodes {
+		node, exists := dgaGraph.GetNode(nodeID)
+		if !exists {
+			continue
+		}
+		// 重置节点运行时状态为 nil，使 shouldSkipNode 不再跳过
+		node.SetRuntimeStatus(nil)
+
+		// 清理节点提取的 metadata（避免旧数据影响后续迭代）
+		if p.metadata != nil {
+			prefix := nodeID + "."
+			for k := range p.metadata {
+				if len(k) > len(prefix) && k[:len(prefix)] == prefix {
+					delete(p.metadata, k)
+				}
+			}
+		}
+	}
+}
+
+// makeTraversalFn 创建节点执行函数（兼容旧的 Traversal 调用方式）
+func (p *PipelineImpl) makeTraversalFn(ctx context.Context) TraversalFn {
+	return func(ctx context.Context, node Node) error {
+		return p.executeNodeWithLifecycle(ctx, node)
+	}
+}
+
+// executeNodeWithLifecycle 执行节点的完整生命周期（跳过检查→通知→执行→通知）
+func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) error {
+	// 检查 context 是否已取消
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	// 检查是否应该跳过此节点
+	if p.shouldSkipNode(node) {
+		fmt.Printf("Skipping node %s (status: %s)\n", node.Id(), node.GetRuntimeStatus().Status)
 		p.notifyEvent(PipelineNodeFinish)
 		return nil
-	})
-
-	// 通知流水线完成
-	if err != nil {
-		p.status = StatusFailed
-	} else {
-		p.status = StatusSuccess
 	}
-	p.notifyEvent(PipelineFinish)
-	return err
+
+	// 通知节点开始
+	p.notifyEvent(PipelineNodeStart)
+	fmt.Printf("Executing node: %s\n", node.Id())
+
+	// 获取节点的executor配置
+	executorName := node.GetExecutor()
+	if executorName == "" {
+		fmt.Printf("Node %s has no executor configured, skipping\n", node.Id())
+		p.notifyEvent(PipelineNodeFinish)
+		return nil
+	}
+
+	// 获取或创建executor
+	exec, err := p.getOrCreateExecutor(ctx, executorName)
+	if err != nil {
+		fmt.Printf("Failed to get executor for node %s: %v\n", node.Id(), err)
+		return fmt.Errorf("failed to get executor for node %s: %w", node.Id(), err)
+	}
+
+	// 执行节点
+	if err := p.executeNode(ctx, node, exec); err != nil {
+		fmt.Printf("Node %s execution failed: %v\n", node.Id(), err)
+		return err
+	}
+
+	// 通知节点完成
+	p.notifyEvent(PipelineNodeFinish)
+	return nil
+}
+
+// Pause 暂停流水线，等待当前层执行完成后暂停
+func (p *PipelineImpl) Pause() error {
+	p.pauseMu.Lock()
+	defer p.pauseMu.Unlock()
+
+	p.mu.RLock()
+	status := p.status
+	p.mu.RUnlock()
+
+	if status != StatusRunning {
+		return fmt.Errorf("%w: current status is %s, expected RUNNING", ErrInvalidState, status)
+	}
+
+	// 发送暂停信号
+	close(p.pauseChan)
+	return nil
+}
+
+// Resume 恢复暂停的流水线
+func (p *PipelineImpl) Resume(ctx context.Context) error {
+	p.pauseMu.Lock()
+	defer p.pauseMu.Unlock()
+
+	p.mu.RLock()
+	status := p.status
+	p.mu.RUnlock()
+
+	if status != StatusPaused && status != StatusStopped {
+		return fmt.Errorf("%w: current status is %s, expected PAUSED or STOPPED", ErrInvalidState, status)
+	}
+
+	// 发送恢复信号
+	close(p.resumeChan)
+	return nil
+}
+
+// IsModifiable 判断当前是否可修改图
+func (p *PipelineImpl) IsModifiable() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	switch p.status {
+	case StatusPaused, StatusStopped, StatusFailed, StatusCancelled, StatusSuccess:
+		return true
+	default:
+		return false
+	}
+}
+
+// restoreTraversalState 恢复遍历状态并重置
+func (p *PipelineImpl) restoreTraversalState() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	level := p.currentLevel
+	p.currentLevel = 0
+	return level
 }
 
 // executeNode 执行单个节点

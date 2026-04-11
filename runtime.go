@@ -37,4 +37,10 @@ type Runtime interface {
 	// ExportConfig 导出流水线的运行时配置
 	// 返回包含当前运行时状态的 YAML 格式配置字符串
 	ExportConfig(id string) (string, error)
+	// Pause 暂停运行中的流水线
+	Pause(ctx context.Context, id string) error
+	// Resume 恢复暂停或停止的流水线
+	Resume(ctx context.Context, id string) error
+	// ModifyGraph 对暂停或停止的流水线执行图修改（原子操作）
+	ModifyGraph(ctx context.Context, id string, modifications GraphModifications) error
 }
