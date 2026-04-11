@@ -293,6 +293,11 @@ func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, li
 		pipeline.(*PipelineImpl).SetParam(pipelineConfig.Param)
 	}
 
+		// è®¾ç½®å¾ªç¯å¾æå¤§è¿­ä»£æ¬¡æ°
+		if pipelineConfig.MaxLoopIterations > 0 {
+			pipeline.(*PipelineImpl).SetMaxLoopIterations(pipelineConfig.MaxLoopIterations)
+		}
+
 	// 设置metadata
 	if err := r.setupMetadata(ctx, pipeline, pipelineConfig); err != nil {
 		return nil, fmt.Errorf("failed to setup metadata: %w", err)
@@ -368,6 +373,11 @@ func (r *RuntimeImpl) RunSync(ctx context.Context, id string, config string, lis
 	if len(pipelineConfig.Param) > 0 {
 		pipeline.(*PipelineImpl).SetParam(pipelineConfig.Param)
 	}
+
+		// è®¾ç½®å¾ªç¯å¾æå¤§è¿­ä»£æ¬¡æ°
+		if pipelineConfig.MaxLoopIterations > 0 {
+			pipeline.(*PipelineImpl).SetMaxLoopIterations(pipelineConfig.MaxLoopIterations)
+		}
 
 	// 设置metadata
 	if err := r.setupMetadata(ctx, pipeline, pipelineConfig); err != nil {
@@ -565,12 +575,25 @@ func (r *RuntimeImpl) parseGraphEdges(graph Graph, nodeMap map[string]Node, grap
 		return
 	}
 
+	// 获取 DGAGraph 用于记录入口/出口节点
+	dgaGraph, isDGA := graph.(*DGAGraph)
+
 	// 遍历所有语句，提取转换关系
 	for _, stmt := range stateDiagram.Statements {
 		// 尝试转换为 Transition
 		if transition, ok := stmt.(*ast.Transition); ok {
-			// 跳过 [*] 开始/结束节点
-			if transition.From == "[*]" || transition.To == "[*]" {
+			// 记录入口节点（[*] --> X）
+			if transition.From == "[*]" {
+				if isDGA && transition.To != "[*]" {
+					dgaGraph.addEntryNode(transition.To)
+				}
+				continue
+			}
+			// 记录出口节点（X --> [*]）
+			if transition.To == "[*]" {
+				if isDGA {
+					dgaGraph.addExitNode(transition.From)
+				}
 				continue
 			}
 
@@ -733,5 +756,194 @@ func (r *RuntimeImpl) ExportConfig(id string) (string, error) {
 	}
 
 	return yamlStr, nil
+}
+
+// Pause 暂停运行中的流水线
+func (r *RuntimeImpl) Pause(ctx context.Context, id string) error {
+	r.mu.RLock()
+	pipeline, exists := r.pipelines[id]
+	r.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("pipeline with id %s not found", id)
+	}
+
+	return pipeline.Pause()
+}
+
+// Resume 恢复暂停或停止的流水线
+func (r *RuntimeImpl) Resume(ctx context.Context, id string) error {
+	r.mu.RLock()
+	pipeline, exists := r.pipelines[id]
+	r.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("pipeline with id %s not found", id)
+	}
+
+	return pipeline.Resume(ctx)
+}
+
+// ModifyGraph 对暂停或停止的流水线执行图修改（原子操作）
+func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications GraphModifications) error {
+	r.mu.RLock()
+	pipeline, exists := r.pipelines[id]
+	config, configExists := r.pipelineConfigs[id]
+	r.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("pipeline with id %s not found", id)
+	}
+
+	// 校验可修改状态
+	if !pipeline.IsModifiable() {
+		return ErrPipelineRunning
+	}
+
+	graph := pipeline.GetGraph()
+
+	// 快照当前状态用于回滚
+	snapshotNodes := graph.Nodes()
+	snapshotEdges := graph.Edges()
+
+	// 回滚函数
+	rollback := func() {
+		// 恢复被删除的节点
+		for _, node := range snapshotNodes {
+			if _, ok := graph.GetNode(node.Id()); !ok {
+				graph.AddVertex(node)
+			}
+		}
+		// 恢复被删除的边
+		for _, edge := range snapshotEdges {
+			if _, ok := graph.GetEdge(edge.Source().Id(), edge.Target().Id()); !ok {
+				_ = graph.AddEdge(edge)
+			}
+		}
+	}
+
+	// 1. 先删除边（在删除节点之前，避免悬空引用）
+	for _, removal := range modifications.RemoveEdges {
+		if err := graph.RemoveEdge(removal.Source, removal.Target); err != nil {
+			rollback()
+			return fmt.Errorf("failed to remove edge %s->%s: %w", removal.Source, removal.Target, err)
+		}
+	}
+
+	// 2. 删除节点（自动删除关联边）
+	for _, nodeID := range modifications.RemoveNodes {
+		if err := graph.RemoveVertex(nodeID); err != nil {
+			rollback()
+			return fmt.Errorf("failed to remove node %s: %w", nodeID, err)
+		}
+	}
+
+	// 3. 添加新节点
+	nodeMap := make(map[string]Node)
+	for _, nodeConfig := range modifications.AddNodes {
+		// 确保步骤有 ID
+		for i := range nodeConfig.Steps {
+			if nodeConfig.Steps[i].Id == "" {
+				nodeConfig.Steps[i].Id = NewUUID()
+			}
+		}
+
+		nodeConfigMap := make(map[string]any)
+		for k, v := range nodeConfig.Config {
+			nodeConfigMap[k] = v
+		}
+		if nodeConfig.Extract != nil {
+			nodeConfigMap["extract"] = nodeConfig.Extract
+		}
+
+		// 使用 Name 作为节点 ID（与 buildGraph 一致）
+		nodeName := nodeConfig.Name
+		if nodeName == "" {
+			nodeName = nodeConfig.Id
+		}
+
+		node := NewDGANodeWithConfig(
+			nodeName,
+			StatusUnknown,
+			nodeConfig.Executor,
+			nodeConfig.Image,
+			nodeConfig.Steps,
+			nodeConfigMap,
+		)
+		node.EnsureIds()
+		nodeMap[nodeName] = node
+		graph.AddVertex(node)
+	}
+
+	// 4. 添加新边
+	for _, edgeMod := range modifications.AddEdges {
+		srcNode, ok := graph.GetNode(edgeMod.Source)
+		if !ok {
+			rollback()
+			return fmt.Errorf("source node %s not found for edge", edgeMod.Source)
+		}
+		destNode, ok := graph.GetNode(edgeMod.Target)
+		if !ok {
+			rollback()
+			return fmt.Errorf("target node %s not found for edge", edgeMod.Target)
+		}
+
+		var edge Edge
+		if edgeMod.Expression != "" {
+			edge = NewConditionalEdge(srcNode, destNode, edgeMod.Expression)
+		} else {
+			edge = NewDGAEdge(srcNode, destNode)
+		}
+
+		if err := graph.AddEdge(edge); err != nil {
+			rollback()
+			return fmt.Errorf("failed to add edge %s->%s: %w", edgeMod.Source, edgeMod.Target, err)
+		}
+	}
+
+	// 5. 解析 Mermaid 图片段
+	if modifications.AddGraph != "" {
+		// 合并已有的和新创建的 nodeMap
+		existingNodes := graph.Nodes()
+		for k, v := range existingNodes {
+			nodeMap[k] = v
+		}
+		r.parseGraphEdges(graph, nodeMap, modifications.AddGraph)
+	}
+
+		// 6. 校验图结构：允许条件回边（循环图），拒绝无条件环
+		if graph.HasCycle() {
+			if dga, ok := graph.(*DGAGraph); ok && dga.IsCyclic() {
+				// 条件回边产生的环，允许
+			} else {
+				rollback()
+				return ErrHasCycle
+			}
+		}
+
+	// 7. 更新存储的配置（保证 ExportConfig 准确）
+	if configExists {
+		// 更新 Nodes 配置
+		if config.Nodes == nil {
+			config.Nodes = make(map[string]NodeConfig)
+		}
+		for _, nodeID := range modifications.RemoveNodes {
+			delete(config.Nodes, nodeID)
+		}
+		for _, nodeConfig := range modifications.AddNodes {
+			nodeName := nodeConfig.Name
+			if nodeName == "" {
+				nodeName = nodeConfig.Id
+			}
+			config.Nodes[nodeName] = nodeConfig
+		}
+	}
+
+	// 8. 触发图修改事件
+	if pipelineImpl, ok := pipeline.(*PipelineImpl); ok {
+		pipelineImpl.notifyEvent(PipelineGraphModified)
+	}
+
+	return nil
 }
 

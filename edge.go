@@ -22,4 +22,6 @@ type EvaluationContext interface {
 	WithNode(node Node) EvaluationContext
 	WithPipeline(pipeline Pipeline) EvaluationContext
 	WithParams(params map[string]any) EvaluationContext
+	WithIteration(iteration int) EvaluationContext
+	Iteration() int
 }
