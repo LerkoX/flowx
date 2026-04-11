@@ -227,7 +227,7 @@ rt.Notify(map[string]any{
 rt.Notify(42)
 ```
 
-## ���停与恢复
+## 暂停与恢复
 
 ### 暂停流水线
 
@@ -241,7 +241,7 @@ err := rt.Pause(ctx, "pipeline-001")
 
 ### 恢复流水线
 
-`Resume` 恢复��停或停止的流水线：
+`Resume` 恢复暂停或停止的流水线：
 
 ```go
 err := rt.Resume(ctx, "pipeline-001")

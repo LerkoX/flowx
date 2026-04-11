@@ -773,7 +773,7 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 	return nil
 }
 
-// runLevelByLevel 逐层执行 BFS 遍��，支持暂停/恢复和循环图
+// runLevelByLevel 逐层执行 BFS 遍历，支持暂停/恢复和循环图
 // 无环图：执行完所有层级后直接返回
 // 有环图：执行完所有层级后评估回边条件，满足则重置循环节点并继续迭代
 func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, evalCtx EvaluationContext, startLevel int) error {
