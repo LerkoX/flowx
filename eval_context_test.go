@@ -39,8 +39,12 @@ func TestDGAEvaluationContext_All_Empty(t *testing.T) {
 	ctx := NewEvaluationContext()
 
 	all := ctx.All()
-	if len(all) != 0 {
-		t.Errorf("Expected empty map, got %d items", len(all))
+	// All() 总是包含 iteration 字段
+	if len(all) != 1 {
+		t.Errorf("Expected 1 item (iteration), got %d items", len(all))
+	}
+	if all["iteration"] != 0 {
+		t.Errorf("Expected iteration=0, got %v", all["iteration"])
 	}
 }
 
@@ -51,8 +55,9 @@ func TestDGAEvaluationContext_All_WithParams(t *testing.T) {
 	})
 
 	all := ctx.All()
-	if len(all) != 2 {
-		t.Errorf("Expected 2 items, got %d", len(all))
+	// 2 params + 1 iteration = 3 items
+	if len(all) != 3 {
+		t.Errorf("Expected 3 items, got %d", len(all))
 	}
 
 	if all["branch"] != "main" {

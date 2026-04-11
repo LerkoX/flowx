@@ -2,9 +2,10 @@ package pipelinex
 
 // DGAEvaluationContext 是EvaluationContext接口的实现
 type DGAEvaluationContext struct {
-	data     map[string]any
-	node     Node
-	pipeline Pipeline
+	data      map[string]any
+	node      Node
+	pipeline  Pipeline
+	iteration int
 }
 
 // NewEvaluationContext 创建一个新的求值上下文
@@ -63,6 +64,9 @@ func (c *DGAEvaluationContext) All() map[string]any {
 		result["nodeId"] = c.node.Id()
 		result["nodeStatus"] = c.node.Status()
 	}
+
+	// 添加迭代计数器
+	result["iteration"] = c.iteration
 
 	// 添加流水线相关数据
 	if c.pipeline != nil {
@@ -136,9 +140,10 @@ func lastIndexOfByte(s string, c byte) int {
 // WithNode 设置当前节点并返回新的上下文（链式调用）
 func (c *DGAEvaluationContext) WithNode(node Node) EvaluationContext {
 	newCtx := &DGAEvaluationContext{
-		data:     make(map[string]any),
-		node:     node,
-		pipeline: c.pipeline,
+		data:      make(map[string]any),
+		node:      node,
+		pipeline:  c.pipeline,
+		iteration: c.iteration,
 	}
 	for k, v := range c.data {
 		newCtx.data[k] = v
@@ -149,9 +154,10 @@ func (c *DGAEvaluationContext) WithNode(node Node) EvaluationContext {
 // WithPipeline 设置流水线并返回新的上下文（链式调用）
 func (c *DGAEvaluationContext) WithPipeline(pipeline Pipeline) EvaluationContext {
 	newCtx := &DGAEvaluationContext{
-		data:     make(map[string]any),
-		node:     c.node,
-		pipeline: pipeline,
+		data:      make(map[string]any),
+		node:      c.node,
+		pipeline:  pipeline,
+		iteration: c.iteration,
 	}
 	for k, v := range c.data {
 		newCtx.data[k] = v
@@ -162,9 +168,10 @@ func (c *DGAEvaluationContext) WithPipeline(pipeline Pipeline) EvaluationContext
 // WithParams 添加参数到上下文并返回新的上下文（链式调用）
 func (c *DGAEvaluationContext) WithParams(params map[string]any) EvaluationContext {
 	newCtx := &DGAEvaluationContext{
-		data:     make(map[string]any),
-		node:     c.node,
-		pipeline: c.pipeline,
+		data:      make(map[string]any),
+		node:      c.node,
+		pipeline:  c.pipeline,
+		iteration: c.iteration,
 	}
 	for k, v := range c.data {
 		newCtx.data[k] = v
@@ -173,4 +180,23 @@ func (c *DGAEvaluationContext) WithParams(params map[string]any) EvaluationConte
 		newCtx.data[k] = v
 	}
 	return newCtx
+}
+
+// WithIteration 设置迭代计数器并返回新的上下文（链式调用）
+func (c *DGAEvaluationContext) WithIteration(iteration int) EvaluationContext {
+	newCtx := &DGAEvaluationContext{
+		data:      make(map[string]any),
+		node:      c.node,
+		pipeline:  c.pipeline,
+		iteration: iteration,
+	}
+	for k, v := range c.data {
+		newCtx.data[k] = v
+	}
+	return newCtx
+}
+
+// Iteration 返回当前迭代计数器值
+func (c *DGAEvaluationContext) Iteration() int {
+	return c.iteration
 }

@@ -1,0 +1,47 @@
+Version: "1.0"
+Name: cyclic-loop-test
+
+Metadate:
+  type: in-config
+  data:
+    counter: "0"
+
+Executors:
+  local:
+    type: local
+    config: {}
+
+Param: {}
+
+MaxLoopIterations: 5
+
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> A: {{ iteration < 3 }}
+    C --> D
+    D --> [*]
+
+Nodes:
+  A:
+    executor: local
+    steps:
+      - name: step1
+        run: "echo 'loop-A'"
+  B:
+    executor: local
+    steps:
+      - name: step1
+        run: "echo 'loop-B'"
+  C:
+    executor: local
+    steps:
+      - name: step1
+        run: "echo 'loop-C'"
+  D:
+    executor: local
+    steps:
+      - name: step1
+        run: "echo 'loop-D'"

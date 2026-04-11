@@ -15,6 +15,9 @@ var (
 	PipelineExecutorPrepareDone Event = EventPipelineExecutorPrepareDone // 流水线执行器准备完毕
 	PipelineNodeStart           Event = EventPipelineNodeStart           // 节点开始
 	PipelineNodeFinish          Event = EventPipelineNodeFinish          // 节点完成
+	PipelinePaused              Event = EventPipelinePaused              // 流水线暂停
+	PipelineResumed             Event = EventPipelineResumed             // 流水线恢复
+	PipelineGraphModified       Event = EventPipelineGraphModified       // 图被修改
 )
 
 type TraversalFn func(ctx context.Context, node Node) error
@@ -25,6 +28,12 @@ type Graph interface {
 	AddVertex(node Node)
 	//AddEdge 添加边
 	AddEdge(edge Edge) error
+	//RemoveVertex 删除节点及其所有关联边
+	RemoveVertex(nodeID string) error
+	//RemoveEdge 删除指定的边
+	RemoveEdge(srcID, destID string) error
+	//HasCycle 检查图中是否存在环
+	HasCycle() bool
 }
 
 type GraphReader interface {
@@ -34,6 +43,14 @@ type GraphReader interface {
 	Edges() []Edge
 	//Traversal 遍历图结构
 	Traversal(ctx context.Context, evalCtx EvaluationContext, fn TraversalFn) error
+	//GetNode 根据节点ID查找节点
+	GetNode(nodeID string) (Node, bool)
+	//GetEdge 根据源节点和目标节点ID查找边
+	GetEdge(srcID, destID string) (Edge, bool)
+	//IncomingEdges 返回指向指定节点的所有边
+	IncomingEdges(nodeID string) []Edge
+	//OutgoingEdges 返回从指定节点出发的所有边
+	OutgoingEdges(nodeID string) []Edge
 }
 
 // ExecutorProvider Executor提供者接口
@@ -85,4 +102,10 @@ type Pipeline interface {
 	SetTemplateEngine(engine TemplateEngine)
 	//GetTemplateEngine 获取模板引擎
 	GetTemplateEngine() TemplateEngine
+	//Pause ��停流水线，等待当前层执行完成后暂停
+	Pause() error
+	//Resume 恢复暂停的流水线
+	Resume(ctx context.Context) error
+	//IsModifiable 判断当前是否可修改图
+	IsModifiable() bool
 }
