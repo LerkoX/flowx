@@ -20,6 +20,9 @@ type Runtime interface {
     SetTemplateEngine(engine TemplateEngine)                                  // 设置模板引擎
     GetTemplateEngine() TemplateEngine                                        // 获取模板引擎
     ExportConfig(id string) (string, error)                                   // 导出运行时配置
+    Pause(ctx context.Context, id string) error                               // 暂停流水线
+    Resume(ctx context.Context, id string) error                              // 恢复流水线
+    ModifyGraph(ctx context.Context, id string, modifications GraphModifications) error // 动态修改图
 }
 ```
 
@@ -223,6 +226,80 @@ rt.Notify(map[string]any{
 // 发送数字
 rt.Notify(42)
 ```
+
+## ���停与恢复
+
+### 暂停流水线
+
+`Pause` 让流水线在当前 BFS 层级执行完成后暂停：
+
+```go
+err := rt.Pause(ctx, "pipeline-001")
+```
+
+暂停后流水线状态变为 `PAUSED`，可以通过 `ExportConfig` 导出状态，或通过 `ModifyGraph` 修改图结构。
+
+### 恢复流水线
+
+`Resume` 恢复��停或停止的流水线：
+
+```go
+err := rt.Resume(ctx, "pipeline-001")
+```
+
+恢复后会重新计算 BFS 层级（图可能已被修改），从暂停时的层级继续执行。
+
+## 动态图修改
+
+`ModifyGraph` 在流水线处于可修改状态时（`PAUSED`、`STOPPED`、`FAILED`、`CANCELLED`、`SUCCESS`）执行图结构变更：
+
+```go
+mods := pipelinex.GraphModifications{
+    RemoveNodes: []string{"OldNode"},
+    RemoveEdges: []pipelinex.EdgeID{{Source: "A", Target: "B"}},
+    AddNodes: []pipelinex.NodeConfig{
+        {
+            Name:     "NewNode",
+            Executor: "local",
+            Steps: []pipelinex.Step{
+                {Name: "step1", Run: "echo hello"},
+            },
+        },
+    },
+    AddEdges: []pipelinex.EdgeModification{
+        {Source: "NewNode", Target: "ExistingNode"},
+        {Source: "X", Target: "Y", Expression: "{{ env == 'prod' }}"},
+    },
+    AddGraph: "stateDiagram-v2\n  D --> E: {{ condition }}",
+}
+
+err := rt.ModifyGraph(ctx, "pipeline-001", mods)
+```
+
+### GraphModifications 结构
+
+```go
+type GraphModifications struct {
+    RemoveNodes []string           // 要删除的节点 ID 列表
+    RemoveEdges []EdgeID           // 要删除的边列表
+    AddNodes    []NodeConfig       // 要添加的节点配置
+    AddEdges    []EdgeModification // 要添加的边
+    AddGraph    string             // Mermaid 图片段（解析后添加节点和边）
+}
+```
+
+### 操作顺序与原子性
+
+修改按以下顺序执行，任何步骤失败都会自动回滚：
+
+1. 删除边
+2. 删除节点（自动删除关联边）
+3. 添加新节点
+4. 添加新边
+5. 解析 Mermaid 图片段
+6. 校验图结构（允许条件回边，拒绝无条件环）
+7. 更新存储的配置
+8. 触发 `PipelineGraphModified` 事件
 
 ## 并发安全
 

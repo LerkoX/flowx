@@ -12,6 +12,7 @@
 ## 特性
 
 - **DAG 工作流**：使用 Mermaid 语法定义复杂的流水线有向无环图结构
+- **循环图支持**：条件回边实现可控循环，通过 `iteration` 变量控制迭代次数
 - **多后端执行**：支持本地、Docker 和 Kubernetes 执行器
 - **并发执行**：独立任务并行运行以获得最佳性能
 - **条件边**：使用模板表达式实现动态执行路径
@@ -21,6 +22,8 @@
 - **日志流式传输**：实时日志输出，支持自定义日志推送
 - **输出提取**：支持通过代码块或正则表达式从命令输出提取结构化数据
 - **运行时恢复**：支持从保存状态恢复流水线执行
+- **暂停恢复**：流水线可暂停/恢复，暂停期间支持修改图结构
+- **动态图修改**：运行时安全添加/删除节点和边
 - **数据传递**：节点间通过元数据共享数据
 
 ## 安装
@@ -263,6 +266,27 @@ QualityCheck --> DeployStaging: "{{ QualityCheck.allTestsPassed == true and Qual
 Deploy --> Production: "{{ eq .Param.environment 'production' and .ManualApproval.approved == true }}"
 ```
 
+## 循环图（Loop Execution）
+
+PipelineX 通过条件回边支持可控循环。当条件边形成环路时，引擎将其标记为回边，实现迭代执行。
+
+```yaml
+MaxLoopIterations: 5          # 安全限制（默认 100）
+
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> A: {{ iteration < 3 }}    # 回边：循环 3 次
+    C --> D
+    D --> [*]
+```
+
+`iteration` 变量从 0 开始，每次循环 +1。上例中 A→B→C→D 执行 3 轮后循环结束。
+
+> 详见 [条件边](doc/edge.md) 中回边和 `iteration` 说明。
+
 ## 数据传递
 
 通过元数据在节点间共享数据：
@@ -455,6 +479,9 @@ type Runtime interface {
 type Pipeline interface {
     Run(ctx context.Context) error                            // 运行流水线
     Cancel()                                                  // 取消流水线
+    Pause() error                                             // 暂停流水线（等待当前层完成）
+    Resume(ctx context.Context) error                         // 恢复暂停的流水线
+    IsModifiable() bool                                       // 当前是否可修改图
     Done() chan struct{}                                      // 流水线完成信号
     SetGraph(graph Graph)                                     // 设置 DAG 图
     GetGraph() Graph                                          // 获取 DAG 图

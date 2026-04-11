@@ -12,6 +12,7 @@ A flexible and extensible pipeline execution library for Go, supporting multiple
 ## Features
 
 - **DAG-Based Workflow**: Define complex pipelines using Directed Acyclic Graph (DAG) structure with Mermaid syntax
+- **Cyclic Graph Support**: Conditional back-edges for controlled loops with `iteration` counter
 - **Multi-Backend Execution**: Support for Local, Docker, and Kubernetes executors
 - **Concurrent Execution**: Independent tasks run in parallel for optimal performance
 - **Conditional Edges**: Dynamic execution paths with template-based condition expressions
@@ -21,6 +22,8 @@ A flexible and extensible pipeline execution library for Go, supporting multiple
 - **Log Streaming**: Real-time log output with customizable log pushing
 - **Output Extraction**: Extract structured data from command output using codec-block or regex patterns
 - **Runtime Recovery**: Resume pipeline execution from saved state
+- **Pause & Resume**: Pause running pipelines and modify graph structure during pause
+- **Dynamic Graph Modification**: Add/remove nodes and edges at runtime
 - **Data Passing**: Share data between nodes using metadata
 
 ## Installation
@@ -263,6 +266,27 @@ QualityCheck --> DeployStaging: "{{ QualityCheck.allTestsPassed == true and Qual
 Deploy --> Production: "{{ eq .Param.environment 'production' and .ManualApproval.approved == true }}"
 ```
 
+## Cyclic Graph (Loop Execution)
+
+PipelineX supports controlled loops through conditional back-edges. A conditional edge that creates a cycle is accepted as a back-edge, enabling iterative execution.
+
+```yaml
+MaxLoopIterations: 5          # Safety limit (default: 100)
+
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> A: {{ iteration < 3 }}    # Back-edge: loop 3 times
+    C --> D
+    D --> [*]
+```
+
+The `iteration` variable starts at 0 and increments each loop. In this example, nodes A→B→C→D execute 3 times, then the loop exits.
+
+> See [Conditional Edges](doc/edge.md) for details on back-edges and `iteration`.
+
 ## Data Passing
 
 Share data between nodes using metadata:
@@ -453,6 +477,9 @@ type Runtime interface {
 type Pipeline interface {
     Run(ctx context.Context) error                            // Run pipeline
     Cancel()                                                  // Cancel pipeline
+    Pause() error                                             // Pause pipeline (waits for current level)
+    Resume(ctx context.Context) error                         // Resume paused pipeline
+    IsModifiable() bool                                       // Check if graph can be modified
     Done() chan struct{}                                      // Pipeline completion signal
     SetGraph(graph Graph)                                     // Set DAG graph
     GetGraph() Graph                                          // Get DAG graph

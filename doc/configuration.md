@@ -33,6 +33,8 @@ Logging:
   headers: {}
   timeout: 5s
 
+MaxLoopIterations: 100
+
 Graph: |
   stateDiagram-v2
     [*] --> Node1
@@ -276,6 +278,31 @@ Graph: |
 ```
 
 > 更多详情参见 [条件边](edge.md)
+
+---
+
+## 8.5 MaxLoopIterations（循环迭代上限）
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `MaxLoopIterations` | int | 100 | 循环图最大迭代次数，超过则返回错误 |
+
+### 示例
+
+```yaml
+MaxLoopIterations: 5
+
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> A: {{ iteration < 3 }}
+    C --> D
+    D --> [*]
+```
+
+> 更多详情参见 [流水线核心](pipeline.md) 中循环图部分
 
 ---
 
