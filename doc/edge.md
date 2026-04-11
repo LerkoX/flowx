@@ -40,7 +40,7 @@ edge := NewConditionalEdgeWithEngine(sourceNode, targetNode, expression, engine)
 
 ```go
 type EvaluationContext interface {
-    Get(key string) (any, bool)                      // ��找值
+    Get(key string) (any, bool)                      // 查找值
     All() map[string]any                             // 获取完整上下文
     WithNode(node Node) EvaluationContext            // 附加节点信息（返回新实例）
     WithPipeline(pipeline Pipeline) EvaluationContext // 附加流水线信息（返回新实例）

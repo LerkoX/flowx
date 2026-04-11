@@ -3,6 +3,7 @@ package pipelinex
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -947,3 +948,180 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 	return nil
 }
 
+
+// UpdateConfig 通过新的 YAML 配置自动比对差异并更新流水线图
+// 已执行的节点不允许删除或替换，只允许修改尚未运行的节点
+// 除 Nodes 和 Graph 外的其他配置字段不可更新
+func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML string) error {
+	r.mu.RLock()
+	pipeline, exists := r.pipelines[id]
+	oldConfig, configExists := r.pipelineConfigs[id]
+	r.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("pipeline with id %s not found", id)
+	}
+
+	if !pipeline.IsModifiable() {
+		return ErrPipelineRunning
+	}
+
+	newConfig, err := r.parseConfig(newConfigYAML)
+	if err != nil {
+		return fmt.Errorf("failed to parse new config: %w", err)
+	}
+
+	if configExists {
+		if err := validateImmutableFields(oldConfig, newConfig); err != nil {
+			return err
+		}
+	}
+
+	graph := pipeline.GetGraph()
+	mods, err := r.computeNodeModifications(oldConfig, newConfig, graph)
+	if err != nil {
+		return err
+	}
+
+	if newConfig.Graph != oldConfig.Graph {
+		edges := graph.Edges()
+		for _, edge := range edges {
+			mods.RemoveEdges = append(mods.RemoveEdges, EdgeRemoval{
+				Source: edge.Source().Id(),
+				Target: edge.Target().Id(),
+			})
+		}
+		if newConfig.Graph != "" {
+			mods.AddGraph = newConfig.Graph
+		}
+	}
+
+	if mods.IsEmpty() {
+		return nil
+	}
+
+	if err := r.ModifyGraph(ctx, id, mods); err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	if config, ok := r.pipelineConfigs[id]; ok {
+		config.Graph = newConfig.Graph
+	}
+	r.mu.Unlock()
+
+	return nil
+}
+
+// validateImmutableFields 校验不可变字段是否被修改
+func validateImmutableFields(old, new *PipelineConfig) error {
+	if old.Version != new.Version {
+		return fmt.Errorf("%w: Version cannot be updated", ErrImmutableField)
+	}
+	if old.Name != new.Name {
+		return fmt.Errorf("%w: Name cannot be updated", ErrImmutableField)
+	}
+	if old.MaxLoopIterations != new.MaxLoopIterations {
+		return fmt.Errorf("%w: MaxLoopIterations cannot be updated", ErrImmutableField)
+	}
+	if !reflect.DeepEqual(old.Param, new.Param) {
+		return fmt.Errorf("%w: Param cannot be updated", ErrImmutableField)
+	}
+	if !reflect.DeepEqual(old.Executors, new.Executors) {
+		return fmt.Errorf("%w: Executors cannot be updated", ErrImmutableField)
+	}
+	if !reflect.DeepEqual(old.Logging, new.Logging) {
+		return fmt.Errorf("%w: Logging cannot be updated", ErrImmutableField)
+	}
+	if !reflect.DeepEqual(old.AI, new.AI) {
+		return fmt.Errorf("%w: AI cannot be updated", ErrImmutableField)
+	}
+	if !reflect.DeepEqual(old.Metadate, new.Metadate) {
+		return fmt.Errorf("%w: Metadate cannot be updated", ErrImmutableField)
+	}
+	return nil
+}
+
+// computeNodeModifications 比对新旧节点配置，计算差异
+func (r *RuntimeImpl) computeNodeModifications(oldConfig, newConfig *PipelineConfig, graph Graph) (GraphModifications, error) {
+	var mods GraphModifications
+
+	oldNodes := oldConfig.Nodes
+	if oldNodes == nil {
+		oldNodes = make(map[string]NodeConfig)
+	}
+	newNodes := newConfig.Nodes
+	if newNodes == nil {
+		newNodes = make(map[string]NodeConfig)
+	}
+
+	// 找被删除的节点（old 有，new 没有）
+	for nodeName := range oldNodes {
+		if _, exists := newNodes[nodeName]; !exists {
+			node, ok := graph.GetNode(nodeName)
+			if ok && isNodeExecuted(node) {
+				return mods, fmt.Errorf("%w: cannot remove node %q (status: %s)",
+					ErrNodeAlreadyExecuted, nodeName, node.GetRuntimeStatus().Status)
+			}
+			mods.RemoveNodes = append(mods.RemoveNodes, nodeName)
+		}
+	}
+
+	// 找新增/修改的节点
+	for nodeName, newNodeConfig := range newNodes {
+		// 确保 Name 字段与 map key 一致（与 buildGraph 行为一致）
+		if newNodeConfig.Name == "" {
+			newNodeConfig.Name = nodeName
+		}
+		oldNodeConfig, exists := oldNodes[nodeName]
+		if !exists {
+			mods.AddNodes = append(mods.AddNodes, newNodeConfig)
+		} else {
+			if !nodeConfigEqual(oldNodeConfig, newNodeConfig) {
+				node, ok := graph.GetNode(nodeName)
+				if ok && isNodeExecuted(node) {
+					return mods, fmt.Errorf("%w: cannot modify node %q (status: %s)",
+						ErrNodeAlreadyExecuted, nodeName, node.GetRuntimeStatus().Status)
+				}
+				mods.RemoveNodes = append(mods.RemoveNodes, nodeName)
+				mods.AddNodes = append(mods.AddNodes, newNodeConfig)
+			}
+		}
+	}
+
+	return mods, nil
+}
+
+// nodeConfigEqual 比较两个 NodeConfig 是否相等（忽略 Runtime 字段）
+func nodeConfigEqual(a, b NodeConfig) bool {
+	aCopy := a
+	bCopy := b
+	// 忽略运行时状态
+	aCopy.Runtime = nil
+	bCopy.Runtime = nil
+	// 忽略 Config（interface{} 类型的 map DeepEqual 不稳定）
+	aCopy.Config = nil
+	bCopy.Config = nil
+	// 忽略 Description、Id 和 Name（不影响执行，Name 从 map key 派生）
+	aCopy.Description = ""
+	bCopy.Description = ""
+	aCopy.Id = ""
+	bCopy.Id = ""
+	aCopy.Name = ""
+	bCopy.Name = ""
+	return reflect.DeepEqual(aCopy, bCopy)
+}
+
+// isNodeExecuted 判断节点是否已经执行过
+func isNodeExecuted(node Node) bool {
+	status := node.GetRuntimeStatus()
+	if status == nil {
+		return false
+	}
+	switch status.Status {
+	case StatusSuccess, StatusFailed, StatusCancelled, StatusRunning:
+		return true
+	default:
+		return false
+	}
+}
