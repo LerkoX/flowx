@@ -5,24 +5,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LerkoX/flowx/executor/provider"
+	"github.com/LerkoX/flowx/core"
+	"github.com/LerkoX/flowx/dag"
 )
 
 // TestDGAGraph_RemoveVertex 测试删除节点及其关联边
 func TestDGAGraph_RemoveVertex(t *testing.T) {
-	graph := NewDGAGraph()
+	graph := dag.NewDGAGraph()
 
 	// 创建 A -> B -> C 的线性图
-	nodeA := NewDGANodeWithConfig("A", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo A"}}, nil)
-	nodeB := NewDGANodeWithConfig("B", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo B"}}, nil)
-	nodeC := NewDGANodeWithConfig("C", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo C"}}, nil)
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeB := dag.NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo B"}}, nil)
+	nodeC := dag.NewDGANodeWithConfig("C", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo C"}}, nil)
 
 	graph.AddVertex(nodeA)
 	graph.AddVertex(nodeB)
 	graph.AddVertex(nodeC)
 
-	edgeAB := NewDGAEdge(nodeA, nodeB)
-	edgeBC := NewDGAEdge(nodeB, nodeC)
+	edgeAB := dag.NewDGAEdge(nodeA, nodeB)
+	edgeBC := dag.NewDGAEdge(nodeB, nodeC)
 	if err := graph.AddEdge(edgeAB); err != nil {
 		t.Fatalf("AddEdge A->B failed: %v", err)
 	}
@@ -60,22 +61,22 @@ func TestDGAGraph_RemoveVertex(t *testing.T) {
 	}
 
 	// 删除不存在的节点应返回错误
-	if err := graph.RemoveVertex("NonExistent"); err != ErrNodeNotFound {
+	if err := graph.RemoveVertex("NonExistent"); err != core.ErrNodeNotFound {
 		t.Errorf("Expected ErrNodeNotFound, got %v", err)
 	}
 }
 
 // TestDGAGraph_RemoveEdge 测试删除指定边
 func TestDGAGraph_RemoveEdge(t *testing.T) {
-	graph := NewDGAGraph()
+	graph := dag.NewDGAGraph()
 
-	nodeA := NewDGANodeWithConfig("A", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo A"}}, nil)
-	nodeB := NewDGANodeWithConfig("B", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo B"}}, nil)
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeB := dag.NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo B"}}, nil)
 
 	graph.AddVertex(nodeA)
 	graph.AddVertex(nodeB)
 
-	edgeAB := NewDGAEdge(nodeA, nodeB)
+	edgeAB := dag.NewDGAEdge(nodeA, nodeB)
 	if err := graph.AddEdge(edgeAB); err != nil {
 		t.Fatalf("AddEdge failed: %v", err)
 	}
@@ -99,14 +100,14 @@ func TestDGAGraph_RemoveEdge(t *testing.T) {
 	}
 
 	// 删除不存在的边应返回错误
-	if err := graph.RemoveEdge("A", "B"); err != ErrEdgeNotFound {
+	if err := graph.RemoveEdge("A", "B"); err != core.ErrEdgeNotFound {
 		t.Errorf("Expected ErrEdgeNotFound, got %v", err)
 	}
 }
 
 // TestDGAGraph_GetNode_GetEdge 测试节点和边查找
 func TestDGAGraph_GetNode_GetEdge(t *testing.T) {
-	graph := NewDGAGraph()
+	graph := dag.NewDGAGraph()
 
 	// 查找不存在的节点
 	if _, ok := graph.GetNode("X"); ok {
@@ -116,7 +117,7 @@ func TestDGAGraph_GetNode_GetEdge(t *testing.T) {
 		t.Error("GetEdge should return false for non-existent edge")
 	}
 
-	nodeA := NewDGANodeWithConfig("A", StatusUnknown, "local", "", nil, nil)
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusUnknown, "local", "", nil, nil)
 	graph.AddVertex(nodeA)
 
 	if node, ok := graph.GetNode("A"); !ok || node.Id() != "A" {
@@ -126,18 +127,18 @@ func TestDGAGraph_GetNode_GetEdge(t *testing.T) {
 
 // TestDGAGraph_IncomingOutgoingEdges 测试入边和出边查询
 func TestDGAGraph_IncomingOutgoingEdges(t *testing.T) {
-	graph := NewDGAGraph()
+	graph := dag.NewDGAGraph()
 
-	nodeA := NewDGANodeWithConfig("A", StatusUnknown, "local", "", nil, nil)
-	nodeB := NewDGANodeWithConfig("B", StatusUnknown, "local", "", nil, nil)
-	nodeC := NewDGANodeWithConfig("C", StatusUnknown, "local", "", nil, nil)
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusUnknown, "local", "", nil, nil)
+	nodeB := dag.NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", nil, nil)
+	nodeC := dag.NewDGANodeWithConfig("C", core.StatusUnknown, "local", "", nil, nil)
 
 	graph.AddVertex(nodeA)
 	graph.AddVertex(nodeB)
 	graph.AddVertex(nodeC)
 
-	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
-	graph.AddEdge(NewDGAEdge(nodeC, nodeB))
+	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeB))
+	graph.AddEdge(dag.NewDGAEdge(nodeC, nodeB))
 
 	// B 的入边来自 A 和 C
 	inEdges := graph.IncomingEdges("B")
@@ -160,24 +161,24 @@ func TestDGAGraph_IncomingOutgoingEdges(t *testing.T) {
 
 // TestDGAGraph_TraversalSteps 测试 BFS 层级计算
 func TestDGAGraph_TraversalSteps(t *testing.T) {
-	graph := NewDGAGraph()
+	graph := dag.NewDGAGraph()
 
-	nodeA := NewDGANodeWithConfig("A", StatusUnknown, "local", "", nil, nil)
-	nodeB := NewDGANodeWithConfig("B", StatusUnknown, "local", "", nil, nil)
-	nodeC := NewDGANodeWithConfig("C", StatusUnknown, "local", "", nil, nil)
-	nodeD := NewDGANodeWithConfig("D", StatusUnknown, "local", "", nil, nil)
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusUnknown, "local", "", nil, nil)
+	nodeB := dag.NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", nil, nil)
+	nodeC := dag.NewDGANodeWithConfig("C", core.StatusUnknown, "local", "", nil, nil)
+	nodeD := dag.NewDGANodeWithConfig("D", core.StatusUnknown, "local", "", nil, nil)
 
 	graph.AddVertex(nodeA)
 	graph.AddVertex(nodeB)
 	graph.AddVertex(nodeC)
 	graph.AddVertex(nodeD)
 
-	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
-	graph.AddEdge(NewDGAEdge(nodeA, nodeC))
-	graph.AddEdge(NewDGAEdge(nodeB, nodeD))
-	graph.AddEdge(NewDGAEdge(nodeC, nodeD))
+	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeB))
+	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeC))
+	graph.AddEdge(dag.NewDGAEdge(nodeB, nodeD))
+	graph.AddEdge(dag.NewDGAEdge(nodeC, nodeD))
 
-	evalCtx := NewEvaluationContext()
+	evalCtx := dag.NewEvaluationContext()
 	levels := graph.TraversalSteps(evalCtx)
 
 	if len(levels) != 3 {
@@ -227,7 +228,7 @@ func TestRuntimeImpl_PauseResume(t *testing.T) {
 
 	// 验证状态
 	time.Sleep(200 * time.Millisecond)
-	if pipeline.Status() != StatusPaused {
+	if pipeline.Status() != core.StatusPaused {
 		t.Logf("Pipeline status: %s (expected PAUSED)", pipeline.Status())
 	}
 
@@ -248,7 +249,7 @@ func TestRuntimeImpl_PauseResume(t *testing.T) {
 		t.Fatal("Pipeline did not complete after resume")
 	}
 
-	if pipeline.Status() != StatusSuccess {
+	if pipeline.Status() != core.StatusSuccess {
 		t.Errorf("Expected SUCCESS, got %s", pipeline.Status())
 	}
 }
@@ -315,16 +316,16 @@ func TestGraph_DirectModification(t *testing.T) {
 	}
 
 	// 添加新节点 D 和 E
-	nodeD := NewDGANodeWithConfig("D", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo D"}}, nil)
-	nodeE := NewDGANodeWithConfig("E", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo E"}}, nil)
+	nodeD := dag.NewDGANodeWithConfig("D", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo D"}}, nil)
+	nodeE := dag.NewDGANodeWithConfig("E", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo E"}}, nil)
 	graph.AddVertex(nodeD)
 	graph.AddVertex(nodeE)
 
 	// 添加边 B -> D -> E
-	if err := graph.AddEdge(NewDGAEdge(graph.Nodes()["B"], nodeD)); err != nil {
+	if err := graph.AddEdge(dag.NewDGAEdge(graph.Nodes()["B"], nodeD)); err != nil {
 		t.Fatalf("AddEdge B->D failed: %v", err)
 	}
-	if err := graph.AddEdge(NewDGAEdge(nodeD, nodeE)); err != nil {
+	if err := graph.AddEdge(dag.NewDGAEdge(nodeD, nodeE)); err != nil {
 		t.Fatalf("AddEdge D->E failed: %v", err)
 	}
 
@@ -351,7 +352,7 @@ func TestGraph_DirectModification(t *testing.T) {
 // TestGraph_RemoveAndReplace 测试删除未运行节点并替换的场景
 // 模拟：A,B 已运行完成，删除 D 替换为 F,G
 func TestGraph_RemoveAndReplace(t *testing.T) {
-	graph := NewDGAGraph()
+	graph := dag.NewDGAGraph()
 
 	// 创建 A -> B -> C -> D 的图
 	nodes := []struct {
@@ -362,30 +363,30 @@ func TestGraph_RemoveAndReplace(t *testing.T) {
 	}
 
 	for _, n := range nodes {
-		node := NewDGANodeWithConfig(n.id, StatusUnknown, "local", "", []Step{{Name: "step1", Run: n.step}}, nil)
+		node := dag.NewDGANodeWithConfig(n.id, core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: n.step}}, nil)
 		graph.AddVertex(node)
 	}
 
 	graphNodes := graph.Nodes()
-	graph.AddEdge(NewDGAEdge(graphNodes["A"], graphNodes["B"]))
-	graph.AddEdge(NewDGAEdge(graphNodes["B"], graphNodes["C"]))
-	graph.AddEdge(NewDGAEdge(graphNodes["C"], graphNodes["D"]))
+	graph.AddEdge(dag.NewDGAEdge(graphNodes["A"], graphNodes["B"]))
+	graph.AddEdge(dag.NewDGAEdge(graphNodes["B"], graphNodes["C"]))
+	graph.AddEdge(dag.NewDGAEdge(graphNodes["C"], graphNodes["D"]))
 
 	// 模拟 A, B 已完成：设置状态
 	graphNodes = graph.Nodes()
 	nodeA := graphNodes["A"]
-	nodeA.SetRuntimeStatus(&NodeRuntimeStatus{Status: StatusSuccess, Steps: []StepRuntimeStatus{{Name: "step1", Status: StatusSuccess}}})
+	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess, Steps: []core.StepRuntimeStatus{{Name: "step1", Status: core.StatusSuccess}}})
 
 	// 删除 D，替换为 F, G
 	graph.RemoveVertex("D")
 
-	nodeF := NewDGANodeWithConfig("F", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo F"}}, nil)
-	nodeG := NewDGANodeWithConfig("G", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo G"}}, nil)
+	nodeF := dag.NewDGANodeWithConfig("F", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo F"}}, nil)
+	nodeG := dag.NewDGANodeWithConfig("G", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo G"}}, nil)
 	graph.AddVertex(nodeF)
 	graph.AddVertex(nodeG)
 
-	graph.AddEdge(NewDGAEdge(graphNodes["C"], nodeF))
-	graph.AddEdge(NewDGAEdge(nodeF, nodeG))
+	graph.AddEdge(dag.NewDGAEdge(graphNodes["C"], nodeF))
+	graph.AddEdge(dag.NewDGAEdge(nodeF, nodeG))
 
 	// 验证新结构
 	if _, ok := graph.GetNode("D"); ok {
@@ -405,7 +406,7 @@ func TestGraph_RemoveAndReplace(t *testing.T) {
 	}
 
 	// 验证层级
-	evalCtx := NewEvaluationContext()
+	evalCtx := dag.NewEvaluationContext()
 	levels := graph.TraversalSteps(evalCtx)
 	t.Logf("Levels after modification: %v", levels)
 
@@ -417,376 +418,23 @@ func TestGraph_RemoveAndReplace(t *testing.T) {
 
 // TestGraph_CycleDetection 测试添加环时的检测
 func TestGraph_CycleDetection(t *testing.T) {
-	graph := NewDGAGraph()
+	graph := dag.NewDGAGraph()
 
-	nodeA := NewDGANodeWithConfig("A", StatusUnknown, "local", "", nil, nil)
-	nodeB := NewDGANodeWithConfig("B", StatusUnknown, "local", "", nil, nil)
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusUnknown, "local", "", nil, nil)
+	nodeB := dag.NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", nil, nil)
 	graph.AddVertex(nodeA)
 	graph.AddVertex(nodeB)
 
-	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
+	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeB))
 
 	// 尝试添加 B -> A 形成环
-	err := graph.AddEdge(NewDGAEdge(nodeB, nodeA))
-	if err != ErrHasCycle {
+	err := graph.AddEdge(dag.NewDGAEdge(nodeB, nodeA))
+	if err != core.ErrHasCycle {
 		t.Errorf("Expected ErrHasCycle when adding B->A, got %v", err)
 	}
 
 	// 环检测返回 true
 	if !graph.HasCycle() {
 		t.Error("Graph should have cycle after adding B->A")
-	}
-}
-
-// --- UpdateConfig Tests ---
-
-// TestRuntimeImpl_UpdateConfig_AddNodes 测试通过新配置添加节点
-func TestRuntimeImpl_UpdateConfig_AddNodes(t *testing.T) {
-	ctx := context.Background()
-	rt := NewRuntime(ctx).(*RuntimeImpl)
-
-	// 手动构建 pipeline（A 已执行，B 未执行）
-	graph := NewDGAGraph()
-	nodeA := NewDGANodeWithConfig("A", StatusSuccess, "local", "", []Step{{Name: "step1", Run: "echo A"}}, nil)
-	nodeA.SetRuntimeStatus(&NodeRuntimeStatus{Status: StatusSuccess})
-	nodeB := NewDGANodeWithConfig("B", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo B"}}, nil)
-
-	graph.AddVertex(nodeA)
-	graph.AddVertex(nodeB)
-	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
-
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(StatusSuccess)
-
-	execProvider := provider.NewProvider()
-	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
-	pipeline.SetExecutorProvider(execProvider)
-
-	rt.pipelines["update-add-test"] = pipeline
-	rt.pipelineConfigs["update-add-test"] = &PipelineConfig{
-		Version: "1.0",
-		Name:    "update-test",
-		Executors: map[string]ExecutorConfig{
-			"local": {Type: "local", Config: map[string]interface{}{}},
-		},
-		Graph: "stateDiagram-v2\n  [*] --> A\n  A --> B\n  B --> [*]",
-		Nodes: map[string]NodeConfig{
-			"A": {Executor: "local", Steps: []Step{{Name: "step1", Run: "echo A"}}},
-			"B": {Executor: "local", Steps: []Step{{Name: "step1", Run: "echo B"}}},
-		},
-	}
-
-	// 新配置：添加节点 C，Graph 变更
-	newConfig := `
-Version: "1.0"
-Name: update-test
-
-Executors:
-  local:
-    type: local
-    config: {}
-
-Graph: |
-  stateDiagram-v2
-    [*] --> A
-    A --> B
-    B --> C
-    C --> [*]
-
-Nodes:
-  A:
-    executor: local
-    steps:
-      - name: step1
-        run: echo A
-  B:
-    executor: local
-    steps:
-      - name: step1
-        run: echo B
-  C:
-    executor: local
-    steps:
-      - name: step1
-        run: echo C
-`
-
-	err := rt.UpdateConfig(ctx, "update-add-test", newConfig)
-	if err != nil {
-		t.Fatalf("UpdateConfig failed: %v", err)
-	}
-
-	g := pipeline.GetGraph()
-	_, ok := g.GetNode("C")
-	if !ok {
-		t.Error("Node C should be added to graph")
-	}
-}
-
-// TestRuntimeImpl_UpdateConfig_RemoveUnexecutedNode 测试删除未执行节点
-func TestRuntimeImpl_UpdateConfig_RemoveUnexecutedNode(t *testing.T) {
-	ctx := context.Background()
-	rt := NewRuntime(ctx).(*RuntimeImpl)
-
-
-	// RunSync 会执行所有节点，所以直接用 Graph 构建来控制状态
-	graph := NewDGAGraph()
-	nodeA := NewDGANodeWithConfig("A", StatusSuccess, "local", "", []Step{{Name: "step1", Run: "echo A"}}, nil)
-	nodeA.SetRuntimeStatus(&NodeRuntimeStatus{Status: StatusSuccess})
-	nodeB := NewDGANodeWithConfig("B", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo B"}}, nil)
-
-	graph.AddVertex(nodeA)
-	graph.AddVertex(nodeB)
-	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
-
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(StatusSuccess)
-
-	execProvider := provider.NewProvider()
-	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
-	pipeline.SetExecutorProvider(execProvider)
-
-	rt.pipelines["remove-unexec"] = pipeline
-	rt.pipelineConfigs["remove-unexec"] = &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		Executors: map[string]ExecutorConfig{
-			"local": {Type: "local", Config: map[string]interface{}{}},
-		},
-		Nodes: map[string]NodeConfig{
-			"A": {Executor: "local", Steps: []Step{{Name: "step1", Run: "echo A"}}},
-			"B": {Executor: "local", Steps: []Step{{Name: "step1", Run: "echo B"}}},
-		},
-	}
-
-	// 新配置：删除未执行的 B 节点
-	newConfig := `
-Version: "1.0"
-Name: test
-
-Executors:
-  local:
-    type: local
-    config: {}
-
-Nodes:
-  A:
-    executor: local
-    steps:
-      - name: step1
-        run: echo A
-`
-
-	err := rt.UpdateConfig(ctx, "remove-unexec", newConfig)
-	if err != nil {
-		t.Fatalf("UpdateConfig should succeed for removing unexecuted node, got: %v", err)
-	}
-
-	g := pipeline.GetGraph()
-	if _, ok := g.GetNode("B"); ok {
-		t.Error("Node B should be removed")
-	}
-}
-
-// TestRuntimeImpl_UpdateConfig_RemoveExecutedNode 测试删除已执行节点被拒绝
-func TestRuntimeImpl_UpdateConfig_RemoveExecutedNode(t *testing.T) {
-	ctx := context.Background()
-	rt := NewRuntime(ctx).(*RuntimeImpl)
-
-	graph := NewDGAGraph()
-	nodeA := NewDGANodeWithConfig("A", StatusSuccess, "local", "", []Step{{Name: "step1", Run: "echo A"}}, nil)
-	nodeA.SetRuntimeStatus(&NodeRuntimeStatus{Status: StatusSuccess})
-
-	graph.AddVertex(nodeA)
-
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(StatusSuccess)
-
-	rt.pipelines["remove-exec"] = pipeline
-	rt.pipelineConfigs["remove-exec"] = &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		Executors: map[string]ExecutorConfig{
-			"local": {Type: "local", Config: map[string]interface{}{}},
-		},
-		Nodes: map[string]NodeConfig{
-			"A": {Executor: "local", Steps: []Step{{Name: "step1", Run: "echo A"}}},
-		},
-	}
-
-	// 新配置：删除已执行的 A 节点
-	newConfig := `
-Version: "1.0"
-Name: test
-
-Executors:
-  local:
-    type: local
-    config: {}
-Nodes: {}
-`
-
-	err := rt.UpdateConfig(ctx, "remove-exec", newConfig)
-	if err == nil {
-		t.Error("Expected error when removing executed node")
-	}
-	t.Logf("Got expected error: %v", err)
-}
-
-// TestRuntimeImpl_UpdateConfig_ModifyExecutedNode 测试修改已执行节点被拒绝
-func TestRuntimeImpl_UpdateConfig_ModifyExecutedNode(t *testing.T) {
-	ctx := context.Background()
-	rt := NewRuntime(ctx).(*RuntimeImpl)
-
-	graph := NewDGAGraph()
-	nodeA := NewDGANodeWithConfig("A", StatusSuccess, "local", "", []Step{{Name: "step1", Run: "echo A"}}, nil)
-	nodeA.SetRuntimeStatus(&NodeRuntimeStatus{Status: StatusSuccess})
-
-	graph.AddVertex(nodeA)
-
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(StatusSuccess)
-
-	rt.pipelines["modify-exec"] = pipeline
-	rt.pipelineConfigs["modify-exec"] = &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		Executors: map[string]ExecutorConfig{
-			"local": {Type: "local", Config: map[string]interface{}{}},
-		},
-		Nodes: map[string]NodeConfig{
-			"A": {Executor: "local", Steps: []Step{{Name: "step1", Run: "echo A"}}},
-		},
-	}
-
-	// 新配置：修改已执行的 A 节点
-	newConfig := `
-Version: "1.0"
-Name: test
-
-Executors:
-  local:
-    type: local
-    config: {}
-
-Nodes:
-  A:
-    executor: local
-    steps:
-      - name: step1
-        run: echo "modified A"
-`
-
-	err := rt.UpdateConfig(ctx, "modify-exec", newConfig)
-	if err == nil {
-		t.Error("Expected error when modifying executed node")
-	}
-	t.Logf("Got expected error: %v", err)
-}
-
-// TestRuntimeImpl_UpdateConfig_ImmutableField 测试修改不可变字段被拒绝
-func TestRuntimeImpl_UpdateConfig_ImmutableField(t *testing.T) {
-	ctx := context.Background()
-	rt := NewRuntime(ctx).(*RuntimeImpl)
-
-	graph := NewDGAGraph()
-	nodeA := NewDGANodeWithConfig("A", StatusSuccess, "local", "", []Step{{Name: "step1", Run: "echo A"}}, nil)
-	nodeA.SetRuntimeStatus(&NodeRuntimeStatus{Status: StatusSuccess})
-
-	graph.AddVertex(nodeA)
-
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(StatusSuccess)
-
-	rt.pipelines["immutable-test"] = pipeline
-	rt.pipelineConfigs["immutable-test"] = &PipelineConfig{
-		Version: "1.0",
-		Name:    "original",
-		Executors: map[string]ExecutorConfig{
-			"local": {Type: "local", Config: map[string]interface{}{}},
-		},
-		Nodes: map[string]NodeConfig{
-			"A": {Executor: "local", Steps: []Step{{Name: "step1", Run: "echo A"}}},
-		},
-	}
-
-	// 新配置：Name 被修改
-	newConfig := `
-Version: "1.0"
-Name: changed-name
-
-Executors:
-  local:
-    type: local
-    config: {}
-
-Nodes:
-  A:
-    executor: local
-    steps:
-      - name: step1
-        run: echo A
-`
-
-	err := rt.UpdateConfig(ctx, "immutable-test", newConfig)
-	if err == nil {
-		t.Error("Expected error when modifying immutable field")
-	}
-	t.Logf("Got expected error: %v", err)
-}
-
-// TestRuntimeImpl_UpdateConfig_NoChanges 测试无变更直接返回
-func TestRuntimeImpl_UpdateConfig_NoChanges(t *testing.T) {
-	ctx := context.Background()
-	rt := NewRuntime(ctx).(*RuntimeImpl)
-
-	graph := NewDGAGraph()
-	nodeA := NewDGANodeWithConfig("A", StatusSuccess, "local", "", []Step{{Name: "step1", Run: "echo A"}}, nil)
-	nodeA.SetRuntimeStatus(&NodeRuntimeStatus{Status: StatusSuccess})
-
-	graph.AddVertex(nodeA)
-
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(StatusSuccess)
-
-	rt.pipelines["nochange-test"] = pipeline
-	rt.pipelineConfigs["nochange-test"] = &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		Executors: map[string]ExecutorConfig{
-			"local": {Type: "local", Config: map[string]interface{}{}},
-		},
-		Nodes: map[string]NodeConfig{
-			"A": {Executor: "local", Steps: []Step{{Name: "step1", Run: "echo A"}}},
-		},
-	}
-
-	// 完全相同的新配置
-	newConfig := `
-Version: "1.0"
-Name: test
-
-Executors:
-  local:
-    type: local
-    config: {}
-
-Nodes:
-  A:
-    executor: local
-    steps:
-      - name: step1
-        run: echo A
-`
-
-	err := rt.UpdateConfig(ctx, "nochange-test", newConfig)
-	if err != nil {
-		t.Errorf("UpdateConfig should succeed with no changes, got: %v", err)
 	}
 }
