@@ -2,294 +2,361 @@ package flowx
 
 import (
 	"context"
-	"strings"
 	"testing"
 
-	"github.com/LerkoX/flowx/logger"
+	"github.com/LerkoX/flowx/core"
+	"github.com/LerkoX/flowx/dag"
+	"github.com/LerkoX/flowx/executor/provider"
 )
 
-func TestRuntimeImpl_SetPusher(t *testing.T) {
+// --- UpdateConfig Tests ---
+
+// TestRuntimeImpl_UpdateConfig_AddNodes 测试通过新配置添加节点
+func TestRuntimeImpl_UpdateConfig_AddNodes(t *testing.T) {
 	ctx := context.Background()
-	runtime := NewRuntime(ctx).(*RuntimeImpl)
+	rt := NewRuntime(ctx).(*RuntimeImpl)
 
-	pusher := logger.NewConsolePusher()
-	runtime.SetPusher(pusher)
+	// 手动构建 pipeline（A 已执行，B 未执行）
+	graph := dag.NewDGAGraph()
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusSuccess, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
+	nodeB := dag.NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo B"}}, nil)
 
-	runtime.mu.RLock()
-	p := runtime.pusher
-	runtime.mu.RUnlock()
+	graph.AddVertex(nodeA)
+	graph.AddVertex(nodeB)
+	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeB))
 
-	if p != pusher {
-		t.Error("SetPusher did not store the pusher")
-	}
-}
+	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
+	pipeline.SetGraph(graph)
+	pipeline.SetStatusForTest(core.StatusSuccess)
 
-func TestRuntimeImpl_SetTemplateEngine_Custom(t *testing.T) {
-	ctx := context.Background()
-	runtime := NewRuntime(ctx).(*RuntimeImpl)
+	execProvider := provider.NewProvider()
+	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
+	pipeline.SetExecutorProvider(execProvider)
 
-	engine := NewPongo2TemplateEngine()
-	runtime.SetTemplateEngine(engine)
-
-	got := runtime.GetTemplateEngine()
-	if got == nil {
-		t.Error("GetTemplateEngine() returned nil after SetTemplateEngine")
-	}
-}
-
-func TestRuntimeImpl_SetTemplateEngine_Nil(t *testing.T) {
-	ctx := context.Background()
-	runtime := NewRuntime(ctx).(*RuntimeImpl)
-
-	runtime.SetTemplateEngine(nil)
-
-	// getTemplateEngine 应返回默认 Pongo2 引擎
-	engine := runtime.getTemplateEngine()
-	if engine == nil {
-		t.Error("getTemplateEngine() should return default engine when nil is set")
-	}
-}
-
-func TestRuntimeImpl_Pause_NotFound(t *testing.T) {
-	ctx := context.Background()
-	runtime := NewRuntime(ctx).(*RuntimeImpl)
-
-	err := runtime.Pause(ctx, "nonexistent-id")
-	if err == nil {
-		t.Error("Expected error for non-existent pipeline")
-	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Error should contain 'not found', got: %v", err)
-	}
-}
-
-func TestRuntimeImpl_Resume_NotFound(t *testing.T) {
-	ctx := context.Background()
-	runtime := NewRuntime(ctx).(*RuntimeImpl)
-
-	err := runtime.Resume(ctx, "nonexistent-id")
-	if err == nil {
-		t.Error("Expected error for non-existent pipeline")
-	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Error should contain 'not found', got: %v", err)
-	}
-}
-
-func TestRuntimeImpl_CleanupCompletedPipelines(t *testing.T) {
-	ctx := context.Background()
-	runtime := NewRuntime(ctx).(*RuntimeImpl)
-
-	// 手动创建一个已完成的 pipeline 并注册到 runtime
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	close(pipeline.DoneChanForTest()) // 模拟已完成
-
-	runtime.mu.Lock()
-	runtime.pipelines["completed-pipeline"] = pipeline
-	runtime.mu.Unlock()
-
-	// 手动创建一个运行中的 pipeline
-	runningPipeline := NewPipeline(ctx).(*PipelineImpl)
-	runtime.mu.Lock()
-	runtime.pipelines["running-pipeline"] = runningPipeline
-	runtime.mu.Unlock()
-
-	// 执行清理
-	runtime.cleanupCompletedPipelines()
-
-	// 验证已完成的 pipeline 被清理
-	runtime.mu.RLock()
-	_, completedExists := runtime.pipelines["completed-pipeline"]
-	_, runningExists := runtime.pipelines["running-pipeline"]
-	runtime.mu.RUnlock()
-
-	if completedExists {
-		t.Error("Completed pipeline should have been cleaned up")
-	}
-	if !runningExists {
-		t.Error("Running pipeline should not have been cleaned up")
-	}
-}
-
-func TestSetPipelineParam(t *testing.T) {
-	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
-	param := map[string]interface{}{"key1": "value1", "key2": 42}
-
-	SetPipelineParam(pipeline, param)
-
-	p := pipeline.ParamForTest()
-	if p["key1"] != "value1" {
-		t.Errorf("param[key1] = %v, want 'value1'", p["key1"])
-	}
-	if p["key2"] != 42 {
-		t.Errorf("param[key2] = %v, want 42", p["key2"])
-	}
-}
-
-func TestSetPipelineParam_NonPipelineImpl(t *testing.T) {
-	// 传入 nil 不会 panic
-	SetPipelineParam(nil, map[string]interface{}{"key": "value"})
-}
-
-func TestValidateImmutableFields_NoChanges(t *testing.T) {
-	old := &PipelineConfig{
+	rt.pipelines["update-add-test"] = pipeline
+	rt.pipelineConfigs["update-add-test"] = &core.PipelineConfig{
 		Version: "1.0",
-		Name:    "test",
-		Param:   map[string]interface{}{"k": "v"},
+		Name:    "update-test",
+		Executors: map[string]core.ExecutorConfig{
+			"local": {Type: "local", Config: map[string]interface{}{}},
+		},
+		Graph: "stateDiagram-v2\n  [*] --> A\n  A --> B\n  B --> [*]",
+		Nodes: map[string]core.NodeConfig{
+			"A": {Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo A"}}},
+			"B": {Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo B"}}},
+		},
 	}
-	err := validateImmutableFields(old, old)
+
+	// 新配置：添加节点 C，Graph 变更
+	newConfig := `
+Version: "1.0"
+Name: update-test
+
+Executors:
+  local:
+    type: local
+    config: {}
+
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> [*]
+
+Nodes:
+  A:
+    executor: local
+    steps:
+      - name: step1
+        run: echo A
+  B:
+    executor: local
+    steps:
+      - name: step1
+        run: echo B
+  C:
+    executor: local
+    steps:
+      - name: step1
+        run: echo C
+`
+
+	err := rt.UpdateConfig(ctx, "update-add-test", newConfig)
 	if err != nil {
-		t.Errorf("Expected nil for identical configs, got: %v", err)
+		t.Fatalf("UpdateConfig failed: %v", err)
+	}
+
+	g := pipeline.GetGraph()
+	_, ok := g.GetNode("C")
+	if !ok {
+		t.Error("Node C should be added to graph")
 	}
 }
 
-func TestValidateImmutableFields_VersionChanged(t *testing.T) {
-	old := &PipelineConfig{Version: "1.0", Name: "test"}
-	newCfg := &PipelineConfig{Version: "2.0", Name: "test"}
+// TestRuntimeImpl_UpdateConfig_RemoveUnexecutedNode 测试删除未执行节点
+func TestRuntimeImpl_UpdateConfig_RemoveUnexecutedNode(t *testing.T) {
+	ctx := context.Background()
+	rt := NewRuntime(ctx).(*RuntimeImpl)
 
-	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when Version changed")
-	}
-	if !strings.Contains(err.Error(), "Version") {
-		t.Errorf("Error should mention Version, got: %v", err)
-	}
-}
+	// RunSync 会执行所有节点，所以直接用 Graph 构建来控制状态
+	graph := dag.NewDGAGraph()
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusSuccess, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
+	nodeB := dag.NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo B"}}, nil)
 
-func TestValidateImmutableFields_NameChanged(t *testing.T) {
-	old := &PipelineConfig{Version: "1.0", Name: "test"}
-	newCfg := &PipelineConfig{Version: "1.0", Name: "changed"}
+	graph.AddVertex(nodeA)
+	graph.AddVertex(nodeB)
+	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeB))
 
-	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when Name changed")
-	}
-}
+	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
+	pipeline.SetGraph(graph)
+	pipeline.SetStatusForTest(core.StatusSuccess)
 
-func TestValidateImmutableFields_MaxLoopIterationsChanged(t *testing.T) {
-	old := &PipelineConfig{Version: "1.0", Name: "test", MaxLoopIterations: 100}
-	newCfg := &PipelineConfig{Version: "1.0", Name: "test", MaxLoopIterations: 200}
+	execProvider := provider.NewProvider()
+	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
+	pipeline.SetExecutorProvider(execProvider)
 
-	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when MaxLoopIterations changed")
-	}
-}
-
-func TestValidateImmutableFields_ParamChanged(t *testing.T) {
-	old := &PipelineConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v1"}}
-	newCfg := &PipelineConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v2"}}
-
-	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when Param changed")
-	}
-}
-
-func TestValidateImmutableFields_ExecutorsChanged(t *testing.T) {
-	old := &PipelineConfig{
-		Version:   "1.0",
-		Name:      "test",
-		Executors: map[string]ExecutorConfig{"local": {Type: "local"}},
-	}
-	newCfg := &PipelineConfig{
-		Version:   "1.0",
-		Name:      "test",
-		Executors: map[string]ExecutorConfig{"docker": {Type: "docker"}},
-	}
-
-	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when Executors changed")
-	}
-}
-
-func TestValidateImmutableFields_LoggingChanged(t *testing.T) {
-	old := &PipelineConfig{
+	rt.pipelines["remove-unexec"] = pipeline
+	rt.pipelineConfigs["remove-unexec"] = &core.PipelineConfig{
 		Version: "1.0",
 		Name:    "test",
-		Logging: LoggingConfig{Endpoint: "http://old"},
-	}
-	newCfg := &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		Logging: LoggingConfig{Endpoint: "http://new"},
-	}
-
-	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when Logging changed")
-	}
-}
-
-func TestValidateImmutableFields_AIChanged(t *testing.T) {
-	old := &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		AI:      AIConfig{Intent: "old"},
-	}
-	newCfg := &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		AI:      AIConfig{Intent: "new"},
+		Executors: map[string]core.ExecutorConfig{
+			"local": {Type: "local", Config: map[string]interface{}{}},
+		},
+		Nodes: map[string]core.NodeConfig{
+			"A": {Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo A"}}},
+			"B": {Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo B"}}},
+		},
 	}
 
-	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when AI changed")
-	}
-}
+	// 新配置：删除未执行的 B 节点
+	newConfig := `
+Version: "1.0"
+Name: test
 
-func TestValidateImmutableFields_MetadateChanged(t *testing.T) {
-	old := &PipelineConfig{
-		Version:  "1.0",
-		Name:     "test",
-		Metadate: MetadataConfig{Type: "old"},
-	}
-	newCfg := &PipelineConfig{
-		Version:  "1.0",
-		Name:     "test",
-		Metadate: MetadataConfig{Type: "new"},
-	}
+Executors:
+  local:
+    type: local
+    config: {}
 
-	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when Metadate changed")
-	}
-}
+Nodes:
+  A:
+    executor: local
+    steps:
+      - name: step1
+        run: echo A
+`
 
-func TestValidateImmutableFields_NodesMutable(t *testing.T) {
-	old := &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		Nodes:   map[string]NodeConfig{"A": {Name: "A"}},
-	}
-	newCfg := &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		Nodes:   map[string]NodeConfig{"B": {Name: "B"}},
-	}
-
-	err := validateImmutableFields(old, newCfg)
+	err := rt.UpdateConfig(ctx, "remove-unexec", newConfig)
 	if err != nil {
-		t.Errorf("Nodes changes should be allowed, got: %v", err)
+		t.Fatalf("UpdateConfig should succeed for removing unexecuted node, got: %v", err)
+	}
+
+	g := pipeline.GetGraph()
+	if _, ok := g.GetNode("B"); ok {
+		t.Error("Node B should be removed")
 	}
 }
 
-func TestValidateImmutableFields_GraphMutable(t *testing.T) {
-	old := &PipelineConfig{
+// TestRuntimeImpl_UpdateConfig_RemoveExecutedNode 测试删除已执行节点被拒绝
+func TestRuntimeImpl_UpdateConfig_RemoveExecutedNode(t *testing.T) {
+	ctx := context.Background()
+	rt := NewRuntime(ctx).(*RuntimeImpl)
+
+	graph := dag.NewDGAGraph()
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusSuccess, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
+
+	graph.AddVertex(nodeA)
+
+	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
+	pipeline.SetGraph(graph)
+	pipeline.SetStatusForTest(core.StatusSuccess)
+
+	rt.pipelines["remove-exec"] = pipeline
+	rt.pipelineConfigs["remove-exec"] = &core.PipelineConfig{
 		Version: "1.0",
 		Name:    "test",
-		Graph:   "stateDiagram-v2\n    [*] --> A",
-	}
-	newCfg := &PipelineConfig{
-		Version: "1.0",
-		Name:    "test",
-		Graph:   "stateDiagram-v2\n    [*] --> B",
+		Executors: map[string]core.ExecutorConfig{
+			"local": {Type: "local", Config: map[string]interface{}{}},
+		},
+		Nodes: map[string]core.NodeConfig{
+			"A": {Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo A"}}},
+		},
 	}
 
-	err := validateImmutableFields(old, newCfg)
+	// 新配置：删除已执行的 A 节点
+	newConfig := `
+Version: "1.0"
+Name: test
+
+Executors:
+  local:
+    type: local
+    config: {}
+Nodes: {}
+`
+
+	err := rt.UpdateConfig(ctx, "remove-exec", newConfig)
+	if err == nil {
+		t.Error("Expected error when removing executed node")
+	}
+	t.Logf("Got expected error: %v", err)
+}
+
+// TestRuntimeImpl_UpdateConfig_ModifyExecutedNode 测试修改已执行节点被拒绝
+func TestRuntimeImpl_UpdateConfig_ModifyExecutedNode(t *testing.T) {
+	ctx := context.Background()
+	rt := NewRuntime(ctx).(*RuntimeImpl)
+
+	graph := dag.NewDGAGraph()
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusSuccess, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
+
+	graph.AddVertex(nodeA)
+
+	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
+	pipeline.SetGraph(graph)
+	pipeline.SetStatusForTest(core.StatusSuccess)
+
+	rt.pipelines["modify-exec"] = pipeline
+	rt.pipelineConfigs["modify-exec"] = &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		Executors: map[string]core.ExecutorConfig{
+			"local": {Type: "local", Config: map[string]interface{}{}},
+		},
+		Nodes: map[string]core.NodeConfig{
+			"A": {Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo A"}}},
+		},
+	}
+
+	// 新配置：修改已执行的 A 节点
+	newConfig := `
+Version: "1.0"
+Name: test
+
+Executors:
+  local:
+    type: local
+    config: {}
+
+Nodes:
+  A:
+    executor: local
+    steps:
+      - name: step1
+        run: echo "modified A"
+`
+
+	err := rt.UpdateConfig(ctx, "modify-exec", newConfig)
+	if err == nil {
+		t.Error("Expected error when modifying executed node")
+	}
+	t.Logf("Got expected error: %v", err)
+}
+
+// TestRuntimeImpl_UpdateConfig_ImmutableField 测试修改不可变字段被拒绝
+func TestRuntimeImpl_UpdateConfig_ImmutableField(t *testing.T) {
+	ctx := context.Background()
+	rt := NewRuntime(ctx).(*RuntimeImpl)
+
+	graph := dag.NewDGAGraph()
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusSuccess, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
+
+	graph.AddVertex(nodeA)
+
+	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
+	pipeline.SetGraph(graph)
+	pipeline.SetStatusForTest(core.StatusSuccess)
+
+	rt.pipelines["immutable-test"] = pipeline
+	rt.pipelineConfigs["immutable-test"] = &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "original",
+		Executors: map[string]core.ExecutorConfig{
+			"local": {Type: "local", Config: map[string]interface{}{}},
+		},
+		Nodes: map[string]core.NodeConfig{
+			"A": {Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo A"}}},
+		},
+	}
+
+	// 新配置：Name 被修改
+	newConfig := `
+Version: "1.0"
+Name: changed-name
+
+Executors:
+  local:
+    type: local
+    config: {}
+
+Nodes:
+  A:
+    executor: local
+    steps:
+      - name: step1
+        run: echo A
+`
+
+	err := rt.UpdateConfig(ctx, "immutable-test", newConfig)
+	if err == nil {
+		t.Error("Expected error when modifying immutable field")
+	}
+	t.Logf("Got expected error: %v", err)
+}
+
+// TestRuntimeImpl_UpdateConfig_NoChanges 测试无变更直接返回
+func TestRuntimeImpl_UpdateConfig_NoChanges(t *testing.T) {
+	ctx := context.Background()
+	rt := NewRuntime(ctx).(*RuntimeImpl)
+
+	graph := dag.NewDGAGraph()
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusSuccess, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
+
+	graph.AddVertex(nodeA)
+
+	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
+	pipeline.SetGraph(graph)
+	pipeline.SetStatusForTest(core.StatusSuccess)
+
+	rt.pipelines["nochange-test"] = pipeline
+	rt.pipelineConfigs["nochange-test"] = &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		Executors: map[string]core.ExecutorConfig{
+			"local": {Type: "local", Config: map[string]interface{}{}},
+		},
+		Nodes: map[string]core.NodeConfig{
+			"A": {Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo A"}}},
+		},
+	}
+
+	// 完全相同的新配置
+	newConfig := `
+Version: "1.0"
+Name: test
+
+Executors:
+  local:
+    type: local
+    config: {}
+
+Nodes:
+  A:
+    executor: local
+    steps:
+      - name: step1
+        run: echo A
+`
+
+	err := rt.UpdateConfig(ctx, "nochange-test", newConfig)
 	if err != nil {
-		t.Errorf("Graph changes should be allowed, got: %v", err)
+		t.Errorf("UpdateConfig should succeed with no changes, got: %v", err)
 	}
 }

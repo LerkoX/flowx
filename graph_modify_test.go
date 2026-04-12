@@ -4,45 +4,47 @@ import (
 	"context"
 	"testing"
 
+	"github.com/LerkoX/flowx/core"
+	"github.com/LerkoX/flowx/dag"
 	"github.com/LerkoX/flowx/executor/provider"
 )
 
 // helperSetupModifiablePipeline 创建一个处于 PAUSED 状态的 pipeline 并注册到 runtime
-func helperSetupModifiablePipeline(t *testing.T, rt *RuntimeImpl, id string) (Pipeline, Graph) {
+func helperSetupModifiablePipeline(t *testing.T, rt *RuntimeImpl, id string) (dag.Pipeline, dag.Graph) {
 	t.Helper()
 
-	graph := NewDGAGraph()
-	nodeA := NewDGANodeWithConfig("A", StatusSuccess, "local", "", []Step{{Name: "step1", Run: "echo A"}}, nil)
-	nodeA.SetRuntimeStatus(&NodeRuntimeStatus{Status: StatusSuccess})
-	nodeB := NewDGANodeWithConfig("B", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo B"}}, nil)
-	nodeC := NewDGANodeWithConfig("C", StatusUnknown, "local", "", []Step{{Name: "step1", Run: "echo C"}}, nil)
+	graph := dag.NewDGAGraph()
+	nodeA := dag.NewDGANodeWithConfig("A", core.StatusSuccess, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
+	nodeB := dag.NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo B"}}, nil)
+	nodeC := dag.NewDGANodeWithConfig("C", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo C"}}, nil)
 
 	graph.AddVertex(nodeA)
 	graph.AddVertex(nodeB)
 	graph.AddVertex(nodeC)
-	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
-	graph.AddEdge(NewDGAEdge(nodeB, nodeC))
+	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeB))
+	graph.AddEdge(dag.NewDGAEdge(nodeB, nodeC))
 
-	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
+	pipeline := dag.NewPipeline(context.Background()).(*dag.PipelineImpl)
 	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(StatusPaused) // 设置为可修改状态
+	pipeline.SetStatusForTest(core.StatusPaused) // 设置为可修改状态
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]any{}})
 	pipeline.SetExecutorProvider(execProvider)
 
 	rt.pipelines[id] = pipeline
-	rt.pipelineConfigs[id] = &PipelineConfig{
+	rt.pipelineConfigs[id] = &core.PipelineConfig{
 		Version: "1.0",
 		Name:    "modify-test",
-		Executors: map[string]ExecutorConfig{
+		Executors: map[string]core.ExecutorConfig{
 			"local": {Type: "local", Config: map[string]any{}},
 		},
 		Graph: "stateDiagram-v2\n  [*] --> A\n  A --> B\n  B --> C\n  C --> [*]",
-		Nodes: map[string]NodeConfig{
-			"A": {Name: "A", Executor: "local", Steps: []Step{{Name: "step1", Run: "echo A"}}},
-			"B": {Name: "B", Executor: "local", Steps: []Step{{Name: "step1", Run: "echo B"}}},
-			"C": {Name: "C", Executor: "local", Steps: []Step{{Name: "step1", Run: "echo C"}}},
+		Nodes: map[string]core.NodeConfig{
+			"A": {Name: "A", Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo A"}}},
+			"B": {Name: "B", Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo B"}}},
+			"C": {Name: "C", Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo C"}}},
 		},
 	}
 
@@ -54,9 +56,9 @@ func TestModifyGraph_AddNode(t *testing.T) {
 	rt := NewRuntime(ctx).(*RuntimeImpl)
 	pipeline, _ := helperSetupModifiablePipeline(t, rt, "add-node")
 
-	mods := GraphModifications{
-		AddNodes: []NodeConfig{
-			{Name: "D", Executor: "local", Steps: []Step{{Name: "step1", Run: "echo D"}}},
+	mods := dag.GraphModifications{
+		AddNodes: []core.NodeConfig{
+			{Name: "D", Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo D"}}},
 		},
 	}
 
@@ -76,7 +78,7 @@ func TestModifyGraph_RemoveNode(t *testing.T) {
 	rt := NewRuntime(ctx).(*RuntimeImpl)
 	pipeline, _ := helperSetupModifiablePipeline(t, rt, "remove-node")
 
-	mods := GraphModifications{
+	mods := dag.GraphModifications{
 		RemoveNodes: []string{"C"},
 	}
 
@@ -96,8 +98,8 @@ func TestModifyGraph_AddEdge(t *testing.T) {
 	rt := NewRuntime(ctx).(*RuntimeImpl)
 	pipeline, _ := helperSetupModifiablePipeline(t, rt, "add-edge")
 
-	mods := GraphModifications{
-		AddEdges: []EdgeModification{
+	mods := dag.GraphModifications{
+		AddEdges: []dag.EdgeModification{
 			{Source: "A", Target: "C"},
 		},
 	}
@@ -118,8 +120,8 @@ func TestModifyGraph_RemoveEdge(t *testing.T) {
 	rt := NewRuntime(ctx).(*RuntimeImpl)
 	pipeline, _ := helperSetupModifiablePipeline(t, rt, "remove-edge")
 
-	mods := GraphModifications{
-		RemoveEdges: []EdgeRemoval{
+	mods := dag.GraphModifications{
+		RemoveEdges: []dag.EdgeRemoval{
 			{Source: "B", Target: "C"},
 		},
 	}
@@ -140,8 +142,8 @@ func TestModifyGraph_ConditionalBackEdge(t *testing.T) {
 	rt := NewRuntime(ctx).(*RuntimeImpl)
 	pipeline, _ := helperSetupModifiablePipeline(t, rt, "cond-back-edge")
 
-	mods := GraphModifications{
-		AddEdges: []EdgeModification{
+	mods := dag.GraphModifications{
+		AddEdges: []dag.EdgeModification{
 			{Source: "C", Target: "A", Expression: "{{ iteration < 3 }}"},
 		},
 	}
@@ -162,8 +164,8 @@ func TestModifyGraph_UnconditionalCycle(t *testing.T) {
 	rt := NewRuntime(ctx).(*RuntimeImpl)
 	_, _ = helperSetupModifiablePipeline(t, rt, "uncond-cycle")
 
-	mods := GraphModifications{
-		AddEdges: []EdgeModification{
+	mods := dag.GraphModifications{
+		AddEdges: []dag.EdgeModification{
 			{Source: "C", Target: "A"},
 		},
 	}
@@ -182,7 +184,7 @@ func TestModifyGraph_NotFound(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
 
-	err := rt.ModifyGraph(ctx, "nonexistent", GraphModifications{})
+	err := rt.ModifyGraph(ctx, "nonexistent", dag.GraphModifications{})
 	if err == nil {
 		t.Error("Expected error for non-existent pipeline")
 	}
@@ -196,8 +198,8 @@ func TestModifyGraph_RollbackOnEdgeError(t *testing.T) {
 	graph := pipeline.GetGraph()
 
 	// 添加到不存在目标的边应该失败
-	mods := GraphModifications{
-		AddEdges: []EdgeModification{
+	mods := dag.GraphModifications{
+		AddEdges: []dag.EdgeModification{
 			{Source: "A", Target: "NonExistent"},
 		},
 	}
@@ -224,14 +226,14 @@ func TestModifyGraph_ComplexModification(t *testing.T) {
 	rt := NewRuntime(ctx).(*RuntimeImpl)
 	pipeline, _ := helperSetupModifiablePipeline(t, rt, "complex-mod")
 
-	mods := GraphModifications{
-		RemoveEdges: []EdgeRemoval{
+	mods := dag.GraphModifications{
+		RemoveEdges: []dag.EdgeRemoval{
 			{Source: "B", Target: "C"},
 		},
-		AddNodes: []NodeConfig{
-			{Name: "D", Executor: "local", Steps: []Step{{Name: "step1", Run: "echo D"}}},
+		AddNodes: []core.NodeConfig{
+			{Name: "D", Executor: "local", Steps: []core.Step{{Name: "step1", Run: "echo D"}}},
 		},
-		AddEdges: []EdgeModification{
+		AddEdges: []dag.EdgeModification{
 			{Source: "B", Target: "D"},
 		},
 	}

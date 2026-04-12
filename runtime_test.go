@@ -5,9 +5,15 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/LerkoX/flowx/core"
+	"github.com/LerkoX/flowx/dag"
+	"github.com/LerkoX/flowx/logger"
+	"github.com/LerkoX/flowx/template"
 )
 
 // loadTestConfig 从 test/fixtures/runtime/ 目录加载测试配置
@@ -392,7 +398,7 @@ func TestRuntimeImpl_MultiPipelineConcurrency(t *testing.T) {
 			case <-pipeline.Done():
 				// 流水线正常完成，获取状态
 				status := pipeline.Status()
-				eventCount := listener.Count(PipelineNodeFinish)
+				eventCount := listener.Count(dag.PipelineNodeFinish)
 
 				// 验证数据传递是否成功
 				metadata := pipeline.Metadata()
@@ -468,9 +474,9 @@ func TestRuntimeImpl_MultiPipelineConcurrency(t *testing.T) {
 		completedPipelines++
 
 		// 验证流水线状态为 SUCCESS
-		if result.status != StatusSuccess {
+		if result.status != core.StatusSuccess {
 			t.Errorf("Pipeline %s expected status %s, got %s",
-				result.id, StatusSuccess, result.status)
+				result.id, core.StatusSuccess, result.status)
 		}
 
 		// 验证至少有一个节点执行完成（应该有3个：Generate, Process, Consume）
@@ -499,59 +505,59 @@ func TestRuntimeImpl_MultiPipelineConcurrency(t *testing.T) {
 // TestListener test listener implementation
 type TestListener struct{}
 
-func (l *TestListener) Handle(p Pipeline, event Event) {
+func (l *TestListener) Handle(p dag.Pipeline, event dag.Event) {
 	// Simple implementation that does nothing for testing
 }
 
-func (l *TestListener) Events() []Event {
-	return []Event{
-		PipelineInit,
-		PipelineStart,
-		PipelineFinish,
-		PipelineNodeStart,
-		PipelineNodeFinish,
+func (l *TestListener) Events() []dag.Event {
+	return []dag.Event{
+		dag.PipelineInit,
+		dag.PipelineStart,
+		dag.PipelineFinish,
+		dag.PipelineNodeStart,
+		dag.PipelineNodeFinish,
 	}
 }
 
 // RecordingListener 记录所有事件的监听器
 type RecordingListener struct {
 	mu     sync.Mutex
-	events []Event
+	events []dag.Event
 }
 
 func NewRecordingListener() *RecordingListener {
 	return &RecordingListener{
-		events: make([]Event, 0),
+		events: make([]dag.Event, 0),
 	}
 }
 
-func (l *RecordingListener) Handle(p Pipeline, event Event) {
+func (l *RecordingListener) Handle(p dag.Pipeline, event dag.Event) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.events = append(l.events, event)
 }
 
-func (l *RecordingListener) Events() []Event {
+func (l *RecordingListener) Events() []dag.Event {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return []Event{
-		PipelineInit,
-		PipelineStart,
-		PipelineFinish,
-		PipelineNodeStart,
-		PipelineNodeFinish,
+	return []dag.Event{
+		dag.PipelineInit,
+		dag.PipelineStart,
+		dag.PipelineFinish,
+		dag.PipelineNodeStart,
+		dag.PipelineNodeFinish,
 	}
 }
 
-func (l *RecordingListener) GetRecordedEvents() []Event {
+func (l *RecordingListener) GetRecordedEvents() []dag.Event {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	result := make([]Event, len(l.events))
+	result := make([]dag.Event, len(l.events))
 	copy(result, l.events)
 	return result
 }
 
-func (l *RecordingListener) Count(eventType Event) int {
+func (l *RecordingListener) Count(eventType dag.Event) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	count := 0
@@ -566,8 +572,8 @@ func (l *RecordingListener) Count(eventType Event) int {
 // TestParseGraphEdges_BasicStateDiagram 测试基本状态图解析
 func TestParseGraphEdges_BasicStateDiagram(t *testing.T) {
 	ctx := context.Background()
-	config := &PipelineConfig{
-		Nodes: map[string]NodeConfig{
+	config := &core.PipelineConfig{
+		Nodes: map[string]core.NodeConfig{
 			"Merge":  {},
 			"Build":  {},
 			"Deploy": {},
@@ -601,8 +607,8 @@ func TestParseGraphEdges_BasicStateDiagram(t *testing.T) {
 // TestParseGraphEdges_ComplexDiagram 测试复杂状态图（并行路径）
 func TestParseGraphEdges_ComplexDiagram(t *testing.T) {
 	ctx := context.Background()
-	config := &PipelineConfig{
-		Nodes: map[string]NodeConfig{
+	config := &core.PipelineConfig{
+		Nodes: map[string]core.NodeConfig{
 			"Checkout": {},
 			"Lint":     {},
 			"Test":     {},
@@ -631,8 +637,8 @@ func TestParseGraphEdges_ComplexDiagram(t *testing.T) {
 // TestParseGraphEdges_EmptyGraph 测试空图
 func TestParseGraphEdges_EmptyGraph(t *testing.T) {
 	ctx := context.Background()
-	config := &PipelineConfig{
-		Nodes: map[string]NodeConfig{
+	config := &core.PipelineConfig{
+		Nodes: map[string]core.NodeConfig{
 			"Node1": {},
 			"Node2": {},
 		},
@@ -651,8 +657,8 @@ func TestParseGraphEdges_EmptyGraph(t *testing.T) {
 // TestParseGraphEdges_InvalidSyntax 测试无效语法
 func TestParseGraphEdges_InvalidSyntax(t *testing.T) {
 	ctx := context.Background()
-	config := &PipelineConfig{
-		Nodes: map[string]NodeConfig{
+	config := &core.PipelineConfig{
+		Nodes: map[string]core.NodeConfig{
 			"Node1": {},
 			"Node2": {},
 		},
@@ -672,8 +678,8 @@ func TestParseGraphEdges_InvalidSyntax(t *testing.T) {
 // TestParseGraphEdges_MissingNode 测试配置中缺失节点
 func TestParseGraphEdges_MissingNode(t *testing.T) {
 	ctx := context.Background()
-	config := &PipelineConfig{
-		Nodes: map[string]NodeConfig{
+	config := &core.PipelineConfig{
+		Nodes: map[string]core.NodeConfig{
 			"A": {},
 			// B 缺失
 			"C": {},
@@ -757,8 +763,8 @@ func TestExtractExpression(t *testing.T) {
 // TestParseGraphEdges_ConditionalEdges 测试条件边解析
 func TestParseGraphEdges_ConditionalEdges(t *testing.T) {
 	ctx := context.Background()
-	config := &PipelineConfig{
-		Nodes: map[string]NodeConfig{
+	config := &core.PipelineConfig{
+		Nodes: map[string]core.NodeConfig{
 			"A": {},
 			"B": {},
 			"C": {},
@@ -804,8 +810,8 @@ func TestParseGraphEdges_ConditionalEdges(t *testing.T) {
 // TestParseGraphEdges_UnconditionalEdges 测试无条件边解析
 func TestParseGraphEdges_UnconditionalEdges(t *testing.T) {
 	ctx := context.Background()
-	config := &PipelineConfig{
-		Nodes: map[string]NodeConfig{
+	config := &core.PipelineConfig{
+		Nodes: map[string]core.NodeConfig{
 			"A": {},
 			"B": {},
 		},
@@ -834,8 +840,8 @@ func TestParseGraphEdges_UnconditionalEdges(t *testing.T) {
 // TestParseGraphEdges_WithNotes 测试带注释的图
 func TestParseGraphEdges_WithNotes(t *testing.T) {
 	ctx := context.Background()
-	config := &PipelineConfig{
-		Nodes: map[string]NodeConfig{
+	config := &core.PipelineConfig{
+		Nodes: map[string]core.NodeConfig{
 			"Start":   {},
 			"Process": {},
 			"End":     {},
@@ -1070,11 +1076,11 @@ func TestRuntimeImpl_NodeDataPassing(t *testing.T) {
 	}
 
 	// 验证所有节点都执行了
-	if listener.Count(PipelineNodeStart) != 3 {
-		t.Errorf("Expected 3 PipelineNodeStart events, got %d", listener.Count(PipelineNodeStart))
+	if listener.Count(dag.PipelineNodeStart) != 3 {
+		t.Errorf("Expected 3 PipelineNodeStart events, got %d", listener.Count(dag.PipelineNodeStart))
 	}
-	if listener.Count(PipelineNodeFinish) != 3 {
-		t.Errorf("Expected 3 PipelineNodeFinish events, got %d", listener.Count(PipelineNodeFinish))
+	if listener.Count(dag.PipelineNodeFinish) != 3 {
+		t.Errorf("Expected 3 PipelineNodeFinish events, got %d", listener.Count(dag.PipelineNodeFinish))
 	}
 
 	// 验证 metadata 中包含提取的数据
@@ -1138,11 +1144,11 @@ func TestRuntimeImpl_ParallelNodes(t *testing.T) {
 	}
 
 	// 验证所有节点都执行了 (Start, TaskA, TaskB, TaskC, Merge = 5个节点)
-	if listener.Count(PipelineNodeStart) != 5 {
-		t.Errorf("Expected 5 PipelineNodeStart events, got %d", listener.Count(PipelineNodeStart))
+	if listener.Count(dag.PipelineNodeStart) != 5 {
+		t.Errorf("Expected 5 PipelineNodeStart events, got %d", listener.Count(dag.PipelineNodeStart))
 	}
-	if listener.Count(PipelineNodeFinish) != 5 {
-		t.Errorf("Expected 5 PipelineNodeFinish events, got %d", listener.Count(PipelineNodeFinish))
+	if listener.Count(dag.PipelineNodeFinish) != 5 {
+		t.Errorf("Expected 5 PipelineNodeFinish events, got %d", listener.Count(dag.PipelineNodeFinish))
 	}
 
 	// 并行执行应该比串行执行快得多
@@ -1176,16 +1182,16 @@ func TestRuntimeImpl_RuntimeRecovery(t *testing.T) {
 	expectedStartEvents := 2 // Step2 和 Step3
 	expectedFinishEvents := 3 // Step1 (跳过), Step2, Step3
 
-	if listener.Count(PipelineNodeStart) != expectedStartEvents {
-		t.Errorf("Expected %d PipelineNodeStart events, got %d (recovery may not be working)", expectedStartEvents, listener.Count(PipelineNodeStart))
+	if listener.Count(dag.PipelineNodeStart) != expectedStartEvents {
+		t.Errorf("Expected %d PipelineNodeStart events, got %d (recovery may not be working)", expectedStartEvents, listener.Count(dag.PipelineNodeStart))
 	}
-	if listener.Count(PipelineNodeFinish) != expectedFinishEvents {
-		t.Errorf("Expected %d PipelineNodeFinish events, got %d (recovery may not be working)", expectedFinishEvents, listener.Count(PipelineNodeFinish))
+	if listener.Count(dag.PipelineNodeFinish) != expectedFinishEvents {
+		t.Errorf("Expected %d PipelineNodeFinish events, got %d (recovery may not be working)", expectedFinishEvents, listener.Count(dag.PipelineNodeFinish))
 	}
 
 	// 验证 pipeline 状态为成功
-	if pipeline.Status() != StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", StatusSuccess, pipeline.Status())
+	if pipeline.Status() != core.StatusSuccess {
+		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
 	}
 
 	// 验证 Step1 的状态仍然为 SUCCESS
@@ -1202,8 +1208,8 @@ func TestRuntimeImpl_RuntimeRecovery(t *testing.T) {
 
 	if step1.GetRuntimeStatus() == nil {
 		t.Error("Step1 should have runtime status")
-	} else if step1.GetRuntimeStatus().Status != StatusSuccess {
-		t.Errorf("Expected Step1 status %s, got %s", StatusSuccess, step1.GetRuntimeStatus().Status)
+	} else if step1.GetRuntimeStatus().Status != core.StatusSuccess {
+		t.Errorf("Expected Step1 status %s, got %s", core.StatusSuccess, step1.GetRuntimeStatus().Status)
 	}
 }
 
@@ -1230,13 +1236,13 @@ func TestRuntimeImpl_ParallelStepRecovery(t *testing.T) {
 	// Merge 执行了
 	// 所以预期有 3 个 PipelineNodeStart 事件（Task1, Task3, Merge）
 	expectedStartEvents := 3
-	if listener.Count(PipelineNodeStart) != expectedStartEvents {
-		t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartEvents, listener.Count(PipelineNodeStart))
+	if listener.Count(dag.PipelineNodeStart) != expectedStartEvents {
+		t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartEvents, listener.Count(dag.PipelineNodeStart))
 	}
 
 	// 验证 pipeline 状态为成功
-	if pipeline.Status() != StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", StatusSuccess, pipeline.Status())
+	if pipeline.Status() != core.StatusSuccess {
+		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
 	}
 
 	// 验证 Task2 的所有步骤都是 SUCCESS
@@ -1256,14 +1262,14 @@ func TestRuntimeImpl_ParallelStepRecovery(t *testing.T) {
 		t.Fatal("Task2 should have runtime status")
 	}
 
-	if task2Runtime.Status != StatusSuccess {
-		t.Errorf("Expected Task2 status %s, got %s", StatusSuccess, task2Runtime.Status)
+	if task2Runtime.Status != core.StatusSuccess {
+		t.Errorf("Expected Task2 status %s, got %s", core.StatusSuccess, task2Runtime.Status)
 	}
 
 	// 验证 Task2 的所有步骤都是 SUCCESS
 	for _, step := range task2Runtime.Steps {
-		if step.Status != StatusSuccess {
-			t.Errorf("Expected Task2 step %s status %s, got %s", step.Name, StatusSuccess, step.Status)
+		if step.Status != core.StatusSuccess {
+			t.Errorf("Expected Task2 step %s status %s, got %s", step.Name, core.StatusSuccess, step.Status)
 		}
 	}
 
@@ -1279,17 +1285,17 @@ func TestRuntimeImpl_ParallelStepRecovery(t *testing.T) {
 	}
 
 	// Task3 应该是 SUCCESS（所有步骤都成功了）
-	if task3Runtime.Status != StatusSuccess {
-		t.Errorf("Expected Task3 status %s, got %s", StatusSuccess, task3Runtime.Status)
+	if task3Runtime.Status != core.StatusSuccess {
+		t.Errorf("Expected Task3 status %s, got %s", core.StatusSuccess, task3Runtime.Status)
 	}
 
 	// 验证 Task3 的步骤状态
 	// init 和 first-step 应该是 SUCCESS
 	// second-step 应该是 SUCCESS（执行后）
 	expectedSteps := map[string]string{
-		"init":        StatusSuccess,
-		"first-step":  StatusSuccess,
-		"second-step": StatusSuccess,
+		"init":        core.StatusSuccess,
+		"first-step":  core.StatusSuccess,
+		"second-step": core.StatusSuccess,
 	}
 
 	for _, step := range task3Runtime.Steps {
@@ -1321,14 +1327,14 @@ func TestRuntimeImpl_ConditionalEdge_SimpleParam(t *testing.T) {
 			t.Fatalf("RunSync failed: %v", err)
 		}
 
-		if pipeline.Status() != StatusSuccess {
-			t.Errorf("Expected pipeline status %s, got %s", StatusSuccess, pipeline.Status())
+		if pipeline.Status() != core.StatusSuccess {
+			t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
 		}
 
 		// 验证执行的节点：Check 和 Deploy 应该执行，Test 不应该执行
 		expectedStartNodes := 2 // Check 和 Deploy
-		if listener.Count(PipelineNodeStart) != expectedStartNodes {
-			t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartNodes, listener.Count(PipelineNodeStart))
+		if listener.Count(dag.PipelineNodeStart) != expectedStartNodes {
+			t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartNodes, listener.Count(dag.PipelineNodeStart))
 		}
 	})
 
@@ -1353,14 +1359,14 @@ func TestRuntimeImpl_ConditionalEdge_Metadata(t *testing.T) {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", StatusSuccess, pipeline.Status())
+	if pipeline.Status() != core.StatusSuccess {
+		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
 	}
 
 	// 验证执行的节点：Setup, Generate, Process, Deploy (shouldDeploy=true)
 	expectedStartNodes := 4
-	if listener.Count(PipelineNodeStart) != expectedStartNodes {
-		t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartNodes, listener.Count(PipelineNodeStart))
+	if listener.Count(dag.PipelineNodeStart) != expectedStartNodes {
+		t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartNodes, listener.Count(dag.PipelineNodeStart))
 	}
 
 	// 验证 metadata 中的值（布尔值已转换为字符串）
@@ -1394,15 +1400,15 @@ func TestRuntimeImpl_ConditionalEdge_Complex(t *testing.T) {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", StatusSuccess, pipeline.Status())
+	if pipeline.Status() != core.StatusSuccess {
+		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
 	}
 
 	// 验证执行的节点：Start -> Staging -> FeatureCheck (env=staging, featureFlag=true)
 	// 注意：由于 Staging 节点没有 extract 数据，所以 FeatureCheck 可能无法通过条件边
 	// 实际执行节点数取决于特征标志的评估结果
 	expectedStartNodes := 3
-	actualStartNodes := listener.Count(PipelineNodeStart)
+	actualStartNodes := listener.Count(dag.PipelineNodeStart)
 	if actualStartNodes != expectedStartNodes {
 		t.Logf("Warning: Expected %d PipelineNodeStart events, got %d", expectedStartNodes, actualStartNodes)
 		// 暂时不报错，先查看实际行为
@@ -1450,15 +1456,15 @@ func TestRuntimeImpl_ConditionalEdge_MultiCondition(t *testing.T) {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", StatusSuccess, pipeline.Status())
+	if pipeline.Status() != core.StatusSuccess {
+		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
 	}
 
 	// 验证执行的节点：Validate -> Build -> Deploy
 	// testsPassed=true 且 codeCoverage=85 >= 80
 	expectedStartNodes := 3
-	if listener.Count(PipelineNodeStart) != expectedStartNodes {
-		t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartNodes, listener.Count(PipelineNodeStart))
+	if listener.Count(dag.PipelineNodeStart) != expectedStartNodes {
+		t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartNodes, listener.Count(dag.PipelineNodeStart))
 	}
 }
 
@@ -1479,16 +1485,16 @@ func TestComprehensivePipelineExecution(t *testing.T) {
 		}
 
 		// 验证事件
-		if listener.Count(PipelineStart) == 0 {
+		if listener.Count(dag.PipelineStart) == 0 {
 			t.Error("Expected PipelineStart event")
 		}
-		if listener.Count(PipelineFinish) == 0 {
+		if listener.Count(dag.PipelineFinish) == 0 {
 			t.Error("Expected PipelineFinish event")
 		}
-		if listener.Count(PipelineNodeStart) < 2 {
+		if listener.Count(dag.PipelineNodeStart) < 2 {
 			t.Error("Expected at least 2 PipelineNodeStart events")
 		}
-		if listener.Count(PipelineNodeFinish) < 2 {
+		if listener.Count(dag.PipelineNodeFinish) < 2 {
 			t.Error("Expected at least 2 PipelineNodeFinish events")
 		}
 	})
@@ -1520,10 +1526,10 @@ func TestComprehensivePipelineExecution(t *testing.T) {
 		}
 
 		// 验证事件
-		if listener.Count(PipelineStart) == 0 {
+		if listener.Count(dag.PipelineStart) == 0 {
 			t.Error("Expected PipelineStart event")
 		}
-		if listener.Count(PipelineFinish) == 0 {
+		if listener.Count(dag.PipelineFinish) == 0 {
 			t.Error("Expected PipelineFinish event")
 		}
 	})
@@ -1597,11 +1603,11 @@ func TestComprehensivePipelineExecution(t *testing.T) {
 		}
 
 		// 验证事件
-		if listener.Count(PipelineNodeStart) != 4 {
-			t.Errorf("Expected 4 PipelineNodeStart events, got %d", listener.Count(PipelineNodeStart))
+		if listener.Count(dag.PipelineNodeStart) != 4 {
+			t.Errorf("Expected 4 PipelineNodeStart events, got %d", listener.Count(dag.PipelineNodeStart))
 		}
-		if listener.Count(PipelineNodeFinish) != 4 {
-			t.Errorf("Expected 4 PipelineNodeFinish events, got %d", listener.Count(PipelineNodeFinish))
+		if listener.Count(dag.PipelineNodeFinish) != 4 {
+			t.Errorf("Expected 4 PipelineNodeFinish events, got %d", listener.Count(dag.PipelineNodeFinish))
 		}
 	})
 
@@ -1663,7 +1669,7 @@ func TestRuntimeImpl_ExportConfig(t *testing.T) {
 	}
 
 	// 验证导出的 YAML 可以被解析
-	snapshotter := NewPipelineSnapshotter()
+	snapshotter := dag.NewPipelineSnapshotter()
 	exportedConfig, err := snapshotter.FromYAML(yamlStr)
 	if err != nil {
 		t.Fatalf("Failed to parse exported YAML: %v", err)
@@ -1693,4 +1699,307 @@ func TestRuntimeImpl_ExportConfig_NotFound(t *testing.T) {
 	}
 }
 
+// TestRuntimeImpl_SetPusher tests setting the log pusher
+func TestRuntimeImpl_SetPusher(t *testing.T) {
+	ctx := context.Background()
+	runtime := NewRuntime(ctx).(*RuntimeImpl)
 
+	pusher := logger.NewConsolePusher()
+	runtime.SetPusher(pusher)
+
+	runtime.mu.RLock()
+	p := runtime.pusher
+	runtime.mu.RUnlock()
+
+	if p != pusher {
+		t.Error("SetPusher did not store the pusher")
+	}
+}
+
+// TestRuntimeImpl_SetTemplateEngine_Custom tests setting a custom template engine
+func TestRuntimeImpl_SetTemplateEngine_Custom(t *testing.T) {
+	ctx := context.Background()
+	runtime := NewRuntime(ctx).(*RuntimeImpl)
+
+	engine := template.NewPongo2TemplateEngine()
+	runtime.SetTemplateEngine(engine)
+
+	got := runtime.GetTemplateEngine()
+	if got == nil {
+		t.Error("GetTemplateEngine() returned nil after SetTemplateEngine")
+	}
+}
+
+// TestRuntimeImpl_SetTemplateEngine_Nil tests setting nil template engine
+func TestRuntimeImpl_SetTemplateEngine_Nil(t *testing.T) {
+	ctx := context.Background()
+	runtime := NewRuntime(ctx).(*RuntimeImpl)
+
+	runtime.SetTemplateEngine(nil)
+
+	// getTemplateEngine should return the default Pongo2 engine
+	engine := runtime.getTemplateEngine()
+	if engine == nil {
+		t.Error("getTemplateEngine() should return default engine when nil is set")
+	}
+}
+
+// TestRuntimeImpl_Pause_NotFound tests pausing a non-existent pipeline
+func TestRuntimeImpl_Pause_NotFound(t *testing.T) {
+	ctx := context.Background()
+	runtime := NewRuntime(ctx).(*RuntimeImpl)
+
+	err := runtime.Pause(ctx, "nonexistent-id")
+	if err == nil {
+		t.Error("Expected error for non-existent pipeline")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Error should contain 'not found', got: %v", err)
+	}
+}
+
+// TestRuntimeImpl_Resume_NotFound tests resuming a non-existent pipeline
+func TestRuntimeImpl_Resume_NotFound(t *testing.T) {
+	ctx := context.Background()
+	runtime := NewRuntime(ctx).(*RuntimeImpl)
+
+	err := runtime.Resume(ctx, "nonexistent-id")
+	if err == nil {
+		t.Error("Expected error for non-existent pipeline")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Error should contain 'not found', got: %v", err)
+	}
+}
+
+// TestRuntimeImpl_CleanupCompletedPipelines tests cleaning up completed pipelines
+func TestRuntimeImpl_CleanupCompletedPipelines(t *testing.T) {
+	ctx := context.Background()
+	runtime := NewRuntime(ctx).(*RuntimeImpl)
+
+	// Manually create a completed pipeline and register to runtime
+	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
+	close(pipeline.DoneChanForTest()) // simulate completed
+
+	runtime.mu.Lock()
+	runtime.pipelines["completed-pipeline"] = pipeline
+	runtime.mu.Unlock()
+
+	// Manually create a running pipeline
+	runningPipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
+	runtime.mu.Lock()
+	runtime.pipelines["running-pipeline"] = runningPipeline
+	runtime.mu.Unlock()
+
+	// Execute cleanup
+	runtime.cleanupCompletedPipelines()
+
+	// Verify completed pipeline is cleaned up
+	runtime.mu.RLock()
+	_, completedExists := runtime.pipelines["completed-pipeline"]
+	_, runningExists := runtime.pipelines["running-pipeline"]
+	runtime.mu.RUnlock()
+
+	if completedExists {
+		t.Error("Completed pipeline should have been cleaned up")
+	}
+	if !runningExists {
+		t.Error("Running pipeline should not have been cleaned up")
+	}
+}
+
+// TestSetPipelineParam tests setting pipeline parameters
+func TestSetPipelineParam(t *testing.T) {
+	pipeline := dag.NewPipeline(context.Background()).(*dag.PipelineImpl)
+	param := map[string]interface{}{"key1": "value1", "key2": 42}
+
+	SetPipelineParam(pipeline, param)
+
+	p := pipeline.ParamForTest()
+	if p["key1"] != "value1" {
+		t.Errorf("param[key1] = %v, want 'value1'", p["key1"])
+	}
+	if p["key2"] != 42 {
+		t.Errorf("param[key2] = %v, want 42", p["key2"])
+	}
+}
+
+// TestSetPipelineParam_NonPipelineImpl tests setting params on nil
+func TestSetPipelineParam_NonPipelineImpl(t *testing.T) {
+	// Passing nil should not panic
+	SetPipelineParam(nil, map[string]interface{}{"key": "value"})
+}
+
+// TestValidateImmutableFields_NoChanges tests validation with identical configs
+func TestValidateImmutableFields_NoChanges(t *testing.T) {
+	old := &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		Param:   map[string]interface{}{"k": "v"},
+	}
+	err := validateImmutableFields(old, old)
+	if err != nil {
+		t.Errorf("Expected nil for identical configs, got: %v", err)
+	}
+}
+
+// TestValidateImmutableFields_VersionChanged tests validation when version changes
+func TestValidateImmutableFields_VersionChanged(t *testing.T) {
+	old := &core.PipelineConfig{Version: "1.0", Name: "test"}
+	newCfg := &core.PipelineConfig{Version: "2.0", Name: "test"}
+
+	err := validateImmutableFields(old, newCfg)
+	if err == nil {
+		t.Error("Expected error when Version changed")
+	}
+	if !strings.Contains(err.Error(), "Version") {
+		t.Errorf("Error should mention Version, got: %v", err)
+	}
+}
+
+// TestValidateImmutableFields_NameChanged tests validation when name changes
+func TestValidateImmutableFields_NameChanged(t *testing.T) {
+	old := &core.PipelineConfig{Version: "1.0", Name: "test"}
+	newCfg := &core.PipelineConfig{Version: "1.0", Name: "changed"}
+
+	err := validateImmutableFields(old, newCfg)
+	if err == nil {
+		t.Error("Expected error when Name changed")
+	}
+}
+
+// TestValidateImmutableFields_MaxLoopIterationsChanged tests validation when max loop iterations changes
+func TestValidateImmutableFields_MaxLoopIterationsChanged(t *testing.T) {
+	old := &core.PipelineConfig{Version: "1.0", Name: "test", MaxLoopIterations: 100}
+	newCfg := &core.PipelineConfig{Version: "1.0", Name: "test", MaxLoopIterations: 200}
+
+	err := validateImmutableFields(old, newCfg)
+	if err == nil {
+		t.Error("Expected error when MaxLoopIterations changed")
+	}
+}
+
+// TestValidateImmutableFields_ParamChanged tests validation when param changes
+func TestValidateImmutableFields_ParamChanged(t *testing.T) {
+	old := &core.PipelineConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v1"}}
+	newCfg := &core.PipelineConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v2"}}
+
+	err := validateImmutableFields(old, newCfg)
+	if err == nil {
+		t.Error("Expected error when Param changed")
+	}
+}
+
+// TestValidateImmutableFields_ExecutorsChanged tests validation when executors change
+func TestValidateImmutableFields_ExecutorsChanged(t *testing.T) {
+	old := &core.PipelineConfig{
+		Version:   "1.0",
+		Name:      "test",
+		Executors: map[string]core.ExecutorConfig{"local": {Type: "local"}},
+	}
+	newCfg := &core.PipelineConfig{
+		Version:   "1.0",
+		Name:      "test",
+		Executors: map[string]core.ExecutorConfig{"docker": {Type: "docker"}},
+	}
+
+	err := validateImmutableFields(old, newCfg)
+	if err == nil {
+		t.Error("Expected error when Executors changed")
+	}
+}
+
+// TestValidateImmutableFields_LoggingChanged tests validation when logging changes
+func TestValidateImmutableFields_LoggingChanged(t *testing.T) {
+	old := &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		Logging: core.LoggingConfig{Endpoint: "http://old"},
+	}
+	newCfg := &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		Logging: core.LoggingConfig{Endpoint: "http://new"},
+	}
+
+	err := validateImmutableFields(old, newCfg)
+	if err == nil {
+		t.Error("Expected error when Logging changed")
+	}
+}
+
+// TestValidateImmutableFields_AIChanged tests validation when AI config changes
+func TestValidateImmutableFields_AIChanged(t *testing.T) {
+	old := &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		AI:      core.AIConfig{Intent: "old"},
+	}
+	newCfg := &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		AI:      core.AIConfig{Intent: "new"},
+	}
+
+	err := validateImmutableFields(old, newCfg)
+	if err == nil {
+		t.Error("Expected error when AI changed")
+	}
+}
+
+// TestValidateImmutableFields_MetadateChanged tests validation when metadata config changes
+func TestValidateImmutableFields_MetadateChanged(t *testing.T) {
+	old := &core.PipelineConfig{
+		Version:  "1.0",
+		Name:     "test",
+		Metadate: core.MetadataConfig{Type: "old"},
+	}
+	newCfg := &core.PipelineConfig{
+		Version:  "1.0",
+		Name:     "test",
+		Metadate: core.MetadataConfig{Type: "new"},
+	}
+
+	err := validateImmutableFields(old, newCfg)
+	if err == nil {
+		t.Error("Expected error when Metadate changed")
+	}
+}
+
+// TestValidateImmutableFields_NodesMutable tests that nodes are mutable
+func TestValidateImmutableFields_NodesMutable(t *testing.T) {
+	old := &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		Nodes:   map[string]core.NodeConfig{"A": {Name: "A"}},
+	}
+	newCfg := &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		Nodes:   map[string]core.NodeConfig{"B": {Name: "B"}},
+	}
+
+	err := validateImmutableFields(old, newCfg)
+	if err != nil {
+		t.Errorf("Nodes changes should be allowed, got: %v", err)
+	}
+}
+
+// TestValidateImmutableFields_GraphMutable tests that graph is mutable
+func TestValidateImmutableFields_GraphMutable(t *testing.T) {
+	old := &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		Graph:   "stateDiagram-v2\n    [*] --> A",
+	}
+	newCfg := &core.PipelineConfig{
+		Version: "1.0",
+		Name:    "test",
+		Graph:   "stateDiagram-v2\n    [*] --> B",
+	}
+
+	err := validateImmutableFields(old, newCfg)
+	if err != nil {
+		t.Errorf("Graph changes should be allowed, got: %v", err)
+	}
+}
