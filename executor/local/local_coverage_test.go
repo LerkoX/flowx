@@ -3,7 +3,7 @@ package local
 import (
 	"testing"
 
-	"github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
 )
 
 func TestParseInputRequest_YAML(t *testing.T) {

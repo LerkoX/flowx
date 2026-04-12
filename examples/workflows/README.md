@@ -250,7 +250,7 @@ import (
     "os"
     "path/filepath"
 
-    "github.com/LerkoX/pipelinex"
+    "github.com/LerkoX/flowx"
 )
 
 func main() {

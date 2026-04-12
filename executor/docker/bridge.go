@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
 )
 
 // DockerBridge Docker桥接器实现

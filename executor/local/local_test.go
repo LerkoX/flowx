@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LerkoX/pipelinex/executor"
-	executorpkg "github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
+	executorpkg "github.com/LerkoX/flowx/executor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

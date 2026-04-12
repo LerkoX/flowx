@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
 )
 
 // LocalAdapter 本地适配器实现

@@ -1,4 +1,4 @@
-module github.com/LerkoX/pipelinex
+module github.com/LerkoX/flowx
 
 go 1.25.0
 

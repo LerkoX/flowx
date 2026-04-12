@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/LerkoX/pipelinex"
-	"github.com/LerkoX/pipelinex/logger"
+	"github.com/LerkoX/flowx"
+	"github.com/LerkoX/flowx/logger"
 )
 
 // PipelineListener监听流水线事件执行

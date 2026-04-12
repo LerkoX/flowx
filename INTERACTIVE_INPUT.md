@@ -47,7 +47,7 @@ import (
     "os"
     "time"
 
-    "github.com/LerkoX/pipelinex"
+    "github.com/LerkoX/flowx"
 )
 
 func main() {

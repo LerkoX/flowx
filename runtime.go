@@ -3,7 +3,7 @@ package pipelinex
 import (
 	"context"
 
-	"github.com/LerkoX/pipelinex/logger"
+	"github.com/LerkoX/flowx/logger"
 )
 
 // Runtime 运行时

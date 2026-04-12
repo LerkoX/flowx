@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/LerkoX/pipelinex/logger"
+	"github.com/LerkoX/flowx/logger"
 )
 
 func TestRuntimeImpl_SetPusher(t *testing.T) {
