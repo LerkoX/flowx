@@ -1,3 +1,5 @@
+[English Documentation](./README.md)
+
 # PipelineX
 
 <p align="center">
@@ -114,7 +116,7 @@ Nodes:
           echo '```'
 ```
 
-这将从输出中提取 `buildId` 和 `version`，使其可作为 `${Metadata.Build.buildId}` 和 `${Metadata.Build.version}` 使用。
+这将从输出中提取 `buildId` 和 `version`，使其可作为 `{{ .Metadata.Build.buildId }}` 和 `{{ .Metadata.Build.version }}` 使用。
 
 ### 正则表达式提取
 
@@ -507,5 +509,3 @@ go test ./...
 ## 许可证
 
 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
-
-[English Documentation](./README.md)
