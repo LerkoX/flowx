@@ -185,7 +185,7 @@ This project is indexed by GitNexus as **pipelinex** (573 symbols, 1606 relation
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/pipelinex/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/flowx/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -224,10 +224,10 @@ This project is indexed by GitNexus as **pipelinex** (573 symbols, 1606 relation
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/pipelinex/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/pipelinex/clusters` | All functional areas |
-| `gitnexus://repo/pipelinex/processes` | All execution flows |
-| `gitnexus://repo/pipelinex/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/flowx/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/flowx/clusters` | All functional areas |
+| `gitnexus://repo/flowx/processes` | All execution flows |
+| `gitnexus://repo/flowx/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 

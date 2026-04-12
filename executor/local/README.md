@@ -99,7 +99,7 @@ func main() {
     go executor.Transfer(ctx, resultChan, commandChan, nil)
 
     // 发送步骤执行
-    steps := []pipelinex.Step{
+    steps := []flowx.Step{
         {Name: "build", Run: "go build -o app ."},
         {Name: "test", Run: "go test ./..."},
     }
@@ -153,9 +153,9 @@ Local Executor 实现了以下接口：
 
 | 接口 | 实现类型 | 说明 |
 |------|---------|------|
-| `pipelinex.Executor` | `LocalExecutor` | 执行器主接口 |
-| `pipelinex.Adapter` | `LocalAdapter` | 配置适配器接口 |
-| `pipelinex.Bridge` | `LocalBridge` | 连接桥接器接口 |
+| `flowx.Executor` | `LocalExecutor` | 执行器主接口 |
+| `flowx.Adapter` | `LocalAdapter` | 配置适配器接口 |
+| `flowx.Bridge` | `LocalBridge` | 连接桥接器接口 |
 
 ## LocalExecutor 方法
 

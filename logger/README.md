@@ -89,7 +89,7 @@ func main() {
     consolePusher := logger.NewConsolePusher()
 
     // 创建 Runtime 并设置日志推送器
-    runtime := pipelinex.NewRuntime(ctx)
+    runtime := flowx.NewRuntime(ctx)
     runtime.SetPusher(consolePusher)
 
     // 执行流水线...
@@ -104,7 +104,7 @@ type PipelineListener struct {
     ctx    context.Context
 }
 
-func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
+func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
     if l.pusher != nil {
         l.pusher.Push(l.ctx, logger.Entry{
             Pipeline: p.Id(),

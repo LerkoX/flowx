@@ -49,7 +49,7 @@ func main() {
     ctx := context.Background()
 
     // 创建运行时
-    runtime := pipelinex.NewRuntime(ctx)
+    runtime := flowx.NewRuntime(ctx)
 
     // 流水线配置
     config := `
@@ -349,20 +349,20 @@ Nodes:
 通过事件监听器监控流水线执行：
 
 ```go
-listener := pipelinex.NewListener()
-listener.Handle(func(p pipelinex.Pipeline, event pipelinex.Event) {
+listener := flowx.NewListener()
+listener.Handle(func(p flowx.Pipeline, event flowx.Event) {
     switch event {
-    case pipelinex.PipelineInit:
+    case flowx.PipelineInit:
         fmt.Println("流水线初始化")
-    case pipelinex.PipelineStart:
+    case flowx.PipelineStart:
         fmt.Println("流水线开始")
-    case pipelinex.PipelineFinish:
+    case flowx.PipelineFinish:
         fmt.Println("流水线完成")
-    case pipelinex.PipelineExecutorPrepare:
+    case flowx.PipelineExecutorPrepare:
         fmt.Println("执行器准备中")
-    case pipelinex.PipelineNodeStart:
+    case flowx.PipelineNodeStart:
         fmt.Println("节点开始执行")
-    case pipelinex.PipelineNodeFinish:
+    case flowx.PipelineNodeFinish:
         fmt.Println("节点执行完成")
     }
 })

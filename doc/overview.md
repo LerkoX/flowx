@@ -58,7 +58,7 @@ Pipelinex 是一个基于 Go 语言开发的 CI/CD 流水线执行库。它使�
 ## 目录结构
 
 ```
-pipelinex/
+flowx/
 ├── pipeline.go           # Pipeline 接口定义
 ├── pipeline_impl.go      # Pipeline + DAG 图实现
 ├── node.go               # Node 接口定义
@@ -115,7 +115,7 @@ import (
 
 func main() {
     // 1. 创建运行时
-    rt := pipelinex.NewRuntime(context.Background())
+    rt := flowx.NewRuntime(context.Background())
 
     // 2. 准备 YAML 配置
     configYAML := `
@@ -157,12 +157,12 @@ Nodes:
 
 ```go
 // 创建监听器
-listener := &pipelinex.DGAListener{
-    Events: []pipelinex.Event{
-        pipelinex.EventPipelineNodeStart,
-        pipelinex.EventPipelineNodeFinish,
+listener := &flowx.DGAListener{
+    Events: []flowx.Event{
+        flowx.EventPipelineNodeStart,
+        flowx.EventPipelineNodeFinish,
     },
-    Handler: func(p pipelinex.Pipeline, event pipelinex.Event) {
+    Handler: func(p flowx.Pipeline, event flowx.Event) {
         fmt.Printf("Event: %s, Pipeline: %s\n", event, p.Id())
     },
 }

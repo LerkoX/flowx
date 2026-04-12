@@ -1,6 +1,6 @@
 # Pipelinex 本地工作流示例
 
-本目录包含使用 pipelinex 流水线库的本地工作流配置示例。
+本目录包含使用 flowx 流水线库的本地工作流配置示例。
 
 ## 工作流列表
 
@@ -209,7 +209,7 @@ Executing node: Package
 **配置定时任务**：
 ```bash
 # 添加到 crontab（每天早上 7:30 执行）
-30 7 * * * /myapp/pipelinex/runner -config /myapp/pipelinex/weather_feishu_notify.yaml >> /tmp/weather_notify.log 2>&1
+30 7 * * * /myapp/flowx/runner -config /myapp/flowx/weather_feishu_notify.yaml >> /tmp/weather_notify.log 2>&1
 ```
 
 ---
@@ -239,7 +239,7 @@ cd examples/workflows
 go run main.go -config <配置文件名.yaml>
 ```
 
-### 方法三：使用 pipelinex Go 库加载和执行配置文件
+### 方法三：使用 flowx Go 库加载和执行配置文件
 
 ```go
 package main
@@ -265,7 +265,7 @@ func main() {
     }
 
     // 创建运行时
-    runtime := pipelinex.NewRuntime(ctx)
+    runtime := flowx.NewRuntime(ctx)
 
     // 运行流水线
     pipelineID := "my-pipeline"
@@ -402,7 +402,7 @@ Graph: |
 
 ## 参考文件
 
-- `/workspace/github/pipelinex/config.example.yaml` - 完整配置示例
-- `/workspace/github/pipelinex/test/fixtures/runtime/` - 测试用例配置
-- `/workspace/github/pipelinex/doc/config.md` - 配置详细文档
-- `/workspace/github/pipelinex/README.md` - 项目文档
+- `/workspace/github/flowx/config.example.yaml` - 完整配置示例
+- `/workspace/github/flowx/test/fixtures/runtime/` - 测试用例配置
+- `/workspace/github/flowx/doc/config.md` - 配置详细文档
+- `/workspace/github/flowx/README.md` - 项目文档

@@ -29,7 +29,7 @@ type Runtime interface {
 ## 创建 Runtime
 
 ```go
-rt := pipelinex.NewRuntime(context.Background())
+rt := flowx.NewRuntime(context.Background())
 ```
 
 `RuntimeImpl` 使用 `sync.RWMutex` 保证并发安全，内部维护一个 `map[string]Pipeline` 管理所有流水线实例。
@@ -254,19 +254,19 @@ err := rt.Resume(ctx, "pipeline-001")
 `ModifyGraph` 在流水线处于可修改状态时（`PAUSED`、`STOPPED`、`FAILED`、`CANCELLED`、`SUCCESS`）执行图结构变更：
 
 ```go
-mods := pipelinex.GraphModifications{
+mods := flowx.GraphModifications{
     RemoveNodes: []string{"OldNode"},
-    RemoveEdges: []pipelinex.EdgeID{{Source: "A", Target: "B"}},
-    AddNodes: []pipelinex.NodeConfig{
+    RemoveEdges: []flowx.EdgeID{{Source: "A", Target: "B"}},
+    AddNodes: []flowx.NodeConfig{
         {
             Name:     "NewNode",
             Executor: "local",
-            Steps: []pipelinex.Step{
+            Steps: []flowx.Step{
                 {Name: "step1", Run: "echo hello"},
             },
         },
     },
-    AddEdges: []pipelinex.EdgeModification{
+    AddEdges: []flowx.EdgeModification{
         {Source: "NewNode", Target: "ExistingNode"},
         {Source: "X", Target: "Y", Expression: "{{ env == 'prod' }}"},
     },

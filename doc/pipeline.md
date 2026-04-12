@@ -244,12 +244,12 @@ type Listener interface {
 
 ```go
 // 创建监听器
-listener := &pipelinex.DGAListener{
-    Events: []pipelinex.Event{
-        pipelinex.EventPipelineNodeStart,
-        pipelinex.EventPipelineNodeFinish,
+listener := &flowx.DGAListener{
+    Events: []flowx.Event{
+        flowx.EventPipelineNodeStart,
+        flowx.EventPipelineNodeFinish,
     },
-    Handler: func(p pipelinex.Pipeline, event pipelinex.Event) {
+    Handler: func(p flowx.Pipeline, event flowx.Event) {
         fmt.Printf("Event: %s\n", event)
     },
 }
@@ -294,18 +294,18 @@ err := pipeline.Resume(ctx)
 在流水线处于 `PAUSED`、`STOPPED`、`FAILED`、`CANCELLED` 或 `SUCCESS` 状态时，可以通过 `Runtime.ModifyGraph` 修改图结构：
 
 ```go
-mods := pipelinex.GraphModifications{
+mods := flowx.GraphModifications{
     RemoveNodes: []string{"OldNode"},
-    AddNodes: []pipelinex.NodeConfig{
+    AddNodes: []flowx.NodeConfig{
         {
             Name:     "NewNode",
             Executor: "local",
-            Steps: []pipelinex.Step{
+            Steps: []flowx.Step{
                 {Name: "step1", Run: "echo hello"},
             },
         },
     },
-    AddEdges: []pipelinex.EdgeModification{
+    AddEdges: []flowx.EdgeModification{
         {Source: "NewNode", Target: "ExistingNode"},
     },
 }

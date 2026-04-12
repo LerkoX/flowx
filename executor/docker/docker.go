@@ -105,7 +105,7 @@ func (d *DockerExecutor) Prepare(ctx context.Context) error {
 	}
 
 	// 创建容器
-	resp, err := d.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, fmt.Sprintf("pipelinex-%d", time.Now().UnixNano()))
+	resp, err := d.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, fmt.Sprintf("flowx-%d", time.Now().UnixNano()))
 	if err != nil {
 		return fmt.Errorf("failed to create container: %w", err)
 	}

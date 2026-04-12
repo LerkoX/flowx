@@ -1,7 +1,7 @@
 Version: "1.0"
 Name: 数据传递示例
 Param:
-  projectName: pipelinex-demo
+  projectName: flowx-demo
   buildId: "001"
   environment: production
 Executors:

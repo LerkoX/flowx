@@ -130,7 +130,7 @@ func main() {
     go executor.Transfer(ctx, resultChan, commandChan, nil)
 
     // 发送步骤执行
-    steps := []pipelinex.Step{
+    steps := []flowx.Step{
         {Name: "build", Run: "go build -o app ."},
         {Name: "test", Run: "go test ./..."},
     }
@@ -220,9 +220,9 @@ Kubernetes Executor 实现了以下接口：
 
 | 接口 | 实现类型 | 说明 |
 |------|---------|------|
-| `pipelinex.Executor` | `KubernetesExecutor` | 执行器主接口 |
-| `pipelinex.Adapter` | `KubernetesAdapter` | 配置适配器接口 |
-| `pipelinex.Bridge` | `KubernetesBridge` | 连接桥接器接口 |
+| `flowx.Executor` | `KubernetesExecutor` | 执行器主接口 |
+| `flowx.Adapter` | `KubernetesAdapter` | 配置适配器接口 |
+| `flowx.Bridge` | `KubernetesBridge` | 连接桥接器接口 |
 
 ## KubernetesExecutor 方法
 

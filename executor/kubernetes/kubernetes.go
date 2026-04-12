@@ -114,7 +114,7 @@ func (k *KubernetesExecutor) Prepare(ctx context.Context) error {
 	}
 
 	// 生成唯一的pod名称
-	k.podName = fmt.Sprintf("pipelinex-%d", time.Now().UnixNano())
+	k.podName = fmt.Sprintf("flowx-%d", time.Now().UnixNano())
 
 	// 构建Pod配置
 	pod := k.buildPodSpec()
@@ -268,7 +268,7 @@ func (k *KubernetesExecutor) buildPodSpec() *corev1.Pod {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   podName,
 			Labels: map[string]string{
-				"app":       "pipelinex",
+				"app":       "flowx",
 				"component": "executor",
 			},
 		},
