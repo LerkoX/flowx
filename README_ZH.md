@@ -1,9 +1,9 @@
 [English Documentation](./README.md)
 
-# PipelineX
+# FlowX
 
 <p align="center">
-  <img src="icon.ico" alt="PipelineX Icon" width="120">
+  <img src="icon.ico" alt="FlowX Icon" width="120">
 </p>
 
 一个灵活且可扩展的 Go 语言流水线执行库，支持多种执行后端和基于 DAG 的工作流编排。
@@ -94,7 +94,7 @@ Nodes:
 
 ## 输出提取
 
-PipelineX 支持从命令输出提取结构化数据并保存到流水线元数据，供后续节点使用。
+FlowX 支持从命令输出提取结构化数据并保存到流水线元数据，供后续节点使用。
 
 ### Codec-Block 提取
 
@@ -141,7 +141,7 @@ Nodes:
 
 ## 配置说明
 
-PipelineX 使用 YAML 配置，结构如下：
+FlowX 使用 YAML 配置，结构如下：
 
 ```yaml
 Version: "1.0"              # 配置版本
@@ -252,8 +252,8 @@ Executors:
 Graph: |
   stateDiagram-v2
     [*] --> Build
-    Build --> Deploy: "{{ eq .Param.branch 'main' }}"
-    Build --> Test: "{{ ne .Param.branch 'main' }}"
+    Build --> Deploy: {{ Param.branch == "main" }}
+    Build --> Test: {{ Param.branch != "main" }}
     Test --> [*]
     Deploy --> [*]
 ```
@@ -262,15 +262,15 @@ Graph: |
 
 ```yaml
 # 多条件
-QualityCheck --> DeployStaging: "{{ QualityCheck.allTestsPassed == true and QualityCheck.codeCoverage >= 80 }}"
+QualityCheck --> DeployStaging: {{ QualityCheck.allTestsPassed == true and QualityCheck.codeCoverage >= 80 }}
 
 # 嵌套条件
-Deploy --> Production: "{{ eq .Param.environment 'production' and .ManualApproval.approved == true }}"
+Deploy --> Production: {{ Param.environment == "production" and ManualApproval.approved == true }}
 ```
 
 ## 循环图（Loop Execution）
 
-PipelineX 通过条件回边支持可控循环。当条件边形成环路时，引擎将其标记为回边，实现迭代执行。
+FlowX 通过条件回边支持可控循环。当条件边形成环路时，引擎将其标记为回边，实现迭代执行。
 
 ```yaml
 MaxLoopIterations: 5          # 安全限制（默认 100）
@@ -360,15 +360,107 @@ listener.Handle(func(p flowx.Pipeline, event flowx.Event) {
         fmt.Println("流水线完成")
     case flowx.PipelineExecutorPrepare:
         fmt.Println("执行器准备中")
+    case flowx.PipelineExecutorPrepareDone:
+        fmt.Println("执行器准备完成")
     case flowx.PipelineNodeStart:
         fmt.Println("节点开始执行")
     case flowx.PipelineNodeFinish:
         fmt.Println("节点执行完成")
+    case flowx.PipelineCancelled:
+        fmt.Println("流水线已取消")
+    case flowx.PipelineStatusUpdate:
+        fmt.Println("流水线状态更新")
+    case flowx.PipelinePaused:
+        fmt.Println("流水线已暂停")
+    case flowx.PipelineResumed:
+        fmt.Println("流水线已恢复")
+    case flowx.PipelineGraphModified:
+        fmt.Println("流水线图已修改")
     }
 })
 
 pipeline, err := runtime.RunSync(ctx, "id", config, listener)
 ```
+
+**可用事件：**
+
+| 事件 | 描述 |
+|------|------|
+| `PipelineInit` | 流水线初始化 |
+| `PipelineStart` | 流水线开始执行 |
+| `PipelineFinish` | 流水线执行完成（成功或失败） |
+| `PipelineExecutorPrepare` | 节点执行器正在准备 |
+| `PipelineExecutorPrepareDone` | 节点执行器准备完成 |
+| `PipelineNodeStart` | 节点开始执行 |
+| `PipelineNodeFinish` | 节点执行完成 |
+| `PipelineCancelled` | 流水线被取消 |
+| `PipelineStatusUpdate` | 流水线状态变更 |
+| `PipelinePaused` | 流水线暂停 |
+| `PipelineResumed` | 流水线恢复执行 |
+| `PipelineGraphModified` | 流水线图被修改 |
+
+## 动态图修改
+
+FlowX 支持在运行时动态修改流水线图。在流水线暂停期间，可以安全地添加或删除节点和边。
+
+### 使用 ModifyGraph（细粒度控制）
+
+```go
+err := runtime.ModifyGraph(ctx, "pipeline-id", flowx.GraphModifications{
+    AddNodes: []flowx.NodeConfig{
+        {
+            Name: "NewNode",
+            Executor: "local",
+            Steps: []flowx.Step{
+                {Name: "step1", Run: "echo 'New step'"},
+            },
+        },
+    },
+    AddEdges: []flowx.EdgeModification{
+        {Source: "ExistingNode", Target: "NewNode", Expression: ""},
+    },
+    RemoveNodes: []string{"UnusedNode"},
+    RemoveEdges: []flowx.EdgeID{{Source: "A", Target: "B"}},
+})
+```
+
+### 使用 UpdateConfig（配置比对）
+
+通过提供新的 YAML 配置来更新流水线。FlowX 自动计算差异并应用变更：
+
+```go
+newConfig := `
+Version: "1.0"
+Name: my-pipeline
+
+Graph: |
+  stateDiagram-v2
+    [*] --> Build
+    Build --> Deploy
+    Deploy --> [*]
+
+Nodes:
+  Build:
+    executor: local
+    steps:
+      - name: build
+        run: echo "Building..."
+  Deploy:
+    executor: local
+    steps:
+      - name: deploy
+        run: echo "Deploying..."
+`
+
+err := runtime.UpdateConfig(ctx, "pipeline-id", newConfig)
+```
+
+规则：
+- 已执行的节点无法被删除或修改
+- 新节点在恢复后执行
+- 仅当边两端节点都未执行时才能删除
+
+> 详见 [doc/runtime.md](doc/runtime.md) 获取完整的 API 文档。
 
 ## 架构图
 
