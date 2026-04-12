@@ -29,7 +29,7 @@ A flexible and extensible pipeline execution library for Go, supporting multiple
 ## Installation
 
 ```bash
-go get github.com/LerkoX/pipelinex
+go get github.com/LerkoX/flowx
 ```
 
 ## Quick Start
@@ -40,7 +40,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/LerkoX/pipelinex"
+    "github.com/LerkoX/flowx"
 )
 
 func main() {

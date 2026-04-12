@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
 )
 
 // DockerAdapter Docker适配器实现

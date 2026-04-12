@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/LerkoX/pipelinex/executor/provider"
+	"github.com/LerkoX/flowx/executor/provider"
 )
 
 // TestDGAGraph_ConditionalBackEdge 测试条件回边被接受

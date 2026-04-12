@@ -76,8 +76,8 @@ import (
     "context"
     "log"
 
-    "github.com/LerkoX/pipelinex"
-    "github.com/LerkoX/pipelinex/executor/docker"
+    "github.com/LerkoX/flowx"
+    "github.com/LerkoX/flowx/executor/docker"
 )
 
 func main() {

@@ -1,7 +1,7 @@
 package pipelinex
 
 import (
-	"github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
 )
 
 // Executor 执行器

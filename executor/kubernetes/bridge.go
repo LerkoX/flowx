@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )

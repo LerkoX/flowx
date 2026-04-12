@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"

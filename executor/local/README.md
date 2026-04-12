@@ -70,8 +70,8 @@ import (
     "context"
     "log"
 
-    "github.com/LerkoX/pipelinex"
-    "github.com/LerkoX/pipelinex/executor/local"
+    "github.com/LerkoX/flowx"
+    "github.com/LerkoX/flowx/executor/local"
 )
 
 func main() {

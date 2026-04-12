@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LerkoX/pipelinex/executor/provider"
+	"github.com/LerkoX/flowx/executor/provider"
 )
 
 // TestDGAGraph_RemoveVertex 测试删除节点及其关联边

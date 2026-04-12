@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/LerkoX/pipelinex/executor/provider"
+	"github.com/LerkoX/flowx/executor/provider"
 )
 
 // helperSetupModifiablePipeline 创建一个处于 PAUSED 状态的 pipeline 并注册到 runtime

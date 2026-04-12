@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
 )
 
 func TestNewDockerExecutorWithClient_NilClient(t *testing.T) {

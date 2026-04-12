@@ -97,8 +97,8 @@ import (
     "context"
     "log"
 
-    "github.com/LerkoX/pipelinex"
-    "github.com/LerkoX/pipelinex/executor/kubernetes"
+    "github.com/LerkoX/flowx"
+    "github.com/LerkoX/flowx/executor/kubernetes"
 )
 
 func main() {

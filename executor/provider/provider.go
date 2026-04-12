@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/LerkoX/pipelinex/executor"
-	"github.com/LerkoX/pipelinex/executor/docker"
-	"github.com/LerkoX/pipelinex/executor/kubernetes"
-	"github.com/LerkoX/pipelinex/executor/local"
+	"github.com/LerkoX/flowx/executor"
+	"github.com/LerkoX/flowx/executor/docker"
+	"github.com/LerkoX/flowx/executor/kubernetes"
+	"github.com/LerkoX/flowx/executor/local"
 )
 
 // Provider ExecutorProvider 实现

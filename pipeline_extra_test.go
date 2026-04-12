@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/LerkoX/pipelinex/executor"
-	"github.com/LerkoX/pipelinex/executor/provider"
+	"github.com/LerkoX/flowx/executor"
+	"github.com/LerkoX/flowx/executor/provider"
 )
 
 // --- PipelineImpl.Pause / Resume / IsModifiable ---

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LerkoX/pipelinex/executor"
+	"github.com/LerkoX/flowx/executor"
 	"gopkg.in/yaml.v3"
 )
 
