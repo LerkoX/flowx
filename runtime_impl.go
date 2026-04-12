@@ -8,8 +8,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LerkoX/flowx/core"
+	"github.com/LerkoX/flowx/dag"
 	"github.com/LerkoX/flowx/executor/provider"
 	"github.com/LerkoX/flowx/logger"
+	"github.com/LerkoX/flowx/metadata"
+	"github.com/LerkoX/flowx/template"
 	"github.com/tetrafolium/mermaid-check/ast"
 	"github.com/tetrafolium/mermaid-check/parser"
 	"gopkg.in/yaml.v2"
@@ -20,16 +24,16 @@ var _ Runtime = (*RuntimeImpl)(nil)
 
 // RuntimeImpl Runtime接口的实现
 type RuntimeImpl struct {
-	pipelines       map[string]Pipeline      // 存储所有流水线
+	pipelines       map[string]dag.Pipeline      // 存储所有流水线
 	pipelineIds     map[string]bool          // 跟踪所有使用过的流水线ID
-	pipelineConfigs map[string]*PipelineConfig // 存储原始配置用于导出
+	pipelineConfigs map[string]*core.PipelineConfig // 存储原始配置用于导出
 	mu              sync.RWMutex             // 读写锁
 	ctx             context.Context          // 上下文
 	cancel          context.CancelFunc       // 取消函数
 	doneChan        chan struct{}            // 完成通道
 	background      chan struct{}            // 后台处理完成通道
 	pusher          logger.Pusher            // 日志推送器
-	templateEngine  TemplateEngine           // 模板引擎
+	templateEngine  template.TemplateEngine           // 模板引擎
 }
 
 // renderParam 渲染Param中的模板表达式，支持自引用
@@ -164,7 +168,7 @@ func (r *RuntimeImpl) renderMetadata(metadataData map[string]interface{}, param 
 }
 
 // renderConfig 渲染配置中所有引用 Param 的地方（配置阶段）
-func (r *RuntimeImpl) renderConfig(config *PipelineConfig) error {
+func (r *RuntimeImpl) renderConfig(config *core.PipelineConfig) error {
 	// 构建 Param 上下文
 	ctx := map[string]any{
 		"Param": config.Param,
@@ -211,19 +215,19 @@ func (r *RuntimeImpl) renderConfig(config *PipelineConfig) error {
 func NewRuntime(ctx context.Context) Runtime {
 	ctx, cancel := context.WithCancel(ctx)
 	return &RuntimeImpl{
-		pipelines:       make(map[string]Pipeline),
+		pipelines:       make(map[string]dag.Pipeline),
 		pipelineIds:     make(map[string]bool),
-		pipelineConfigs: make(map[string]*PipelineConfig),
+		pipelineConfigs: make(map[string]*core.PipelineConfig),
 		ctx:             ctx,
 		cancel:          cancel,
 		doneChan:        make(chan struct{}),
 		background:      make(chan struct{}),
-		templateEngine:  NewPongo2TemplateEngine(), // 默认引擎
+		templateEngine:  template.NewPongo2TemplateEngine(), // 默认引擎
 	}
 }
 
 // Get 获取流水线状态
-func (r *RuntimeImpl) Get(id string) (Pipeline, error) {
+func (r *RuntimeImpl) Get(id string) (dag.Pipeline, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -245,7 +249,7 @@ func (r *RuntimeImpl) Cancel(ctx context.Context, id string) error {
 	}
 
 	// 调用流水线的Cancel方法
-	if p, ok := pipeline.(*PipelineImpl); ok {
+	if p, ok := pipeline.(*dag.PipelineImpl); ok {
 		p.Cancel()
 	}
 
@@ -253,7 +257,7 @@ func (r *RuntimeImpl) Cancel(ctx context.Context, id string) error {
 }
 
 // RunAsync 执行异步流水线
-func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, listener Listener) (Pipeline, error) {
+func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
 	// 提前获取 templateEngine，避免在持有写锁时调用 GetTemplateEngine 导致死锁
 	templateEngine := r.GetTemplateEngine()
 
@@ -277,7 +281,7 @@ func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, li
 	}
 
 	// 创建流水线
-	pipeline := NewPipeline(ctx)
+	pipeline := dag.NewPipeline(ctx)
 	pipeline.SetTemplateEngine(templateEngine)
 
 	// 设置监听器
@@ -291,12 +295,12 @@ func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, li
 
 	// 设置渲染后的 param 值
 	if len(pipelineConfig.Param) > 0 {
-		pipeline.(*PipelineImpl).SetParam(pipelineConfig.Param)
+		pipeline.(*dag.PipelineImpl).SetParam(pipelineConfig.Param)
 	}
 
 		// è®¾ç½®å¾ªç¯å¾æå¤§è¿­ä»£æ¬¡æ°
 		if pipelineConfig.MaxLoopIterations > 0 {
-			pipeline.(*PipelineImpl).SetMaxLoopIterations(pipelineConfig.MaxLoopIterations)
+			pipeline.(*dag.PipelineImpl).SetMaxLoopIterations(pipelineConfig.MaxLoopIterations)
 		}
 
 	// 设置metadata
@@ -328,7 +332,7 @@ func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, li
 		}()
 
 		if err := pipeline.Run(ctx); err != nil {
-			fmt.Printf("Pipeline %s execution failed: %v\n", id, err)
+			fmt.Printf("dag.Pipeline %s execution failed: %v\n", id, err)
 		}
 	}()
 
@@ -336,7 +340,7 @@ func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, li
 }
 
 // RunSync 执行同步流水线
-func (r *RuntimeImpl) RunSync(ctx context.Context, id string, config string, listener Listener) (Pipeline, error) {
+func (r *RuntimeImpl) RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
 	// 检查是否已存在相同ID的流水线
 	r.mu.Lock()
 	if _, exists := r.pipelineIds[id]; exists {
@@ -358,7 +362,7 @@ func (r *RuntimeImpl) RunSync(ctx context.Context, id string, config string, lis
 	}
 
 	// 创建流水线
-	pipeline := NewPipeline(ctx)
+	pipeline := dag.NewPipeline(ctx)
 	pipeline.SetTemplateEngine(r.GetTemplateEngine())
 
 	// 设置监听器
@@ -372,12 +376,12 @@ func (r *RuntimeImpl) RunSync(ctx context.Context, id string, config string, lis
 
 	// 设置渲染后的 param 值
 	if len(pipelineConfig.Param) > 0 {
-		pipeline.(*PipelineImpl).SetParam(pipelineConfig.Param)
+		pipeline.(*dag.PipelineImpl).SetParam(pipelineConfig.Param)
 	}
 
 		// è®¾ç½®å¾ªç¯å¾æå¤§è¿­ä»£æ¬¡æ°
 		if pipelineConfig.MaxLoopIterations > 0 {
-			pipeline.(*PipelineImpl).SetMaxLoopIterations(pipelineConfig.MaxLoopIterations)
+			pipeline.(*dag.PipelineImpl).SetMaxLoopIterations(pipelineConfig.MaxLoopIterations)
 		}
 
 	// 设置metadata
@@ -462,7 +466,7 @@ func (r *RuntimeImpl) StopBackground() {
 }
 
 // setupMetadata 设置流水线的metadata
-func (r *RuntimeImpl) setupMetadata(ctx context.Context, pipeline Pipeline, config *PipelineConfig) error {
+func (r *RuntimeImpl) setupMetadata(ctx context.Context, pipeline dag.Pipeline, config *core.PipelineConfig) error {
 	// 检查是否有metadata配置（注意配置中是Metadate）
 	// 只有当配置了 Metadate.Type 且有数据时才创建 store
 	if config.Metadate.Type == "" || config.Metadate.Data == nil || len(config.Metadate.Data) == 0 {
@@ -470,7 +474,7 @@ func (r *RuntimeImpl) setupMetadata(ctx context.Context, pipeline Pipeline, conf
 	}
 
 	// 创建metadata store
-	factory := NewMetadataStoreFactory()
+	factory := metadata.NewMetadataStoreFactory()
 	store, err := factory.Create(config.Metadate)
 	if err != nil {
 		return fmt.Errorf("failed to create metadata store: %w", err)
@@ -482,8 +486,8 @@ func (r *RuntimeImpl) setupMetadata(ctx context.Context, pipeline Pipeline, conf
 }
 
 // parseConfig 解析流水线配置
-func (r *RuntimeImpl) parseConfig(config string) (*PipelineConfig, error) {
-	var pipelineConfig PipelineConfig
+func (r *RuntimeImpl) parseConfig(config string) (*core.PipelineConfig, error) {
+	var pipelineConfig core.PipelineConfig
 
 	err := yaml.Unmarshal([]byte(config), &pipelineConfig)
 	if err != nil {
@@ -494,14 +498,14 @@ func (r *RuntimeImpl) parseConfig(config string) (*PipelineConfig, error) {
 }
 
 // buildGraph 构建图结构
-func (r *RuntimeImpl) buildGraph(config *PipelineConfig) Graph {
-	graph := NewDGAGraph()
+func (r *RuntimeImpl) buildGraph(config *core.PipelineConfig) dag.Graph {
+	graph := dag.NewDGAGraph()
 
 	// 创建节点
-	nodeMap := make(map[string]Node)
+	nodeMap := make(map[string]dag.Node)
 	for nodeName, nodeConfig := range config.Nodes {
-		// 初始状态：如果有 runtime 则用 runtime 的 status，否则用 StatusUnknown
-		initialStatus := StatusUnknown
+		// 初始状态：如果有 runtime 则用 runtime 的 status，否则用 core.StatusUnknown
+		initialStatus := core.StatusUnknown
 		if nodeConfig.Runtime != nil && nodeConfig.Runtime.Status != "" {
 			initialStatus = nodeConfig.Runtime.Status
 		}
@@ -509,7 +513,7 @@ func (r *RuntimeImpl) buildGraph(config *PipelineConfig) Graph {
 		// 确保步骤有ID
 		for i := range nodeConfig.Steps {
 			if nodeConfig.Steps[i].Id == "" {
-				nodeConfig.Steps[i].Id = NewUUID()
+				nodeConfig.Steps[i].Id = core.NewUUID()
 			}
 		}
 
@@ -523,7 +527,7 @@ func (r *RuntimeImpl) buildGraph(config *PipelineConfig) Graph {
 			nodeConfigMap["extract"] = nodeConfig.Extract
 		}
 
-		node := NewDGANodeWithConfig(
+		node := dag.NewDGANodeWithConfig(
 			nodeName,
 			initialStatus,
 			nodeConfig.Executor,
@@ -553,8 +557,8 @@ func (r *RuntimeImpl) buildGraph(config *PipelineConfig) Graph {
 }
 
 // SetPipelineParam 设置 pipeline 的 param 值（内部使用）
-func SetPipelineParam(pipeline Pipeline, param map[string]interface{}) {
-	if pipelineImpl, ok := pipeline.(*PipelineImpl); ok {
+func SetPipelineParam(pipeline dag.Pipeline, param map[string]interface{}) {
+	if pipelineImpl, ok := pipeline.(*dag.PipelineImpl); ok {
 		pipelineImpl.SetParam(param)
 	}
 }
@@ -562,7 +566,7 @@ func SetPipelineParam(pipeline Pipeline, param map[string]interface{}) {
 // parseGraphEdges 解析图边关系
 // 使用 mermaid-check 库解析 stateDiagram-v2 语法
 // 支持从边标签中解析条件表达式，例如：A --> B: label[{eq .Param}]
-func (r *RuntimeImpl) parseGraphEdges(graph Graph, nodeMap map[string]Node, graphStr string) {
+func (r *RuntimeImpl) parseGraphEdges(graph dag.Graph, nodeMap map[string]dag.Node, graphStr string) {
 	stateParser := parser.NewStateParser()
 	diagram, err := stateParser.Parse(graphStr)
 	if err != nil {
@@ -576,8 +580,8 @@ func (r *RuntimeImpl) parseGraphEdges(graph Graph, nodeMap map[string]Node, grap
 		return
 	}
 
-	// 获取 DGAGraph 用于记录入口/出口节点
-	dgaGraph, isDGA := graph.(*DGAGraph)
+	// 获取 dag.DGAGraph 用于记录入口/出口节点
+	dgaGraph, isDGA := graph.(*dag.DGAGraph)
 
 	// 遍历所有语句，提取转换关系
 	for _, stmt := range stateDiagram.Statements {
@@ -609,11 +613,11 @@ func (r *RuntimeImpl) parseGraphEdges(graph Graph, nodeMap map[string]Node, grap
 			expression := r.extractExpression(transition.Label)
 
 			// 添加边关系（有条件表达式则创建条件边）
-			var edge Edge
+			var edge dag.Edge
 			if expression != "" {
-				edge = NewConditionalEdge(srcNode, destNode, expression)
+				edge = dag.NewConditionalEdge(srcNode, destNode, expression)
 			} else {
-				edge = NewDGAEdge(srcNode, destNode)
+				edge = dag.NewDGAEdge(srcNode, destNode)
 			}
 			_ = graph.AddEdge(edge)
 		}
@@ -634,7 +638,7 @@ func ExtractExpression(label string) string {
 	}
 
 	// 使用模板引擎验证表达式语法
-	engine := NewPongo2TemplateEngine()
+	engine := template.NewPongo2TemplateEngine()
 	if err := engine.Validate(label); err == nil {
 		return label
 	}
@@ -706,24 +710,24 @@ func (r *RuntimeImpl) SetPusher(pusher logger.Pusher) {
 }
 
 // SetTemplateEngine 设置模板引擎
-func (r *RuntimeImpl) SetTemplateEngine(engine TemplateEngine) {
+func (r *RuntimeImpl) SetTemplateEngine(engine template.TemplateEngine) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.templateEngine = engine
 }
 
 // getTemplateEngine 获取当前使用的模板引擎（内部使用）
-func (r *RuntimeImpl) getTemplateEngine() TemplateEngine {
+func (r *RuntimeImpl) getTemplateEngine() template.TemplateEngine {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if r.templateEngine == nil {
-		return NewPongo2TemplateEngine()
+		return template.NewPongo2TemplateEngine()
 	}
 	return r.templateEngine
 }
 
 // GetTemplateEngine 获取当前使用的模板引擎
-func (r *RuntimeImpl) GetTemplateEngine() TemplateEngine {
+func (r *RuntimeImpl) GetTemplateEngine() template.TemplateEngine {
 	return r.getTemplateEngine()
 }
 
@@ -744,7 +748,7 @@ func (r *RuntimeImpl) ExportConfig(id string) (string, error) {
 	}
 
 	// 使用 Snapshotter 生成带状态的配置
-	snapshotter := NewPipelineSnapshotter()
+	snapshotter := dag.NewPipelineSnapshotter()
 	snapshotConfig, err := snapshotter.TakeSnapshot(pipeline, config)
 	if err != nil {
 		return "", fmt.Errorf("failed to take snapshot: %w", err)
@@ -786,7 +790,7 @@ func (r *RuntimeImpl) Resume(ctx context.Context, id string) error {
 }
 
 // ModifyGraph 对暂停或停止的流水线执行图修改（原子操作）
-func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications GraphModifications) error {
+func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications dag.GraphModifications) error {
 	r.mu.RLock()
 	pipeline, exists := r.pipelines[id]
 	config, configExists := r.pipelineConfigs[id]
@@ -798,7 +802,7 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 
 	// 校验可修改状态
 	if !pipeline.IsModifiable() {
-		return ErrPipelineRunning
+		return core.ErrPipelineRunning
 	}
 
 	graph := pipeline.GetGraph()
@@ -840,12 +844,12 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 	}
 
 	// 3. 添加新节点
-	nodeMap := make(map[string]Node)
+	nodeMap := make(map[string]dag.Node)
 	for _, nodeConfig := range modifications.AddNodes {
 		// 确保步骤有 ID
 		for i := range nodeConfig.Steps {
 			if nodeConfig.Steps[i].Id == "" {
-				nodeConfig.Steps[i].Id = NewUUID()
+				nodeConfig.Steps[i].Id = core.NewUUID()
 			}
 		}
 
@@ -863,9 +867,9 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 			nodeName = nodeConfig.Id
 		}
 
-		node := NewDGANodeWithConfig(
+		node := dag.NewDGANodeWithConfig(
 			nodeName,
-			StatusUnknown,
+			core.StatusUnknown,
 			nodeConfig.Executor,
 			nodeConfig.Image,
 			nodeConfig.Steps,
@@ -889,11 +893,11 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 			return fmt.Errorf("target node %s not found for edge", edgeMod.Target)
 		}
 
-		var edge Edge
+		var edge dag.Edge
 		if edgeMod.Expression != "" {
-			edge = NewConditionalEdge(srcNode, destNode, edgeMod.Expression)
+			edge = dag.NewConditionalEdge(srcNode, destNode, edgeMod.Expression)
 		} else {
-			edge = NewDGAEdge(srcNode, destNode)
+			edge = dag.NewDGAEdge(srcNode, destNode)
 		}
 
 		if err := graph.AddEdge(edge); err != nil {
@@ -914,11 +918,11 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 
 		// 6. 校验图结构：允许条件回边（循环图），拒绝无条件环
 		if graph.HasCycle() {
-			if dga, ok := graph.(*DGAGraph); ok && dga.IsCyclic() {
+			if dga, ok := graph.(*dag.DGAGraph); ok && dga.IsCyclic() {
 				// 条件回边产生的环，允许
 			} else {
 				rollback()
-				return ErrHasCycle
+				return core.ErrHasCycle
 			}
 		}
 
@@ -926,7 +930,7 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 	if configExists {
 		// 更新 Nodes 配置
 		if config.Nodes == nil {
-			config.Nodes = make(map[string]NodeConfig)
+			config.Nodes = make(map[string]core.NodeConfig)
 		}
 		for _, nodeID := range modifications.RemoveNodes {
 			delete(config.Nodes, nodeID)
@@ -941,8 +945,8 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 	}
 
 	// 8. 触发图修改事件
-	if pipelineImpl, ok := pipeline.(*PipelineImpl); ok {
-		pipelineImpl.NotifyEvent(PipelineGraphModified)
+	if pipelineImpl, ok := pipeline.(*dag.PipelineImpl); ok {
+		pipelineImpl.NotifyEvent(dag.PipelineGraphModified)
 	}
 
 	return nil
@@ -951,7 +955,7 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 
 // UpdateConfig 通过新的 YAML 配置自动比对差异并更新流水线图
 // 已执行的节点不允许删除或替换，只允许修改尚未运行的节点
-// 除 Nodes 和 Graph 外的其他配置字段不可更新
+// 除 Nodes 和 dag.Graph 外的其他配置字段不可更新
 func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML string) error {
 	r.mu.RLock()
 	pipeline, exists := r.pipelines[id]
@@ -963,7 +967,7 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 	}
 
 	if !pipeline.IsModifiable() {
-		return ErrPipelineRunning
+		return core.ErrPipelineRunning
 	}
 
 	newConfig, err := r.parseConfig(newConfigYAML)
@@ -986,7 +990,7 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 	if newConfig.Graph != oldConfig.Graph {
 		edges := graph.Edges()
 		for _, edge := range edges {
-			mods.RemoveEdges = append(mods.RemoveEdges, EdgeRemoval{
+			mods.RemoveEdges = append(mods.RemoveEdges, dag.EdgeRemoval{
 				Source: edge.Source().Id(),
 				Target: edge.Target().Id(),
 			})
@@ -1014,45 +1018,45 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 }
 
 // validateImmutableFields 校验不可变字段是否被修改
-func validateImmutableFields(old, new *PipelineConfig) error {
+func validateImmutableFields(old, new *core.PipelineConfig) error {
 	if old.Version != new.Version {
-		return fmt.Errorf("%w: Version cannot be updated", ErrImmutableField)
+		return fmt.Errorf("%w: Version cannot be updated", core.ErrImmutableField)
 	}
 	if old.Name != new.Name {
-		return fmt.Errorf("%w: Name cannot be updated", ErrImmutableField)
+		return fmt.Errorf("%w: Name cannot be updated", core.ErrImmutableField)
 	}
 	if old.MaxLoopIterations != new.MaxLoopIterations {
-		return fmt.Errorf("%w: MaxLoopIterations cannot be updated", ErrImmutableField)
+		return fmt.Errorf("%w: MaxLoopIterations cannot be updated", core.ErrImmutableField)
 	}
 	if !reflect.DeepEqual(old.Param, new.Param) {
-		return fmt.Errorf("%w: Param cannot be updated", ErrImmutableField)
+		return fmt.Errorf("%w: Param cannot be updated", core.ErrImmutableField)
 	}
 	if !reflect.DeepEqual(old.Executors, new.Executors) {
-		return fmt.Errorf("%w: Executors cannot be updated", ErrImmutableField)
+		return fmt.Errorf("%w: Executors cannot be updated", core.ErrImmutableField)
 	}
 	if !reflect.DeepEqual(old.Logging, new.Logging) {
-		return fmt.Errorf("%w: Logging cannot be updated", ErrImmutableField)
+		return fmt.Errorf("%w: Logging cannot be updated", core.ErrImmutableField)
 	}
 	if !reflect.DeepEqual(old.AI, new.AI) {
-		return fmt.Errorf("%w: AI cannot be updated", ErrImmutableField)
+		return fmt.Errorf("%w: AI cannot be updated", core.ErrImmutableField)
 	}
 	if !reflect.DeepEqual(old.Metadate, new.Metadate) {
-		return fmt.Errorf("%w: Metadate cannot be updated", ErrImmutableField)
+		return fmt.Errorf("%w: Metadate cannot be updated", core.ErrImmutableField)
 	}
 	return nil
 }
 
 // computeNodeModifications 比对新旧节点配置，计算差异
-func (r *RuntimeImpl) computeNodeModifications(oldConfig, newConfig *PipelineConfig, graph Graph) (GraphModifications, error) {
-	var mods GraphModifications
+func (r *RuntimeImpl) computeNodeModifications(oldConfig, newConfig *core.PipelineConfig, graph dag.Graph) (dag.GraphModifications, error) {
+	var mods dag.GraphModifications
 
 	oldNodes := oldConfig.Nodes
 	if oldNodes == nil {
-		oldNodes = make(map[string]NodeConfig)
+		oldNodes = make(map[string]core.NodeConfig)
 	}
 	newNodes := newConfig.Nodes
 	if newNodes == nil {
-		newNodes = make(map[string]NodeConfig)
+		newNodes = make(map[string]core.NodeConfig)
 	}
 
 	// 找被删除的节点（old 有，new 没有）
@@ -1061,7 +1065,7 @@ func (r *RuntimeImpl) computeNodeModifications(oldConfig, newConfig *PipelineCon
 			node, ok := graph.GetNode(nodeName)
 			if ok && isNodeExecuted(node) {
 				return mods, fmt.Errorf("%w: cannot remove node %q (status: %s)",
-					ErrNodeAlreadyExecuted, nodeName, node.GetRuntimeStatus().Status)
+					core.ErrNodeAlreadyExecuted, nodeName, node.GetRuntimeStatus().Status)
 			}
 			mods.RemoveNodes = append(mods.RemoveNodes, nodeName)
 		}
@@ -1081,7 +1085,7 @@ func (r *RuntimeImpl) computeNodeModifications(oldConfig, newConfig *PipelineCon
 				node, ok := graph.GetNode(nodeName)
 				if ok && isNodeExecuted(node) {
 					return mods, fmt.Errorf("%w: cannot modify node %q (status: %s)",
-						ErrNodeAlreadyExecuted, nodeName, node.GetRuntimeStatus().Status)
+						core.ErrNodeAlreadyExecuted, nodeName, node.GetRuntimeStatus().Status)
 				}
 				mods.RemoveNodes = append(mods.RemoveNodes, nodeName)
 				mods.AddNodes = append(mods.AddNodes, newNodeConfig)
@@ -1092,8 +1096,8 @@ func (r *RuntimeImpl) computeNodeModifications(oldConfig, newConfig *PipelineCon
 	return mods, nil
 }
 
-// nodeConfigEqual 比较两个 NodeConfig 是否相等（忽略 Runtime 字段）
-func nodeConfigEqual(a, b NodeConfig) bool {
+// nodeConfigEqual 比较两个 core.NodeConfig 是否相等（忽略 Runtime 字段）
+func nodeConfigEqual(a, b core.NodeConfig) bool {
 	aCopy := a
 	bCopy := b
 	// 忽略运行时状态
@@ -1113,13 +1117,13 @@ func nodeConfigEqual(a, b NodeConfig) bool {
 }
 
 // isNodeExecuted 判断节点是否已经执行过
-func isNodeExecuted(node Node) bool {
+func isNodeExecuted(node dag.Node) bool {
 	status := node.GetRuntimeStatus()
 	if status == nil {
 		return false
 	}
 	switch status.Status {
-	case StatusSuccess, StatusFailed, StatusCancelled, StatusRunning:
+	case core.StatusSuccess, core.StatusFailed, core.StatusCancelled, core.StatusRunning:
 		return true
 	default:
 		return false

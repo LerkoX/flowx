@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/LerkoX/flowx"
+	"github.com/LerkoX/flowx/dag"
 	"github.com/LerkoX/flowx/logger"
 )
 
@@ -20,7 +21,7 @@ type PipelineListener struct {
 }
 
 // getRunningNodes 获取当前正在运行的节点
-func getRunningNodes(p flowx.Pipeline) []string {
+func getRunningNodes(p dag.Pipeline) []string {
 	graph := p.GetGraph()
 	nodes := graph.Nodes()
 	var runningNodes []string
@@ -34,9 +35,9 @@ func getRunningNodes(p flowx.Pipeline) []string {
 	return runningNodes
 }
 
-func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
+func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 	switch event {
-	case flowx.PipelineInit:
+	case dag.PipelineInit:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -48,7 +49,7 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 		fmt.Printf("  流水线: %s\n", p.Id())
 		fmt.Printf("  状态:   初始化\n")
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	case flowx.PipelineStart:
+	case dag.PipelineStart:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -58,7 +59,7 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 		}
 		fmt.Printf("  状态:   执行中\n")
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	case flowx.PipelineFinish:
+	case dag.PipelineFinish:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -69,14 +70,14 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 		fmt.Printf("  状态:   %s\n", p.Status())
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	case flowx.PipelineExecutorPrepare:
+	case dag.PipelineExecutorPrepare:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
 				Message: "执行器准备中",
 			})
 		}
-	case flowx.PipelineNodeStart:
+	case dag.PipelineNodeStart:
 		// 获取正在运行的节点
 		runningNodes := getRunningNodes(p)
 		if len(runningNodes) > 0 {
@@ -93,7 +94,7 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 				}
 			}
 		}
-	case flowx.PipelineNodeFinish:
+	case dag.PipelineNodeFinish:
 		fmt.Printf("\n")
 		// 获取所有节点状态
 		graph := p.GetGraph()
@@ -127,14 +128,14 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 	}
 }
 
-func (l *PipelineListener) Events() []flowx.Event {
-	return []flowx.Event{
-		flowx.PipelineInit,
-		flowx.PipelineStart,
-		flowx.PipelineFinish,
-		flowx.PipelineExecutorPrepare,
-		flowx.PipelineNodeStart,
-		flowx.PipelineNodeFinish,
+func (l *PipelineListener) Events() []dag.Event {
+	return []dag.Event{
+		dag.PipelineInit,
+		dag.PipelineStart,
+		dag.PipelineFinish,
+		dag.PipelineExecutorPrepare,
+		dag.PipelineNodeStart,
+		dag.PipelineNodeFinish,
 	}
 }
 

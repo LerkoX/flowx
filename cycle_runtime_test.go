@@ -3,6 +3,9 @@ package flowx
 import (
 	"context"
 	"testing"
+
+	"github.com/LerkoX/flowx/core"
+	"github.com/LerkoX/flowx/dag"
 )
 
 // TestCyclicPipeline_Execution 测试循环流水线的实际执行
@@ -17,7 +20,7 @@ func TestCyclicPipeline_Execution(t *testing.T) {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != StatusSuccess {
+	if pipeline.Status() != core.StatusSuccess {
 		t.Errorf("Expected SUCCESS, got %s", pipeline.Status())
 	}
 
@@ -34,7 +37,7 @@ func TestCyclicPipeline_Execution(t *testing.T) {
 			t.Errorf("Node %s should have runtime status", nodeID)
 			continue
 		}
-		if status.Status != StatusSuccess {
+		if status.Status != core.StatusSuccess {
 			t.Errorf("Node %s should be SUCCESS, got %s", nodeID, status.Status)
 		}
 	}
@@ -51,12 +54,12 @@ func TestAcyclicPipeline_NoRegression(t *testing.T) {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != StatusSuccess {
+	if pipeline.Status() != core.StatusSuccess {
 		t.Errorf("Expected SUCCESS, got %s", pipeline.Status())
 	}
 
 	graph := pipeline.GetGraph()
-	dgaGraph, ok := graph.(*DGAGraph)
+	dgaGraph, ok := graph.(*dag.DGAGraph)
 	if !ok {
 		t.Fatal("Graph should be DGAGraph")
 	}

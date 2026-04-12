@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/LerkoX/flowx"
+	"github.com/LerkoX/flowx/dag"
 	"github.com/LerkoX/flowx/logger"
 )
 
@@ -16,9 +17,9 @@ type PipelineListener struct {
 	ctx    context.Context
 }
 
-func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
+func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 	switch event {
-	case flowx.PipelineInit:
+	case dag.PipelineInit:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -27,7 +28,7 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 			})
 		}
 		fmt.Printf("[事件] 流水线初始化: %s\n", p.Id())
-	case flowx.PipelineStart:
+	case dag.PipelineStart:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -36,7 +37,7 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 			})
 		}
 		fmt.Printf("[事件] 流水线开始执行: %s\n", p.Id())
-	case flowx.PipelineFinish:
+	case dag.PipelineFinish:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -45,7 +46,7 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 			})
 		}
 		fmt.Printf("[事件] 流水线执行完成: %s, 状态: %s\n", p.Id(), p.Status())
-	case flowx.PipelineExecutorPrepare:
+	case dag.PipelineExecutorPrepare:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
@@ -53,7 +54,7 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 			})
 		}
 		fmt.Printf("[事件] 执行器准备中\n")
-	case flowx.PipelineNodeStart:
+	case dag.PipelineNodeStart:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
@@ -61,7 +62,7 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 			})
 		}
 		fmt.Printf("[事件] 节点开始执行\n")
-	case flowx.PipelineNodeFinish:
+	case dag.PipelineNodeFinish:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
@@ -74,14 +75,14 @@ func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 	}
 }
 
-func (l *PipelineListener) Events() []flowx.Event {
-	return []flowx.Event{
-		flowx.PipelineInit,
-		flowx.PipelineStart,
-		flowx.PipelineFinish,
-		flowx.PipelineExecutorPrepare,
-		flowx.PipelineNodeStart,
-		flowx.PipelineNodeFinish,
+func (l *PipelineListener) Events() []dag.Event {
+	return []dag.Event{
+		dag.PipelineInit,
+		dag.PipelineStart,
+		dag.PipelineFinish,
+		dag.PipelineExecutorPrepare,
+		dag.PipelineNodeStart,
+		dag.PipelineNodeFinish,
 	}
 }
 
