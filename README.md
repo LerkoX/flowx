@@ -1,9 +1,9 @@
 [中文文档](./README_ZH.md)
 
-# PipelineX
+# FlowX
 
 <p align="center">
-  <img src="icon.ico" alt="PipelineX Icon" width="120">
+  <img src="icon.ico" alt="FlowX Icon" width="120">
 </p>
 
 A flexible and extensible pipeline execution library for Go, supporting multiple execution backends and DAG-based workflow orchestration.
@@ -94,7 +94,7 @@ Nodes:
 
 ## Output Extraction
 
-PipelineX supports extracting structured data from command output and saving it to pipeline metadata for use in subsequent nodes.
+FlowX supports extracting structured data from command output and saving it to pipeline metadata for use in subsequent nodes.
 
 ### Codec-Block Extraction
 
@@ -141,7 +141,7 @@ This extracts test coverage and count from command output.
 
 ## Configuration
 
-PipelineX uses YAML configuration with the following structure:
+FlowX uses YAML configuration with the following structure:
 
 ```yaml
 Version: "1.0"              # Configuration version
@@ -252,8 +252,8 @@ Define conditional execution paths using template expressions:
 Graph: |
   stateDiagram-v2
     [*] --> Build
-    Build --> Deploy: "{{ eq .Param.branch 'main' }}"
-    Build --> Test: "{{ ne .Param.branch 'main' }}"
+    Build --> Deploy: {{ Param.branch == "main" }}
+    Build --> Test: {{ Param.branch != "main" }}
     Test --> [*]
     Deploy --> [*]
 ```
@@ -262,15 +262,15 @@ Complex conditions are supported:
 
 ```yaml
 # Multiple conditions
-QualityCheck --> DeployStaging: "{{ QualityCheck.allTestsPassed == true and QualityCheck.codeCoverage >= 80 }}"
+QualityCheck --> DeployStaging: {{ QualityCheck.allTestsPassed == true and QualityCheck.codeCoverage >= 80 }}
 
 # Nested conditions
-Deploy --> Production: "{{ eq .Param.environment 'production' and .ManualApproval.approved == true }}"
+Deploy --> Production: {{ Param.environment == "production" and ManualApproval.approved == true }}
 ```
 
 ## Cyclic Graph (Loop Execution)
 
-PipelineX supports controlled loops through conditional back-edges. A conditional edge that creates a cycle is accepted as a back-edge, enabling iterative execution.
+FlowX supports controlled loops through conditional back-edges. A conditional edge that creates a cycle is accepted as a back-edge, enabling iterative execution.
 
 ```yaml
 MaxLoopIterations: 5          # Safety limit (default: 100)
@@ -288,6 +288,69 @@ Graph: |
 The `iteration` variable starts at 0 and increments each loop. In this example, nodes A→B→C→D execute 3 times, then the loop exits.
 
 > See [Conditional Edges](doc/edge.md) for details on back-edges and `iteration`.
+
+## Dynamic Graph Modification
+
+FlowX supports modifying the pipeline graph at runtime. You can add/remove nodes and edges while the pipeline is paused.
+
+### Using ModifyGraph (Fine-grained Control)
+
+```go
+err := runtime.ModifyGraph(ctx, "pipeline-id", flowx.GraphModifications{
+    AddNodes: []flowx.NodeConfig{
+        {
+            Name: "NewNode",
+            Executor: "local",
+            Steps: []flowx.Step{
+                {Name: "step1", Run: "echo 'New step'"},
+            },
+        },
+    },
+    AddEdges: []flowx.EdgeModification{
+        {Source: "ExistingNode", Target: "NewNode", Expression: ""},
+    },
+    RemoveNodes: []string{"UnusedNode"},
+    RemoveEdges: []flowx.EdgeID{{Source: "A", Target: "B"}},
+})
+```
+
+### Using UpdateConfig (Config-based Diff)
+
+Update the pipeline by providing a new YAML configuration. FlowX automatically computes the difference and applies the changes:
+
+```go
+newConfig := `
+Version: "1.0"
+Name: my-pipeline
+
+Graph: |
+  stateDiagram-v2
+    [*] --> Build
+    Build --> Deploy
+    Deploy --> [*]
+
+Nodes:
+  Build:
+    executor: local
+    steps:
+      - name: build
+        run: echo "Building..."
+  Deploy:
+    executor: local
+    steps:
+      - name: deploy
+        run: echo "Deploying..."
+`
+
+err := runtime.UpdateConfig(ctx, "pipeline-id", newConfig)
+```
+
+Rules:
+- Nodes that have already executed cannot be removed or modified
+- New nodes will execute on resume
+- Edges can only be removed if neither endpoint has executed
+
+> See [doc/runtime.md](doc/runtime.md) for detailed API documentation.
 
 ## Data Passing
 
@@ -360,15 +423,44 @@ listener.Handle(func(p flowx.Pipeline, event flowx.Event) {
         fmt.Println("Pipeline finished")
     case flowx.PipelineExecutorPrepare:
         fmt.Println("Executor preparing")
+    case flowx.PipelineExecutorPrepareDone:
+        fmt.Println("Executor prepared")
     case flowx.PipelineNodeStart:
         fmt.Println("Node started")
     case flowx.PipelineNodeFinish:
         fmt.Println("Node completed")
+    case flowx.PipelineCancelled:
+        fmt.Println("Pipeline cancelled")
+    case flowx.PipelineStatusUpdate:
+        fmt.Println("Pipeline status updated")
+    case flowx.PipelinePaused:
+        fmt.Println("Pipeline paused")
+    case flowx.PipelineResumed:
+        fmt.Println("Pipeline resumed")
+    case flowx.PipelineGraphModified:
+        fmt.Println("Pipeline graph modified")
     }
 })
 
 pipeline, err := runtime.RunSync(ctx, "id", config, listener)
 ```
+
+**Available Events:**
+
+| Event | Description |
+|-------|-------------|
+| `PipelineInit` | Pipeline initialized |
+| `PipelineStart` | Pipeline started |
+| `PipelineFinish` | Pipeline finished (success or failure) |
+| `PipelineExecutorPrepare` | Node executor is being prepared |
+| `PipelineExecutorPrepareDone` | Node executor preparation completed |
+| `PipelineNodeStart` | Node execution started |
+| `PipelineNodeFinish` | Node execution finished |
+| `PipelineCancelled` | Pipeline cancelled |
+| `PipelineStatusUpdate` | Pipeline status changed |
+| `PipelinePaused` | Pipeline paused |
+| `PipelineResumed` | Pipeline resumed |
+| `PipelineGraphModified` | Pipeline graph was modified |
 
 ## Architecture
 
