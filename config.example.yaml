@@ -190,7 +190,7 @@ Nodes:
         description: "编译Go二进制文件，禁用CGO确保可移植性"
         run: |
           go build -o app .
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"buildId": "'${Param.buildId}'", "binary": "app", "status": "success"}'
           echo '```'
       - id: "c3b2a10987f6e5d4c3b2a10987f6e5d4"

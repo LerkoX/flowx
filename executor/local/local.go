@@ -293,7 +293,7 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 }
 
 // streamOutput 读取输出并回调
-// 同时检测输入请求代码块 ```pipelinex-input
+// 同时检测输入请求代码块 ```flowx-input
 func (l *LocalExecutor) streamOutput(reader io.Reader, callback func([]byte), stepName string, onInputRequest func(*executor.InputRequest)) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 4096), 1024*1024) // 增大缓冲区
@@ -305,7 +305,7 @@ func (l *LocalExecutor) streamOutput(reader io.Reader, callback func([]byte), st
 		line := scanner.Text()
 
 		// 检测代码块开始
-		if strings.TrimSpace(line) == "```pipelinex-input" {
+		if strings.TrimSpace(line) == "```flowx-input" {
 			inInputBlock = true
 			buffer.Reset()
 			continue

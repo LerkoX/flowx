@@ -143,7 +143,7 @@ exec := local.NewLocalExecutor()
 
 - `Prepare`：验证工作目录存在、配置的 Shell 可用
 - `Transfer`：通过 `os/exec` 执行命令，实时流式输出 stdout 和 stderr
-- **交互式输入**：支持通过 `inputChan` 向进程 stdin 发送数据，可识别输出中的 `pipelinex-input` 代码块
+- **交互式输入**：支持通过 `inputChan` 向进程 stdin 发送数据，可识别输出中的 `flowx-input` 代码块
 - **取消**：先发送 `os.Interrupt`，不响应则 `Process.Kill()`
 - **超时**：支持单命令级别超时
 

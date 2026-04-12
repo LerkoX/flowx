@@ -68,7 +68,7 @@ type CommandWrapper struct {
 }
 
 // InputRequest 输入请求信息
-// 程序通过输出 {"pipelinex":"wait-input",...} 来请求用户输入
+// 程序通过输出 {"flowx":"wait-input",...} 来请求用户输入
 type InputRequest struct {
 	Prompt  string `json:"prompt"`   // 显示给用户的提示信息
 	Type    string `json:"type"`     // 输入类型: text/password/confirm

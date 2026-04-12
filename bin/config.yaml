@@ -29,7 +29,7 @@ Nodes:
         run: |
           echo "=== 生成构建信息 ==="
           echo "Build ID: {{ Param.buildId }}"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"buildId": "{{ Param.buildId }}", "buildTime": "2024-01-01T00:00:00Z"}'
           echo '```'
   Step2:
@@ -57,7 +57,7 @@ Nodes:
         run: |
           echo "=== 生成部署配置 ==="
           echo "使用构建ID: {{ Step1.buildId }}"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"deployId": "DEP-{{ Step1.buildId }}", "environment": "{{ Param.environment }}"}'
           echo '```'
   Step4:

@@ -13,10 +13,10 @@
 
 ## 代码块格式
 
-使用 ```pipelinex-input 代码块包裹输入请求信息：
+使用 ```flowx-input 代码块包裹输入请求信息：
 
 ```yaml
-```pipelinex-input
+```flowx-input
 prompt: 请输入用户名
 type: text
 ```
@@ -46,7 +46,7 @@ Nodes:
       - name: ask-name
         run: |
           echo "开始交互流程..."
-          echo '```pipelinex-input'
+          echo '```flowx-input'
           echo 'prompt: 请输入您的姓名'
           echo 'type: text'
           echo '```'
@@ -66,21 +66,21 @@ Nodes:
           echo "配置向导"
 
           # 请求用户名
-          echo '```pipelinex-input'
+          echo '```flowx-input'
           echo 'prompt: 用户名'
           echo 'type: text'
           echo '```'
           read username
 
           # 请求密码
-          echo '```pipelinex-input'
+          echo '```flowx-input'
           echo 'prompt: 密码'
           echo 'type: password'
           echo '```'
           read password
 
           # 确认
-          echo '```pipelinex-input'
+          echo '```flowx-input'
           echo 'prompt: 确认提交？(yes/no)'
           echo 'type: confirm'
           echo '```'
@@ -100,7 +100,7 @@ Nodes:
     steps:
       - name: json-input
         run: |
-          echo '```pipelinex-input'
+          echo '```flowx-input'
           echo '{"prompt":"请输入验证码","type":"text","timeout":60}'
           echo '```'
           read code
@@ -178,9 +178,9 @@ PENDING -> RUNNING -> PAUSED (请求输入) -> RUNNING (收到输入) -> SUCCESS
 
 ## 与结果输出块的区别
 
-| 特性 | 结果输出块 (pipelinex-json/yaml) | 输入请求块 (pipelinex-input) |
+| 特性 | 结果输出块 (flowx-json/yaml) | 输入请求块 (flowx-input) |
 |------|-------------------------------|---------------------------|
-| 代码块标识 | ````pipelinex-json` / ````pipelinex-yaml` | ````pipelinex-input` |
+| 代码块标识 | ````flowx-json` / ````flowx-yaml` | ````flowx-input` |
 | 用途 | 输出结构化数据供后续节点使用 | 请求用户输入 |
 | 处理时机 | 节点完成后提取 | 执行过程中实时检测 |
 | 对用户可见 | 否（被过滤） | 否（被过滤） |
@@ -196,7 +196,7 @@ PENDING -> RUNNING -> PAUSED (请求输入) -> RUNNING (收到输入) -> SUCCESS
 
 ## 注意事项
 
-1. **代码块会被过滤**：用户不会看到 ````pipelinex-input` 代码块内容
+1. **代码块会被过滤**：用户不会看到 ````flowx-input` 代码块内容
 2. **超时处理**：如果配置了 `timeout`，超时后流水线会继续执行（程序可能因等不到输入而失败）
 3. **并发安全**：`InputChan` 是线程安全的，可以从多个 goroutine 发送输入
 4. **状态检测**：建议定期轮询（如 100ms）检测 PAUSED 状态，避免错过输入请求

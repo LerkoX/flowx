@@ -49,7 +49,7 @@ Nodes:
           echo "Starting data collection for {{ Param.date }}"
           outputDir="{{ Param.baseDir }}/reports/{{ Param.date }}"
           mkdir -p $outputDir
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"outputDir": "'$outputDir'", "startTime": "'$(date -Iseconds)'"}'
           echo '```'
 
@@ -71,7 +71,7 @@ Nodes:
         run: |
           outputDir="{{ Param.baseDir }}/raw/{{ Param.date }}"
           echo "Collected 2 users"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"userCount": 2, "dataFile": "'$outputDir/users.json'"}'
           echo '```'
     extract:
@@ -95,7 +95,7 @@ Nodes:
         run: |
           outputDir="{{ Param.baseDir }}/raw/{{ Param.date }}"
           echo "Collected 2 orders, total revenue: 300.0"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"orderCount": 2, "totalRevenue": 300.0, "dataFile": "'$outputDir/orders.json'"}'
           echo '```'
     extract:
@@ -119,7 +119,7 @@ Nodes:
         run: |
           outputDir="{{ Param.baseDir }}/raw/{{ Param.date }}"
           echo "Collected 2 products"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"productCount": 2, "dataFile": "'$outputDir/products.json'"}'
           echo '```'
     extract:
@@ -141,7 +141,7 @@ Nodes:
           cp $outputDir/orders.json $targetDir/orders_normalized.json
           cp $outputDir/products.json $targetDir/products_normalized.json
           echo "Data normalization completed"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"processedDir": "'$targetDir'", "status": "normalized"}'
           echo '```'
     extract:
@@ -160,7 +160,7 @@ Nodes:
           mkdir -p $reportDir
           echo '{"date": "{{ Param.date }}", "type": "user_report", "totalUsers": 2, "newUsers": 1}' > $reportDir/user_report.json
           echo "User report generated"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"userReport": "'$reportDir/user_report.json'", "totalUsers": 2}'
           echo '```'
     extract:
@@ -179,7 +179,7 @@ Nodes:
           mkdir -p $reportDir
           echo '{"date": "{{ Param.date }}", "type": "sales_report", "totalRevenue": 300.0, "completedOrders": 2, "pendingOrders": 0}' > $reportDir/sales_report.json
           echo "Sales report generated"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"salesReport": "'$reportDir/sales_report.json'", "totalRevenue": 300.0}'
           echo '```'
     extract:
@@ -196,7 +196,7 @@ Nodes:
           reportDir="{{ Param.baseDir }}/reports/{{ Param.date }}"
           echo '{"date": "{{ Param.date }}", "reports": ["user_report.json", "sales_report.json"], "generatedAt": "'$(date -Iseconds)'"}' > $reportDir/index.json
           echo "Combined report index created"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"indexFile": "'$reportDir/index.json'", "reportDir": "'$reportDir'"}'
           echo '```'
     extract:

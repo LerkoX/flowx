@@ -127,7 +127,7 @@ func TestExtractOutput_Basic(t *testing.T) {
 	}
 
 	// 完整输出包含 codec-block
-	fullOutput := "Regular output\n```pipelinex-json\n{\"extracted\": \"value123\", \"count\": 42}\n```\nMore output"
+	fullOutput := "Regular output\n```flowx-json\n{\"extracted\": \"value123\", \"count\": 42}\n```\nMore output"
 
 	// 执行提取
 	err := pipeline.extractOutput(ctx, node, stepResult, fullOutput)
