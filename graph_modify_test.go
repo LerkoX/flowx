@@ -25,7 +25,7 @@ func helperSetupModifiablePipeline(t *testing.T, rt *RuntimeImpl, id string) (Pi
 
 	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
 	pipeline.SetGraph(graph)
-	pipeline.status = StatusPaused // 设置为可修改状态
+	pipeline.SetStatusForTest(StatusPaused) // 设置为可修改状态
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]any{}})

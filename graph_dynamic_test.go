@@ -457,7 +457,7 @@ func TestRuntimeImpl_UpdateConfig_AddNodes(t *testing.T) {
 
 	pipeline := NewPipeline(ctx).(*PipelineImpl)
 	pipeline.SetGraph(graph)
-	pipeline.status = StatusSuccess
+	pipeline.SetStatusForTest(StatusSuccess)
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
@@ -542,7 +542,7 @@ func TestRuntimeImpl_UpdateConfig_RemoveUnexecutedNode(t *testing.T) {
 
 	pipeline := NewPipeline(ctx).(*PipelineImpl)
 	pipeline.SetGraph(graph)
-	pipeline.status = StatusSuccess
+	pipeline.SetStatusForTest(StatusSuccess)
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
@@ -603,7 +603,7 @@ func TestRuntimeImpl_UpdateConfig_RemoveExecutedNode(t *testing.T) {
 
 	pipeline := NewPipeline(ctx).(*PipelineImpl)
 	pipeline.SetGraph(graph)
-	pipeline.status = StatusSuccess
+	pipeline.SetStatusForTest(StatusSuccess)
 
 	rt.pipelines["remove-exec"] = pipeline
 	rt.pipelineConfigs["remove-exec"] = &PipelineConfig{
@@ -649,7 +649,7 @@ func TestRuntimeImpl_UpdateConfig_ModifyExecutedNode(t *testing.T) {
 
 	pipeline := NewPipeline(ctx).(*PipelineImpl)
 	pipeline.SetGraph(graph)
-	pipeline.status = StatusSuccess
+	pipeline.SetStatusForTest(StatusSuccess)
 
 	rt.pipelines["modify-exec"] = pipeline
 	rt.pipelineConfigs["modify-exec"] = &PipelineConfig{
@@ -701,7 +701,7 @@ func TestRuntimeImpl_UpdateConfig_ImmutableField(t *testing.T) {
 
 	pipeline := NewPipeline(ctx).(*PipelineImpl)
 	pipeline.SetGraph(graph)
-	pipeline.status = StatusSuccess
+	pipeline.SetStatusForTest(StatusSuccess)
 
 	rt.pipelines["immutable-test"] = pipeline
 	rt.pipelineConfigs["immutable-test"] = &PipelineConfig{
@@ -753,7 +753,7 @@ func TestRuntimeImpl_UpdateConfig_NoChanges(t *testing.T) {
 
 	pipeline := NewPipeline(ctx).(*PipelineImpl)
 	pipeline.SetGraph(graph)
-	pipeline.status = StatusSuccess
+	pipeline.SetStatusForTest(StatusSuccess)
 
 	rt.pipelines["nochange-test"] = pipeline
 	rt.pipelineConfigs["nochange-test"] = &PipelineConfig{
