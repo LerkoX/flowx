@@ -586,14 +586,14 @@ func (r *RuntimeImpl) parseGraphEdges(graph Graph, nodeMap map[string]Node, grap
 			// 记录入口节点（[*] --> X）
 			if transition.From == "[*]" {
 				if isDGA && transition.To != "[*]" {
-					dgaGraph.addEntryNode(transition.To)
+					dgaGraph.AddEntryNode(transition.To)
 				}
 				continue
 			}
 			// 记录出口节点（X --> [*]）
 			if transition.To == "[*]" {
 				if isDGA {
-					dgaGraph.addExitNode(transition.From)
+					dgaGraph.AddExitNode(transition.From)
 				}
 				continue
 			}
@@ -942,7 +942,7 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 
 	// 8. 触发图修改事件
 	if pipelineImpl, ok := pipeline.(*PipelineImpl); ok {
-		pipelineImpl.notifyEvent(PipelineGraphModified)
+		pipelineImpl.NotifyEvent(PipelineGraphModified)
 	}
 
 	return nil

@@ -82,7 +82,7 @@ func TestRuntimeImpl_CleanupCompletedPipelines(t *testing.T) {
 
 	// 手动创建一个已完成的 pipeline 并注册到 runtime
 	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	close(pipeline.doneChan) // 模拟已完成
+	close(pipeline.DoneChanForTest()) // 模拟已完成
 
 	runtime.mu.Lock()
 	runtime.pipelines["completed-pipeline"] = pipeline
@@ -117,11 +117,12 @@ func TestSetPipelineParam(t *testing.T) {
 
 	SetPipelineParam(pipeline, param)
 
-	if pipeline.param["key1"] != "value1" {
-		t.Errorf("param[key1] = %v, want 'value1'", pipeline.param["key1"])
+	p := pipeline.ParamForTest()
+	if p["key1"] != "value1" {
+		t.Errorf("param[key1] = %v, want 'value1'", p["key1"])
 	}
-	if pipeline.param["key2"] != 42 {
-		t.Errorf("param[key2] = %v, want 42", pipeline.param["key2"])
+	if p["key2"] != 42 {
+		t.Errorf("param[key2] = %v, want 42", p["key2"])
 	}
 }
 
