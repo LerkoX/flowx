@@ -98,7 +98,7 @@ PipelineX supports extracting structured data from command output and saving it 
 
 ### Codec-Block Extraction
 
-Automatically recognizes and parses `pipelinex-json` and `pipelinex-yaml` code blocks:
+Automatically recognizes and parses `flowx-json` and `flowx-yaml` code blocks:
 
 ```yaml
 Nodes:
@@ -111,7 +111,7 @@ Nodes:
       - name: build
         run: |
           echo "Building..."
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"buildId": "12345", "version": "1.0.0"}'
           echo '```'
 ```
@@ -300,7 +300,7 @@ Nodes:
     steps:
       - name: generate
         run: |
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"value": 42, "message": "hello world"}'
           echo '```'
     extract:

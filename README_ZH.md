@@ -98,7 +98,7 @@ PipelineX 支持从命令输出提取结构化数据并保存到流水线元数�
 
 ### Codec-Block 提取
 
-自动识别并解析 `pipelinex-json` 和 `pipelinex-yaml` 代码块：
+自动识别并解析 `flowx-json` 和 `flowx-yaml` 代码块：
 
 ```yaml
 Nodes:
@@ -111,7 +111,7 @@ Nodes:
       - name: build
         run: |
           echo "Building..."
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"buildId": "12345", "version": "1.0.0"}'
           echo '```'
 ```
@@ -300,7 +300,7 @@ Nodes:
     steps:
       - name: generate
         run: |
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"value": 42, "message": "hello world"}'
           echo '```'
     extract:

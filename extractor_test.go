@@ -11,7 +11,7 @@ func TestCodecBlockExtractor_ExtractJSON(t *testing.T) {
 Some regular output
 Build completed successfully
 
-` + "`" + "`" + "`pipelinex-json\n{" + `"version": "1.0.0",` + `
+` + "`" + "`" + "`flowx-json\n{" + `"version": "1.0.0",` + `
 "buildTime": "2024-01-15T10:30:00Z",` + `
 "status": "success"
 }` + "\n" + "`" + "`" + "`\n"
@@ -40,7 +40,7 @@ func TestCodecBlockExtractor_ExtractYAML(t *testing.T) {
 	output := `
 Build process started...
 
-` + "`" + "`" + "`pipelinex-yaml\n" + `version: 2.0.0` + `
+` + "`" + "`" + "`flowx-yaml\n" + `version: 2.0.0` + `
 buildTime: 2024-01-15T11:30:00Z` + `
 artifacts:` + `
   - name: app` + `

@@ -165,7 +165,7 @@ type OutputExtractor interface {
 
 ### codec-block 模式
 
-识别输出中的 `pipelinex-json` 和 `pipelinex-yaml` 代码块并解析。
+识别输出中的 `flowx-json` 和 `flowx-yaml` 代码块并解析。
 
 **配置：**
 
@@ -178,7 +178,7 @@ extract:
 **在命令中嵌入：**
 
 ```bash
-echo '```pipelinex-json'
+echo '```flowx-json'
 echo '{"version": "1.0.0", "status": "success"}'
 echo '```'
 ```
@@ -186,7 +186,7 @@ echo '```'
 或 YAML 格式：
 
 ```bash
-echo '```pipelinex-yaml'
+echo '```flowx-yaml'
 echo 'version: "1.0.0"'
 echo 'status: success'
 echo '```'
@@ -228,12 +228,12 @@ data, err := extractor.Extract(output)
 
 ## 交互式输入
 
-Local 执行器支持程序主动请求输入。当输出中包含 `pipelinex-input` 代码块时，执行器会发出输入请求事件。
+Local 执行器支持程序主动请求输入。当输出中包含 `flowx-input` 代码块时，执行器会发出输入请求事件。
 
 **输出格式：**
 
 ```
-```pipelinex-input
+```flowx-input
 prompt: "请输入部署目标"
 type: text
 timeout: 30

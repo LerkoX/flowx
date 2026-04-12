@@ -166,7 +166,7 @@ Nodes:
       - name: build
         run: |
           VERSION=$(cat version.txt)
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo "{\"binaryName\": \"app\", \"binarySize\": \"$(stat -c%s app)\"}"
           echo '```'
           # 提取后: Metadata.binaryName = "app"

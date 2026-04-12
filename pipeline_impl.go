@@ -1302,7 +1302,7 @@ func (p *PipelineImpl) handleResult(ctx context.Context, node Node, _ Executor, 
 }
 
 // handleInputRequest 处理输入请求
-// 当程序输出 {"pipelinex":"wait-input",...} 时被调用
+// 当程序输出 {"flowx":"wait-input",...} 时被调用
 func (p *PipelineImpl) handleInputRequest(node Node, event *executor.InputRequestEvent) {
 	if event == nil || event.Request == nil {
 		return

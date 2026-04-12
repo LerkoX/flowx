@@ -101,7 +101,7 @@ Nodes:
       - name: build
         run: |
           go build -o app .
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"version": "{{ Param.version }}", "binary": "app"}'
           echo '```'
 

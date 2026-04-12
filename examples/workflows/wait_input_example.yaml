@@ -18,13 +18,13 @@ Nodes:
       - name: ask-name
         run: |
           echo "欢迎进入交互式输入演示！"
-          echo '```pipelinex-input'
+          echo '```flowx-input'
           echo 'prompt: 请输入您的姓名'
           echo 'type: text'
           echo '```'
           read name
           echo "你好，$name！"
-          echo '```pipelinex-input'
+          echo '```flowx-input'
           echo 'prompt: 请确认继续 (yes/no)'
           echo 'type: confirm'
           echo '```'

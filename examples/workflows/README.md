@@ -285,13 +285,13 @@ func main() {
 
 ### codec-block 方式
 
-在步骤输出中使用 `pipelinex-json` 或 `pipelinex-yaml` 代码块：
+在步骤输出中使用 `flowx-json` 或 `flowx-yaml` 代码块：
 
 ```yaml
 steps:
   - name: generate-data
     run: |
-      echo '```pipelinex-json'
+      echo '```flowx-json'
       echo '{"value": 42, "message": "hello"}'
       echo '```'
 extract:
@@ -363,7 +363,7 @@ Nodes:
 ## 关键特性说明
 
 ### 数据传递
-- **codec-block**：使用 `pipelinex-json` 或 `pipelinex-yaml` 代码块传递结构化数据
+- **codec-block**：使用 `flowx-json` 或 `flowx-yaml` 代码块传递结构化数据
 - **regex**：使用正则表达式提取数据
 - **跨节点引用**：通过 `{{ .Metadata.NodeName.fieldName }}` 引用前置节点的数据
 

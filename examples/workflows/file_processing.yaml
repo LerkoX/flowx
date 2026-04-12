@@ -43,7 +43,7 @@ Nodes:
         description: "创建工作目录并验证环境"
         run: |
           echo "Initializing file processing at {{ Param.timestamp }}"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"startTime": "{{ Param.timestamp }}", "status": "ready"}'
           echo '```'
 
@@ -96,7 +96,7 @@ Nodes:
             cat "$file"
             echo ""
           done
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"logDir": "{{ Param.projectDir }}/logs", "archiveDir": "{{ Param.projectDir }}/archives", "logFilesCreated": 3}'
           echo '```'
     extract:
@@ -124,7 +124,7 @@ Nodes:
           archive="{{ Param.projectDir }}/archives/logs_${timestamp}.tar.gz"
           tar -czf $archive $(find . -name "{{ Param.logPattern }}" -type f 2>/dev/null | xargs -n 1) 2>/dev/null
           echo "Compressed logs to: $archive"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"archiveFile": "'$archive'", "compressedCount": "1"}'
           echo '```'
       - name: print-after-compress
@@ -159,7 +159,7 @@ Nodes:
           echo "Generated at: $(date)" >> $manifest
           ls -lh *.tar.gz >> $manifest 2>/dev/null || true
           echo "Manifest created: $manifest"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"manifestFile": "'$manifest'", "status": "generated"}'
           echo '```'
       - name: print-after-manifest

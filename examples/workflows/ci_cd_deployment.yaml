@@ -58,7 +58,7 @@ Nodes:
         description: "克隆代码仓库"
         run: |
           echo "Checking out code for {{ Param.projectName }} version {{ Param.version }}"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"branch": "main", "commit": "abc123", "timestamp": "'$(date -Iseconds)'"}'
           echo '```'
     extract:
@@ -75,7 +75,7 @@ Nodes:
           echo "Building {{ Param.projectName }} {{ Param.version }}"
           echo "Compiling source code..."
           echo "Running build optimizations..."
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"buildSuccess": true, "buildSize": "125MB", "buildTime": 45}'
           echo '```'
     extract:
@@ -94,7 +94,7 @@ Nodes:
           echo "Test 2: PASS"
           echo "Test 3: PASS"
           echo "Tests completed successfully"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"testsRun": 50, "testsPassed": 50, "testsFailed": 0, "success": true}'
           echo '```'
     extract:
@@ -119,7 +119,7 @@ Nodes:
           echo "All tests passed: $allTestsPassed"
           codeCoverage=85
           echo "Code coverage: ${codeCoverage}%"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"allTestsPassed": '$allTestsPassed', "codeCoverage": '$codeCoverage', "lintIssues": 0, "securityVulnerabilities": 0}'
           echo '```'
     extract:
@@ -136,7 +136,7 @@ Nodes:
           echo "Deploying {{ Param.projectName }} {{ Param.version }} to DEV environment"
           echo "Target server: dev.example.com"
           echo "Deployment completed!"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"environment": "dev", "url": "https://dev.example.com", "deployedAt": "'$(date -Iseconds)'"}'
           echo '```'
     extract:
@@ -154,7 +154,7 @@ Nodes:
           echo "Target server: staging.example.com"
           echo "Coverage check passed: {{ QualityCheck.codeCoverage }}% (required: {{ Param.codeCoverageThreshold }}%)"
           echo "Deployment completed!"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"environment": "staging", "url": "https://staging.example.com", "deployedAt": "'$(date -Iseconds)'"}'
           echo '```'
     extract:
@@ -173,7 +173,7 @@ Nodes:
           echo "All tests: PASSED"
           echo "Code coverage: {{ QualityCheck.codeCoverage }}%"
           echo "Ready for manual approval"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"version": "{{ Param.version }}", "ready": true, "reviewUrl": "https://reviews.example.com/{{ Param.version }}"}'
           echo '```'
 
@@ -189,7 +189,7 @@ Nodes:
           echo "Reviewer: john.doe@example.com"
           echo "Approval: APPROVED"
           echo "Comments: All checks passed, ready for production deployment"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"approved": true, "reviewer": "john.doe@example.com", "approvedAt": "'$(date -Iseconds)'"}'
           echo '```'
 
@@ -205,7 +205,7 @@ Nodes:
           echo "Target server: production.example.com"
           echo "Approved by: {{ ManualApproval.reviewer }}"
           echo "Deployment completed!"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"environment": "production", "url": "https://production.example.com", "deployedAt": "'$(date -Iseconds)'"}}'
           echo '```'
     extract:
@@ -222,7 +222,7 @@ Nodes:
           echo "Deployment skipped due to quality gate failure"
           echo "All tests passed: {{ QualityCheck.allTestsPassed }}"
           echo "Code coverage: {{ QualityCheck.codeCoverage }}% (required: {{ Param.codeCoverageThreshold }}%)"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"skipped": true, "reason": "Quality gate failed", "testsPassed": "{{ QualityCheck.allTestsPassed }}", "coverage": {{ QualityCheck.codeCoverage }}, "threshold": {{ Param.codeCoverageThreshold }}}'
           echo '```'
 
@@ -238,6 +238,6 @@ Nodes:
           echo "All tests passed: {{ QualityCheck.allTestsPassed }}"
           echo "Code coverage: {{ QualityCheck.codeCoverage }}% (required: {{ Param.codeCoverageThreshold }}%)"
           echo "Please fix quality issues before deploying to production"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"rejected": true, "reason": "Quality gate failed", "testsPassed": "{{ QualityCheck.allTestsPassed }}", "coverage": {{ QualityCheck.codeCoverage }}, "threshold": {{ Param.codeCoverageThreshold }}}'
           echo '```'

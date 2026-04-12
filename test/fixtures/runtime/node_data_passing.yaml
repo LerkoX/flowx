@@ -18,7 +18,7 @@ Nodes:
       - name: generate-data
         run: |
           echo 'Generating data...'
-          echo '```pipelinex-yaml'
+          echo '```flowx-yaml'
           echo 'value: 42'
           echo 'message: hello world'
           echo '```'

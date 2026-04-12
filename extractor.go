@@ -17,7 +17,7 @@ type OutputExtractor interface {
 }
 
 // CodecBlockExtractor 代码块提取器
-// 识别 ```pipelinex-json 和 ```pipelinex-yaml 代码块
+// 识别 ```flowx-json 和 ```flowx-yaml 代码块
 type CodecBlockExtractor struct {
 	maxSize int
 }
@@ -43,7 +43,7 @@ func (e *CodecBlockExtractor) Extract(output string) (map[string]interface{}, er
 	}
 
 	// 查找 JSON 代码块
-	jsonPattern := regexp.MustCompile("(?s)```pipelinex-json\\s*\\n?(.*?)\\n?```")
+	jsonPattern := regexp.MustCompile("(?s)```flowx-json\\s*\\n?(.*?)\\n?```")
 	jsonMatches := jsonPattern.FindAllStringSubmatch(output, -1)
 	for _, match := range jsonMatches {
 		if len(match) >= 2 {
@@ -60,7 +60,7 @@ func (e *CodecBlockExtractor) Extract(output string) (map[string]interface{}, er
 	}
 
 	// 查找 YAML 代码块
-	yamlPattern := regexp.MustCompile("(?s)```pipelinex-yaml\\s*\\n?(.*?)\\n?```")
+	yamlPattern := regexp.MustCompile("(?s)```flowx-yaml\\s*\\n?(.*?)\\n?```")
 	yamlMatches := yamlPattern.FindAllStringSubmatch(output, -1)
 	for _, match := range yamlMatches {
 		if len(match) >= 2 {

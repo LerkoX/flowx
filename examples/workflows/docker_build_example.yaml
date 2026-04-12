@@ -104,7 +104,7 @@ Nodes:
         run: |
           echo "初始化工作目录..."
           mkdir -p /app/src
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"status": "initialized", "workDir": "/app/src"}'
           echo '```'
 
@@ -117,7 +117,7 @@ Nodes:
           cd /app/src
           # 实际使用: git clone ...
           echo "代码克隆完成"
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           echo '{"commit": "abc123", "branch": "main", "files": 42}'
           echo '```'
 
@@ -150,7 +150,7 @@ Nodes:
           mkdir -p /output
 
           # 生成构建信息
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           cat << EOF
           {
             "binary": "{{ Param.appName }}",
@@ -195,7 +195,7 @@ Nodes:
           echo ""
           echo "覆盖率分析..."
 
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           cat << EOF
           {
             "testsRun": 24,
@@ -247,7 +247,7 @@ Nodes:
           echo "添加文档..."
           echo "压缩完成"
 
-          echo '```pipelinex-json'
+          echo '```flowx-json'
           cat << EOF
           {
             "packageName": "$packageName",

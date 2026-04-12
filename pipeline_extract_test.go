@@ -25,7 +25,7 @@ Step: test-step
 Executing: echo 'test output with extraction'
 test output with extraction
 
-` + "```pipelinex-json\n{" + `"buildId": "12345",` + `"version": "1.0.0",` + `"status": "success"}` + "\n```\n"
+` + "```flowx-json\n{" + `"buildId": "12345",` + `"version": "1.0.0",` + `"status": "success"}` + "\n```\n"
 
 	extractConfig, hasExtract := nodeConfig["extract"]
 	if !hasExtract {
