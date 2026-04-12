@@ -1,4 +1,4 @@
-package pipelinex
+package flowx
 
 // Edge 表示DAG中的边，支持条件表达式
 type Edge interface {

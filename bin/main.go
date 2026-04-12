@@ -16,9 +16,9 @@ type PipelineListener struct {
 	ctx    context.Context
 }
 
-func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
+func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 	switch event {
-	case pipelinex.PipelineInit:
+	case flowx.PipelineInit:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -27,7 +27,7 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 			})
 		}
 		fmt.Printf("[事件] 流水线初始化: %s\n", p.Id())
-	case pipelinex.PipelineStart:
+	case flowx.PipelineStart:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -36,7 +36,7 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 			})
 		}
 		fmt.Printf("[事件] 流水线开始执行: %s\n", p.Id())
-	case pipelinex.PipelineFinish:
+	case flowx.PipelineFinish:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -45,7 +45,7 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 			})
 		}
 		fmt.Printf("[事件] 流水线执行完成: %s, 状态: %s\n", p.Id(), p.Status())
-	case pipelinex.PipelineExecutorPrepare:
+	case flowx.PipelineExecutorPrepare:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
@@ -53,7 +53,7 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 			})
 		}
 		fmt.Printf("[事件] 执行器准备中\n")
-	case pipelinex.PipelineNodeStart:
+	case flowx.PipelineNodeStart:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
@@ -61,7 +61,7 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 			})
 		}
 		fmt.Printf("[事件] 节点开始执行\n")
-	case pipelinex.PipelineNodeFinish:
+	case flowx.PipelineNodeFinish:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
@@ -74,14 +74,14 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 	}
 }
 
-func (l *PipelineListener) Events() []pipelinex.Event {
-	return []pipelinex.Event{
-		pipelinex.PipelineInit,
-		pipelinex.PipelineStart,
-		pipelinex.PipelineFinish,
-		pipelinex.PipelineExecutorPrepare,
-		pipelinex.PipelineNodeStart,
-		pipelinex.PipelineNodeFinish,
+func (l *PipelineListener) Events() []flowx.Event {
+	return []flowx.Event{
+		flowx.PipelineInit,
+		flowx.PipelineStart,
+		flowx.PipelineFinish,
+		flowx.PipelineExecutorPrepare,
+		flowx.PipelineNodeStart,
+		flowx.PipelineNodeFinish,
 	}
 }
 
@@ -96,7 +96,7 @@ func main() {
 	consolePusher := logger.NewConsolePusher()
 
 	// 创建 Runtime
-	runtime := pipelinex.NewRuntime(ctx)
+	runtime := flowx.NewRuntime(ctx)
 	runtime.SetPusher(consolePusher)
 
 	// 创建监听器（带有日志推送器）

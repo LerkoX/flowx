@@ -1,4 +1,4 @@
-package pipelinex
+package flowx
 
 // StepRuntimeStatus 步骤运行时状态
 type StepRuntimeStatus struct {

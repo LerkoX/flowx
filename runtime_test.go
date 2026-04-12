@@ -1,4 +1,4 @@
-package pipelinex
+package flowx
 
 import (
 	"context"
@@ -40,7 +40,7 @@ func TestNewRuntime(t *testing.T) {
 	}
 
 	// Check if it's a RuntimeImpl type using reflection
-	if reflect.TypeOf(runtime).String() != "*pipelinex.RuntimeImpl" {
+	if reflect.TypeOf(runtime).String() != "*flowx.RuntimeImpl" {
 		t.Fatalf("NewRuntime should return *RuntimeImpl, got %v", reflect.TypeOf(runtime))
 	}
 }
