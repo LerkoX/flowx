@@ -1,3 +1,5 @@
+[中文文档](./README_ZH.md)
+
 # PipelineX
 
 <p align="center">
@@ -114,7 +116,7 @@ Nodes:
           echo '```'
 ```
 
-This extracts `buildId` and `version` from output and makes them available as `${Metadata.Build.buildId}` and `${Metadata.Build.version}`.
+This extracts `buildId` and `version` from output and makes them available as `{{ .Metadata.Build.buildId }}` and `{{ .Metadata.Build.version }}`.
 
 ### Regex Extraction
 
@@ -505,5 +507,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-[中文文档](./README_ZH.md)
