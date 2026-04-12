@@ -1,4 +1,4 @@
-package pipelinex
+package flowx
 
 // GraphModifications 表示一组要原子应用的图修改操作
 type GraphModifications struct {

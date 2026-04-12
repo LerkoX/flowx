@@ -1,4 +1,4 @@
-package pipelinex
+package flowx
 
 type Node interface {
 	//ID 获取节点唯一id

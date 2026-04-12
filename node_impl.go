@@ -1,4 +1,4 @@
-package pipelinex
+package flowx
 
 import (
 	"github.com/spf13/cast"

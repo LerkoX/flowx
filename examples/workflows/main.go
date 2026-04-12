@@ -20,7 +20,7 @@ type PipelineListener struct {
 }
 
 // getRunningNodes 获取当前正在运行的节点
-func getRunningNodes(p pipelinex.Pipeline) []string {
+func getRunningNodes(p flowx.Pipeline) []string {
 	graph := p.GetGraph()
 	nodes := graph.Nodes()
 	var runningNodes []string
@@ -34,9 +34,9 @@ func getRunningNodes(p pipelinex.Pipeline) []string {
 	return runningNodes
 }
 
-func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
+func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
 	switch event {
-	case pipelinex.PipelineInit:
+	case flowx.PipelineInit:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -48,7 +48,7 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 		fmt.Printf("  流水线: %s\n", p.Id())
 		fmt.Printf("  状态:   初始化\n")
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	case pipelinex.PipelineStart:
+	case flowx.PipelineStart:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -58,7 +58,7 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 		}
 		fmt.Printf("  状态:   执行中\n")
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	case pipelinex.PipelineFinish:
+	case flowx.PipelineFinish:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Pipeline: p.Id(),
@@ -69,14 +69,14 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 		fmt.Printf("  状态:   %s\n", p.Status())
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	case pipelinex.PipelineExecutorPrepare:
+	case flowx.PipelineExecutorPrepare:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
 				Message: "执行器准备中",
 			})
 		}
-	case pipelinex.PipelineNodeStart:
+	case flowx.PipelineNodeStart:
 		// 获取正在运行的节点
 		runningNodes := getRunningNodes(p)
 		if len(runningNodes) > 0 {
@@ -93,7 +93,7 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 				}
 			}
 		}
-	case pipelinex.PipelineNodeFinish:
+	case flowx.PipelineNodeFinish:
 		fmt.Printf("\n")
 		// 获取所有节点状态
 		graph := p.GetGraph()
@@ -127,14 +127,14 @@ func (l *PipelineListener) Handle(p pipelinex.Pipeline, event pipelinex.Event) {
 	}
 }
 
-func (l *PipelineListener) Events() []pipelinex.Event {
-	return []pipelinex.Event{
-		pipelinex.PipelineInit,
-		pipelinex.PipelineStart,
-		pipelinex.PipelineFinish,
-		pipelinex.PipelineExecutorPrepare,
-		pipelinex.PipelineNodeStart,
-		pipelinex.PipelineNodeFinish,
+func (l *PipelineListener) Events() []flowx.Event {
+	return []flowx.Event{
+		flowx.PipelineInit,
+		flowx.PipelineStart,
+		flowx.PipelineFinish,
+		flowx.PipelineExecutorPrepare,
+		flowx.PipelineNodeStart,
+		flowx.PipelineNodeFinish,
 	}
 }
 
@@ -151,7 +151,7 @@ func runPipeline(configPath string) error {
 	consolePusher := logger.NewConsolePusher()
 
 	// 创建 Runtime
-	runtime := pipelinex.NewRuntime(ctx)
+	runtime := flowx.NewRuntime(ctx)
 	runtime.SetPusher(consolePusher)
 
 	// 创建监听器

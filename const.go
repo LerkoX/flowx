@@ -1,4 +1,4 @@
-package pipelinex
+package flowx
 
 const (
 	// 流水线状态常量

@@ -1,4 +1,4 @@
-package pipelinex
+package flowx
 
 // TemplateEngine 模板引擎接口，用于表达式求值
 type TemplateEngine interface {
