@@ -17,7 +17,7 @@ Param:
   feishuAppSecret: ""
   feishuChatId: ""
   # 脚本目录 (绝对路径)
-  scriptDir: "/workspace/github/pipelinex/examples/workflows/scripts"
+  scriptDir: "/workspace/github/flowx/examples/workflows/scripts"
 
 Executors:
   local:

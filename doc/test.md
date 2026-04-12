@@ -14,7 +14,7 @@
 
 ### edge_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 9
 **功能概述**: Edge 边结构的创建与条件表达式求值
 
@@ -32,7 +32,7 @@
 
 ### edge_extra_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 4
 **功能概述**: 自定义模板引擎与边缘切换
 
@@ -45,7 +45,7 @@
 
 ### conditional_edge_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 5
 **功能概述**: 条件边的遍历行为与路由逻辑
 
@@ -59,7 +59,7 @@
 
 ### eval_context_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 16
 **功能概述**: 求值上下文的创建、链式调用与不可变性
 
@@ -84,7 +84,7 @@
 
 ### eval_context_extra_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 7
 **功能概述**: 迭代计数与字符串查找工具
 
@@ -100,7 +100,7 @@
 
 ### pipeline_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 3
 **功能概述**: DAG 遍历算法与基本流水线执行
 
@@ -112,7 +112,7 @@
 
 ### cycle_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 15
 **功能概述**: 循环检测与循环图遍历
 
@@ -136,7 +136,7 @@
 
 ### graph_edge_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 11
 **功能概述**: 图的边操作与条件边遍历
 
@@ -156,7 +156,7 @@
 
 ### graph_dynamic_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 16
 **功能概述**: 图动态修改与 UpdateConfig
 
@@ -181,7 +181,7 @@
 
 ### graph_modify_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 9
 **功能概述**: ModifyGraph 操作与循环预防
 
@@ -199,7 +199,7 @@
 
 ### pipeline_extra_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 14
 **功能概述**: 流水线生命周期、事件通知与输入请求
 
@@ -222,7 +222,7 @@
 
 ### runtime_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 41
 **功能概述**: Runtime 核心功能、流水线执行、模板渲染、并发安全
 
@@ -272,7 +272,7 @@
 
 ### runtime_extra_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 19
 **功能概述**: Runtime 扩展功能、不可变字段验证、清理
 
@@ -300,7 +300,7 @@
 
 ### template_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 19
 **功能概述**: Pongo2 模板引擎的布尔求值、字符串渲染与验证
 
@@ -328,7 +328,7 @@
 
 ### pipeline_metadata_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 3
 **功能概述**: 元数据存储的线程安全与输出提取
 
@@ -340,7 +340,7 @@
 
 ### pipeline_extract_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 3
 **功能概述**: 输出提取器与 codec block 解析
 
@@ -352,7 +352,7 @@
 
 ### extractor_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 7
 **功能概述**: Codec block 提取器与正则提取器
 
@@ -368,7 +368,7 @@
 
 ### snapshot_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 9
 **功能概述**: 流水线快照的序列化、反序列化与深拷贝
 
@@ -386,7 +386,7 @@
 
 ### boolean_conversion_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 7
 **功能概述**: 布尔值转换与复杂 CI/CD 条件表达式
 
@@ -402,7 +402,7 @@
 
 ### uuid_test.go
 
-**包名**: `pipelinex`
+**包名**: `flowx`
 **测试函数数**: 3
 **功能概述**: UUID 验证、格式化与生成
 

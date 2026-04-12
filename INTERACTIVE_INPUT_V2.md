@@ -121,7 +121,7 @@ import (
 
 func main() {
     ctx := context.Background()
-    runtime := pipelinex.NewRuntime(ctx)
+    runtime := flowx.NewRuntime(ctx)
 
     // 运行流水线
     pipeline, _ := runtime.RunAsync(ctx, "demo", config, nil)
@@ -132,7 +132,7 @@ func main() {
     <-pipeline.Done()
 }
 
-func handleInputRequests(ctx context.Context, pipeline pipelinex.Pipeline) {
+func handleInputRequests(ctx context.Context, pipeline flowx.Pipeline) {
     ticker := time.NewTicker(100 * time.Millisecond)
     defer ticker.Stop()
 
@@ -144,7 +144,7 @@ func handleInputRequests(ctx context.Context, pipeline pipelinex.Pipeline) {
             // 遍历所有节点
             for _, node := range pipeline.GetGraph().Nodes() {
                 // 检测 PAUSED 状态（等待输入）
-                if node.Status() == pipelinex.StatusPaused {
+                if node.Status() == flowx.StatusPaused {
                     runtimeStatus := node.GetRuntimeStatus()
                     if runtimeStatus != nil && runtimeStatus.InputRequest != nil {
                         req := runtimeStatus.InputRequest

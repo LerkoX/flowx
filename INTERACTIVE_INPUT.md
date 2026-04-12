@@ -52,7 +52,7 @@ import (
 
 func main() {
     ctx := context.Background()
-    runtime := pipelinex.NewRuntime(ctx)
+    runtime := flowx.NewRuntime(ctx)
 
     config := `
 Version: "1.0"
@@ -86,12 +86,12 @@ Nodes:
     <-pipeline.Done()
 }
 
-func handleInteraction(ctx context.Context, pipeline pipelinex.Pipeline, nodeName string) {
+func handleInteraction(ctx context.Context, pipeline flowx.Pipeline, nodeName string) {
     // 获取节点
     graph := pipeline.GetGraph()
     nodes := graph.GetVertices()
 
-    var targetNode pipelinex.Node
+    var targetNode flowx.Node
     for _, node := range nodes {
         if node.Id() == nodeName {
             targetNode = node
@@ -254,7 +254,7 @@ inputChan := runtimeStatus.InputChan
 graph := pipeline.GetGraph()
 nodes := graph.GetVertices()
 for _, node := range nodes {
-    if node.Status() == pipelinex.StatusRunning {
+    if node.Status() == flowx.StatusRunning {
         runtimeStatus := node.GetRuntimeStatus()
         if runtimeStatus != nil && runtimeStatus.InputChan != nil {
             // 处理交互

@@ -14,13 +14,13 @@
 ## 编译
 
 ```bash
-go build -o pipelinex-demo main.go
+go build -o flowx-demo main.go
 ```
 
 ## 运行
 
 ```bash
-./pipelinex-demo
+./flowx-demo
 ```
 
 ## 示例流水线说明
@@ -35,7 +35,7 @@ go build -o pipelinex-demo main.go
 
 ```go
 // 1. 创建 Runtime
-runtime := pipelinex.NewRuntime(ctx)
+runtime := flowx.NewRuntime(ctx)
 
 // 2. 定义事件监听器
 listener := &PipelineListener{}

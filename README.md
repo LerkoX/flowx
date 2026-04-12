@@ -49,7 +49,7 @@ func main() {
     ctx := context.Background()
 
     // Create runtime
-    runtime := pipelinex.NewRuntime(ctx)
+    runtime := flowx.NewRuntime(ctx)
 
     // Pipeline configuration
     config := `
@@ -349,20 +349,20 @@ Nodes:
 Monitor pipeline execution through event listeners:
 
 ```go
-listener := pipelinex.NewListener()
-listener.Handle(func(p pipelinex.Pipeline, event pipelinex.Event) {
+listener := flowx.NewListener()
+listener.Handle(func(p flowx.Pipeline, event flowx.Event) {
     switch event {
-    case pipelinex.PipelineInit:
+    case flowx.PipelineInit:
         fmt.Println("Pipeline initialized")
-    case pipelinex.PipelineStart:
+    case flowx.PipelineStart:
         fmt.Println("Pipeline started")
-    case pipelinex.PipelineFinish:
+    case flowx.PipelineFinish:
         fmt.Println("Pipeline finished")
-    case pipelinex.PipelineExecutorPrepare:
+    case flowx.PipelineExecutorPrepare:
         fmt.Println("Executor preparing")
-    case pipelinex.PipelineNodeStart:
+    case flowx.PipelineNodeStart:
         fmt.Println("Node started")
-    case pipelinex.PipelineNodeFinish:
+    case flowx.PipelineNodeFinish:
         fmt.Println("Node completed")
     }
 })
