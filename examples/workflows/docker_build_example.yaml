@@ -104,8 +104,9 @@ Nodes:
         run: |
           echo "初始化工作目录..."
           mkdir -p /app/src
-          echo '```flowx-json'
-          echo '{"status": "initialized", "workDir": "/app/src"}'
+          echo '```flowx-yaml'
+          echo 'status: "initialized"'
+          echo 'workDir: "/app/src"'
           echo '```'
 
       - name: clone
@@ -117,8 +118,10 @@ Nodes:
           cd /app/src
           # 实际使用: git clone ...
           echo "代码克隆完成"
-          echo '```flowx-json'
-          echo '{"commit": "abc123", "branch": "main", "files": 42}'
+          echo '```flowx-yaml'
+          echo 'commit: "abc123"'
+          echo 'branch: "main"'
+          echo 'files: 42'
           echo '```'
 
   Build:
@@ -150,7 +153,7 @@ Nodes:
           mkdir -p /output
 
           # 生成构建信息
-          echo '```flowx-json'
+          echo '```flowx-yaml'
           cat << EOF
           {
             "binary": "{{ Param.appName }}",
@@ -195,7 +198,7 @@ Nodes:
           echo ""
           echo "覆盖率分析..."
 
-          echo '```flowx-json'
+          echo '```flowx-yaml'
           cat << EOF
           {
             "testsRun": 24,
@@ -247,7 +250,7 @@ Nodes:
           echo "添加文档..."
           echo "压缩完成"
 
-          echo '```flowx-json'
+          echo '```flowx-yaml'
           cat << EOF
           {
             "packageName": "$packageName",

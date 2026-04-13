@@ -336,7 +336,7 @@
 |---------|------|
 | `TestInConfigMetadataStore_ThreadSafety` | 100 个并发 goroutine 写入 InConfigMetadataStore |
 | `TestInConfigMetadataStore_Delete` | Delete 移除 key 且不影响其他 key |
-| `TestExtractOutput_Basic` | 从输出中解析 `flowx-json` codec block 并存储到流水线元数据 |
+| `TestExtractOutput_Basic` | 从输出中解析 `flowx-yaml` codec block 并存储到流水线元数据 |
 
 ### pipeline_extract_test.go
 
@@ -358,8 +358,8 @@
 
 | 测试函数 | 说明 |
 |---------|------|
-| `TestCodecBlockExtractor_ExtractJSON` | 从 `flowx-json` 代码块提取 JSON |
 | `TestCodecBlockExtractor_ExtractYAML` | 从 `flowx-yaml` 代码块提取 YAML |
+| `TestCodecBlockExtractor_ExtractWithComments` | 从 `flowx-yaml` 代码块提取带注释的字段 |
 | `TestRegexExtractor` | 正则模式提取（coverage、testsPassed、buildStatus） |
 | `TestRegexExtractor_NoMatches` | 无匹配返回空 map |
 | `TestRegexExtractor_InvalidPattern` | 无效正则创建时返回错误 |
