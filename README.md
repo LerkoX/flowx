@@ -94,11 +94,11 @@ Nodes:
 
 ## Output Extraction
 
-FlowX supports extracting structured data from command output and saving it to pipeline metadata for use in subsequent nodes.
+FlowX supports extracting structured data from command output and saving it to pipeline metadata for use in subsequent nodes. Extracted data includes field descriptions (from comments) and source node tracking.
 
 ### Codec-Block Extraction
 
-Automatically recognizes and parses `flowx-json` and `flowx-yaml` code blocks:
+Automatically recognizes and parses `flowx-yaml` code blocks:
 
 ```yaml
 Nodes:
@@ -111,12 +111,13 @@ Nodes:
       - name: build
         run: |
           echo "Building..."
-          echo '```flowx-json'
-          echo '{"buildId": "12345", "version": "1.0.0"}'
+          echo '```flowx-yaml'
+          echo 'buildId: "12345"  # 构建ID'
+          echo 'version: "1.0.0"  # 版本号'
           echo '```'
 ```
 
-This extracts `buildId` and `version` from output and makes them available as `{{ .Metadata.Build.buildId }}` and `{{ .Metadata.Build.version }}`.
+This extracts `buildId` and `version` from output with descriptions, and makes them available as `{{ .Metadata.Build.buildId }}` and `{{ .Metadata.Build.version }}`.
 
 ### Regex Extraction
 
@@ -363,8 +364,9 @@ Nodes:
     steps:
       - name: generate
         run: |
-          echo '```flowx-json'
-          echo '{"value": 42, "message": "hello world"}'
+          echo '```flowx-yaml'
+          echo 'value: 42  # 计算结果'
+          echo 'message: "hello world"  # 消息内容'
           echo '```'
     extract:
       type: codec-block

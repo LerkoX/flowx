@@ -101,8 +101,9 @@ Nodes:
       - name: build
         run: |
           go build -o app .
-          echo '```flowx-json'
-          echo '{"version": "{{ Param.version }}", "binary": "app"}'
+          echo '```flowx-yaml'
+          echo 'version: "{{ Param.version }}"  # 版本号'
+          echo 'binary: "app"  # 二进制文件名'
           echo '```'
 
   Deploy:

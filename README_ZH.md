@@ -94,11 +94,11 @@ Nodes:
 
 ## 输出提取
 
-FlowX 支持从命令输出提取结构化数据并保存到流水线元数据，供后续节点使用。
+FlowX 支持从命令输出提取结构化数据并保存到流水线元数据，供后续节点使用。提取的数据包含字段描述（从注释提取）和来源节点追踪。
 
 ### Codec-Block 提取
 
-自动识别并解析 `flowx-json` 和 `flowx-yaml` 代码块：
+自动识别并解析 `flowx-yaml` 代码块：
 
 ```yaml
 Nodes:
@@ -111,12 +111,13 @@ Nodes:
       - name: build
         run: |
           echo "Building..."
-          echo '```flowx-json'
-          echo '{"buildId": "12345", "version": "1.0.0"}'
+          echo '```flowx-yaml'
+          echo 'buildId: "12345"  # 构建ID'
+          echo 'version: "1.0.0"  # 版本号'
           echo '```'
 ```
 
-这将从输出中提取 `buildId` 和 `version`，使其可作为 `{{ .Metadata.Build.buildId }}` 和 `{{ .Metadata.Build.version }}` 使用。
+这将从输出中提取 `buildId` 和 `version`（含描述），使其可作为 `{{ .Metadata.Build.buildId }}` 和 `{{ .Metadata.Build.version }}` 使用。
 
 ### 正则表达式提取
 
@@ -300,8 +301,9 @@ Nodes:
     steps:
       - name: generate
         run: |
-          echo '```flowx-json'
-          echo '{"value": 42, "message": "hello world"}'
+          echo '```flowx-yaml'
+          echo 'value: 42  # 计算结果'
+          echo 'message: "hello world"  # 消息内容'
           echo '```'
     extract:
       type: codec-block
