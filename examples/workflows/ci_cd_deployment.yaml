@@ -58,8 +58,10 @@ Nodes:
         description: "克隆代码仓库"
         run: |
           echo "Checking out code for {{ Param.projectName }} version {{ Param.version }}"
-          echo '```flowx-json'
-          echo '{"branch": "main", "commit": "abc123", "timestamp": "'$(date -Iseconds)'"}'
+          echo '```flowx-yaml'
+          echo 'branch: "main"'
+          echo 'commit: "abc123"'
+          echo 'timestamp: "'$(date -Iseconds)'"'
           echo '```'
     extract:
       type: codec-block
@@ -75,8 +77,10 @@ Nodes:
           echo "Building {{ Param.projectName }} {{ Param.version }}"
           echo "Compiling source code..."
           echo "Running build optimizations..."
-          echo '```flowx-json'
-          echo '{"buildSuccess": true, "buildSize": "125MB", "buildTime": 45}'
+          echo '```flowx-yaml'
+          echo 'buildSuccess: true'
+          echo 'buildSize: "125MB"'
+          echo 'buildTime: 45'
           echo '```'
     extract:
       type: codec-block
@@ -94,8 +98,11 @@ Nodes:
           echo "Test 2: PASS"
           echo "Test 3: PASS"
           echo "Tests completed successfully"
-          echo '```flowx-json'
-          echo '{"testsRun": 50, "testsPassed": 50, "testsFailed": 0, "success": true}'
+          echo '```flowx-yaml'
+          echo 'testsRun: 50'
+          echo 'testsPassed: 50'
+          echo 'testsFailed: 0'
+          echo 'success: true'
           echo '```'
     extract:
       type: codec-block
@@ -119,8 +126,11 @@ Nodes:
           echo "All tests passed: $allTestsPassed"
           codeCoverage=85
           echo "Code coverage: ${codeCoverage}%"
-          echo '```flowx-json'
-          echo '{"allTestsPassed": '$allTestsPassed', "codeCoverage": '$codeCoverage', "lintIssues": 0, "securityVulnerabilities": 0}'
+          echo '```flowx-yaml'
+          echo 'allTestsPassed: "$allTestsPassed"'
+          echo 'codeCoverage: "$codeCoverage"'
+          echo 'lintIssues: 0'
+          echo 'securityVulnerabilities: 0'
           echo '```'
     extract:
       type: codec-block
@@ -136,8 +146,10 @@ Nodes:
           echo "Deploying {{ Param.projectName }} {{ Param.version }} to DEV environment"
           echo "Target server: dev.example.com"
           echo "Deployment completed!"
-          echo '```flowx-json'
-          echo '{"environment": "dev", "url": "https://dev.example.com", "deployedAt": "'$(date -Iseconds)'"}'
+          echo '```flowx-yaml'
+          echo 'environment: "dev"'
+          echo 'url: "https://dev.example.com"'
+          echo 'deployedAt: "'$(date -Iseconds)'"'
           echo '```'
     extract:
       type: codec-block
@@ -154,8 +166,10 @@ Nodes:
           echo "Target server: staging.example.com"
           echo "Coverage check passed: {{ QualityCheck.codeCoverage }}% (required: {{ Param.codeCoverageThreshold }}%)"
           echo "Deployment completed!"
-          echo '```flowx-json'
-          echo '{"environment": "staging", "url": "https://staging.example.com", "deployedAt": "'$(date -Iseconds)'"}'
+          echo '```flowx-yaml'
+          echo 'environment: "staging"'
+          echo 'url: "https://staging.example.com"'
+          echo 'deployedAt: "'$(date -Iseconds)'"'
           echo '```'
     extract:
       type: codec-block
@@ -173,8 +187,10 @@ Nodes:
           echo "All tests: PASSED"
           echo "Code coverage: {{ QualityCheck.codeCoverage }}%"
           echo "Ready for manual approval"
-          echo '```flowx-json'
-          echo '{"version": "{{ Param.version }}", "ready": true, "reviewUrl": "https://reviews.example.com/{{ Param.version }}"}'
+          echo '```flowx-yaml'
+          echo 'version: "{{ Param.version }}"'
+          echo 'ready: true'
+          echo 'reviewUrl: "https://reviews.example.com/{{ Param.version }}"'
           echo '```'
 
   ManualApproval:
@@ -189,8 +205,10 @@ Nodes:
           echo "Reviewer: john.doe@example.com"
           echo "Approval: APPROVED"
           echo "Comments: All checks passed, ready for production deployment"
-          echo '```flowx-json'
-          echo '{"approved": true, "reviewer": "john.doe@example.com", "approvedAt": "'$(date -Iseconds)'"}'
+          echo '```flowx-yaml'
+          echo 'approved: true'
+          echo 'reviewer: "john.doe@example.com"'
+          echo 'approvedAt: "'$(date -Iseconds)'"'
           echo '```'
 
   DeployProduction:
@@ -205,8 +223,10 @@ Nodes:
           echo "Target server: production.example.com"
           echo "Approved by: {{ ManualApproval.reviewer }}"
           echo "Deployment completed!"
-          echo '```flowx-json'
-          echo '{"environment": "production", "url": "https://production.example.com", "deployedAt": "'$(date -Iseconds)'"}}'
+          echo '```flowx-yaml'
+          echo 'environment: "production"'
+          echo 'url: "https://production.example.com"'
+          echo 'deployedAt: "$(date -Iseconds)'"}"'
           echo '```'
     extract:
       type: codec-block
@@ -222,8 +242,12 @@ Nodes:
           echo "Deployment skipped due to quality gate failure"
           echo "All tests passed: {{ QualityCheck.allTestsPassed }}"
           echo "Code coverage: {{ QualityCheck.codeCoverage }}% (required: {{ Param.codeCoverageThreshold }}%)"
-          echo '```flowx-json'
-          echo '{"skipped": true, "reason": "Quality gate failed", "testsPassed": "{{ QualityCheck.allTestsPassed }}", "coverage": {{ QualityCheck.codeCoverage }}, "threshold": {{ Param.codeCoverageThreshold }}}'
+          echo '```flowx-yaml'
+          echo 'skipped: true'
+          echo 'reason: "Quality gate failed"'
+          echo 'testsPassed: "{{ QualityCheck.allTestsPassed }}"'
+          echo 'coverage: "{{ QualityCheck.codeCoverage }}"'
+          echo 'threshold: "{{ Param.codeCoverageThreshold }}"'
           echo '```'
 
   RejectProduction:
@@ -238,6 +262,10 @@ Nodes:
           echo "All tests passed: {{ QualityCheck.allTestsPassed }}"
           echo "Code coverage: {{ QualityCheck.codeCoverage }}% (required: {{ Param.codeCoverageThreshold }}%)"
           echo "Please fix quality issues before deploying to production"
-          echo '```flowx-json'
-          echo '{"rejected": true, "reason": "Quality gate failed", "testsPassed": "{{ QualityCheck.allTestsPassed }}", "coverage": {{ QualityCheck.codeCoverage }}, "threshold": {{ Param.codeCoverageThreshold }}}'
+          echo '```flowx-yaml'
+          echo 'rejected: true'
+          echo 'reason: "Quality gate failed"'
+          echo 'testsPassed: "{{ QualityCheck.allTestsPassed }}"'
+          echo 'coverage: "{{ QualityCheck.codeCoverage }}"'
+          echo 'threshold: "{{ Param.codeCoverageThreshold }}"'
           echo '```'

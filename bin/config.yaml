@@ -29,8 +29,9 @@ Nodes:
         run: |
           echo "=== 生成构建信息 ==="
           echo "Build ID: {{ Param.buildId }}"
-          echo '```flowx-json'
-          echo '{"buildId": "{{ Param.buildId }}", "buildTime": "2024-01-01T00:00:00Z"}'
+          echo '```flowx-yaml'
+          echo 'buildId: "{{ Param.buildId }}"  # 构建ID'
+          echo 'buildTime: "2024-01-01T00:00:00Z"  # 构建时间'
           echo '```'
   Step2:
     name: 提取测试数据
@@ -57,8 +58,9 @@ Nodes:
         run: |
           echo "=== 生成部署配置 ==="
           echo "使用构建ID: {{ Step1.buildId }}"
-          echo '```flowx-json'
-          echo '{"deployId": "DEP-{{ Step1.buildId }}", "environment": "{{ Param.environment }}"}'
+          echo '```flowx-yaml'
+          echo 'deployId: "DEP-{{ Step1.buildId }}"  # 部署ID'
+          echo 'environment: "{{ Param.environment }}"  # 部署环境'
           echo '```'
   Step4:
     name: 最终部署和汇总

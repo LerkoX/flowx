@@ -74,7 +74,7 @@ type Listener interface {
 
 // PipelineListeningFn 流水线监听函数
 type ListeningFn func(p Pipeline)
-type Metadata map[string]any
+type Metadata map[string]core.FieldItem
 
 type Pipeline interface {
 	//ID 流水线的id

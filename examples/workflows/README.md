@@ -285,14 +285,15 @@ func main() {
 
 ### codec-block 方式
 
-在步骤输出中使用 `flowx-json` 或 `flowx-yaml` 代码块：
+在步骤输出中使用 `flowx-yaml` 代码块：
 
 ```yaml
 steps:
   - name: generate-data
     run: |
-      echo '```flowx-json'
-      echo '{"value": 42, "message": "hello"}'
+      echo '```flowx-yaml'
+      echo 'value: 42  # 计算结果'
+      echo 'message: "hello"  # 消息内容'
       echo '```'
 extract:
   type: codec-block
@@ -363,7 +364,7 @@ Nodes:
 ## 关键特性说明
 
 ### 数据传递
-- **codec-block**：使用 `flowx-json` 或 `flowx-yaml` 代码块传递结构化数据
+- **codec-block**：使用 `flowx-yaml` 代码块传递结构化数据（支持注释提取描述）
 - **regex**：使用正则表达式提取数据
 - **跨节点引用**：通过 `{{ .Metadata.NodeName.fieldName }}` 引用前置节点的数据
 

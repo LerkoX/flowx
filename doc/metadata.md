@@ -136,7 +136,7 @@ Metadate:
 元数据在流水线中的流转：
 
 ```
-1. 初始化：从配置的 Metadate.data 加载初始数据
+1. 初始化：从配置的 Metadate.data 加载初始数据（srcNode=""）
       ↓
 2. 模板渲染：Metadata.data 中的 {{ Param.xxx }} 被渲染
       ↓
@@ -144,9 +144,30 @@ Metadate:
       ↓
 4. 输出提取：节点执行完成后，extractor 提取输出中的数据
       ↓
-5. 写入 Metadata：提取的数据写入 MetadataStore
+5. 写入 Metadata：提取的数据写入 MetadataStore（自动设置 srcNode=节点ID）
       ↓
 6. 下游节点：后续节点可以引用新写入的 Metadata
+```
+
+## SrcNode 追踪
+
+从节点输出提取的元数据会自动记录来源节点：
+
+- **配置初始化**：srcNode 为空字符串（`""`）
+- **节点产生**：srcNode 自动设置为产生该数据的节点 ID
+
+存储格式：`{nodeId}.{key}` → FieldItem
+
+例如：`build-node.imageTag` 表示由 `build-node` 节点产生
+
+### FieldItem 结构
+
+```go
+type FieldItem struct {
+    Value       interface{} // 字段值
+    Description string     // 字段描述（从 flowx-yaml 注释提取）
+    SrcNode     string     // 来源节点 ID
+}
 ```
 
 ### 示例
@@ -155,7 +176,7 @@ Metadate:
 Metadate:
   type: in-config
   data:
-    buildVersion: "{{ Param.version }}"
+    buildVersion: "{{ Param.version }}"  # srcNode=""
 
 Nodes:
   Build:
@@ -165,21 +186,21 @@ Nodes:
     steps:
       - name: build
         run: |
-          VERSION=$(cat version.txt)
-          echo '```flowx-json'
-          echo "{\"binaryName\": \"app\", \"binarySize\": \"$(stat -c%s app)\"}"
+          echo '```flowx-yaml'
+          echo "imageTag: \"myapp:{{ Param.version }}\"  # 镜像标签"
+          echo "buildStatus: \"success\"  # 构建状态"
           echo '```'
-          # 提取后: Metadata.binaryName = "app"
-          #          Metadata.binarySize = "xxx"
+          # 提取后:
+          # Metadata["Build.imageTag"] = FieldItem{Value: "myapp:v1.0.0", Description: "镜像标签", SrcNode: "Build"}
+          # Metadata["Build.buildStatus"] = FieldItem{Value: "success", Description: "构建状态", SrcNode: "Build"}
 
   Deploy:
     executor: k8s
     steps:
       - name: deploy
-        # 引用 Build 节点提取的数据
         run: |
-          echo "Deploying {{ Metadata.binaryName }}"
-          echo "Binary size: {{ Metadata.binarySize }}"
+          echo "Deploying {{ Metadata.Build.imageTag }}"
+          echo "Status: {{ Metadata.Build.buildStatus }}"
 ```
 
 ## MetadataConfig 结构体

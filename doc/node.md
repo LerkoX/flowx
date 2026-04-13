@@ -153,19 +153,19 @@ type ExecutorRuntimeInfo struct {
 
 ## 输出提取
 
-输出提取功能可以从命令输出中提取结构化数据，保存到 metadata 中供后续节点使用。
+输出提取功能可以从命令输出中提取结构化数据，保存到 metadata 中供后续节点使用。提取的数据会自动填充 `srcNode` 字段。
 
 ### OutputExtractor 接口
 
 ```go
 type OutputExtractor interface {
-    Extract(output string) (map[string]interface{}, error)
+    Extract(output string) (map[string]core.FieldItem, error)
 }
 ```
 
 ### codec-block 模式
 
-识别输出中的 `flowx-json` 和 `flowx-yaml` 代码块并解析。
+识别输出中的 `flowx-yaml` 代码块并解析，支持行尾注释提取 description。
 
 **配置：**
 
@@ -175,24 +175,28 @@ extract:
   maxOutputSize: 1048576  # 1MB，可选
 ```
 
-**在命令中嵌入：**
-
-```bash
-echo '```flowx-json'
-echo '{"version": "1.0.0", "status": "success"}'
-echo '```'
-```
-
-或 YAML 格式：
+**在命令中嵌入（flowx-yaml）：**
 
 ```bash
 echo '```flowx-yaml'
-echo 'version: "1.0.0"'
-echo 'status: success'
+echo 'version: "1.0.0"  # 版本号'
+echo 'buildStatus: "success"  # 构建状态'
+echo 'imageTag: "myapp:v1.0.0"  # 镜像标签'
 echo '```'
 ```
 
-提取后的数据会合并到 Pipeline 的 metadata 中，后续节点可以通过 `{{ Metadata.key }}` 引用。
+提取后的数据会自动设置 `srcNode` 为当前节点 ID，并从注释中提取 `description`：
+
+```go
+// 提取结果示例
+map[string]core.FieldItem{
+    "version": {Value: "1.0.0", Description: "版本号", SrcNode: "Build"},
+    "buildStatus": {Value: "success", Description: "构建状态", SrcNode: "Build"},
+    "imageTag": {Value: "myapp:v1.0.0", Description: "镜像标签", SrcNode: "Build"},
+}
+```
+
+存储到 Metadata 时会添加节点前缀：`Metadata["Build.version"]`
 
 ### regex 模式
 

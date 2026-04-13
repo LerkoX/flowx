@@ -43,8 +43,9 @@ Nodes:
         description: "创建工作目录并验证环境"
         run: |
           echo "Initializing file processing at {{ Param.timestamp }}"
-          echo '```flowx-json'
-          echo '{"startTime": "{{ Param.timestamp }}", "status": "ready"}'
+          echo '```flowx-yaml'
+          echo 'startTime: "{{ Param.timestamp }}"'
+          echo 'status: "ready"'
           echo '```'
 
   CreateDir:
@@ -96,8 +97,10 @@ Nodes:
             cat "$file"
             echo ""
           done
-          echo '```flowx-json'
-          echo '{"logDir": "{{ Param.projectDir }}/logs", "archiveDir": "{{ Param.projectDir }}/archives", "logFilesCreated": 3}'
+          echo '```flowx-yaml'
+          echo 'logDir: "{{ Param.projectDir }}/logs"'
+          echo 'archiveDir: "{{ Param.projectDir }}/archives"'
+          echo 'logFilesCreated: 3'
           echo '```'
     extract:
       type: codec-block
@@ -124,8 +127,9 @@ Nodes:
           archive="{{ Param.projectDir }}/archives/logs_${timestamp}.tar.gz"
           tar -czf $archive $(find . -name "{{ Param.logPattern }}" -type f 2>/dev/null | xargs -n 1) 2>/dev/null
           echo "Compressed logs to: $archive"
-          echo '```flowx-json'
-          echo '{"archiveFile": "'$archive'", "compressedCount": "1"}'
+          echo '```flowx-yaml'
+          echo 'archiveFile: "'$archive'"'
+          echo 'compressedCount: "1"'
           echo '```'
       - name: print-after-compress
         description: "压缩后打印目录内容"
@@ -159,8 +163,9 @@ Nodes:
           echo "Generated at: $(date)" >> $manifest
           ls -lh *.tar.gz >> $manifest 2>/dev/null || true
           echo "Manifest created: $manifest"
-          echo '```flowx-json'
-          echo '{"manifestFile": "'$manifest'", "status": "generated"}'
+          echo '```flowx-yaml'
+          echo 'manifestFile: "'$manifest'"'
+          echo 'status: "generated"'
           echo '```'
       - name: print-after-manifest
         description: "生成清单后打印目录内容"

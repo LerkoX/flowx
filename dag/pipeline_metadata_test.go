@@ -109,7 +109,7 @@ func TestExtractOutput_Basic(t *testing.T) {
 		id:             "test-pipeline",
 		executors:      make(map[string]executor.Executor),
 		metadata:       make(Metadata),
-		param:          make(map[string]interface{}),
+		param:          make(map[string]core.FieldItem),
 		templateEngine: template.NewPongo2TemplateEngine(),
 	}
 
@@ -131,8 +131,8 @@ func TestExtractOutput_Basic(t *testing.T) {
 		FinishTime: time.Now(),
 	}
 
-	// 完整输出包含 codec-block
-	fullOutput := "Regular output\n```flowx-json\n{\"extracted\": \"value123\", \"count\": 42}\n```\nMore output"
+	// 完整输出包含 codec-block（使用 flowx-yaml）
+	fullOutput := "Regular output\n```flowx-yaml\nextracted: value123\ncount: 42\n```\nMore output"
 
 	// 执行提取
 	err := pipeline.extractOutput(ctx, node, stepResult, fullOutput)
@@ -143,18 +143,26 @@ func TestExtractOutput_Basic(t *testing.T) {
 	// 验证 metadata
 	md := pipeline.Metadata()
 
-	if extracted, ok := md["TestNode.extracted"]; !ok || extracted != "value123" {
-		t.Errorf("Expected TestNode.extracted=value123, got %v (ok: %v)", extracted, ok)
+	if extracted, ok := md["TestNode.extracted"]; !ok {
+		t.Errorf("Expected TestNode.extracted, got missing")
+	} else if core.GetValue(extracted.Value) != "value123" {
+		t.Errorf("Expected TestNode.extracted=value123, got %v", extracted.Value)
 	}
 
-	// JSON 解析后的数字可能是 int 或 float64
+	// 验证 SrcNode
+	if md["TestNode.extracted"].SrcNode != "TestNode" {
+		t.Errorf("Expected SrcNode=TestNode, got %s", md["TestNode.extracted"].SrcNode)
+	}
+
+	// count 值可能是 int、float64 或 string（取决于 YAML 解析）
 	if count, ok := md["TestNode.count"]; !ok {
-		t.Errorf("Expected TestNode.count=42, got missing (ok: %v)", ok)
-	} else if countInt, ok := count.(int64); ok && countInt != 42 {
-		t.Errorf("Expected TestNode.count=42 (int64), got %v", countInt)
-	} else if countInt, ok := count.(int); ok && countInt != 42 {
-		t.Errorf("Expected TestNode.count=42 (int), got %v", countInt)
-	} else if countInt, ok := count.(float64); ok && countInt != 42 {
-		t.Errorf("Expected TestNode.count=42 (float64), got %v", countInt)
+		t.Errorf("Expected TestNode.count, got missing")
+	} else {
+		countVal := core.GetValue(count.Value)
+		// YAML 解析可能产生 string/int/float64，这里检查字符串形式
+		countStr := fmt.Sprintf("%v", countVal)
+		if countStr != "42" {
+			t.Errorf("Expected TestNode.count=42, got %v", countVal)
+		}
 	}
 }
