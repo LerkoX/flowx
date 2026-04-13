@@ -190,8 +190,10 @@ Nodes:
         description: "编译Go二进制文件，禁用CGO确保可移植性"
         run: |
           go build -o app .
-          echo '```flowx-json'
-          echo '{"buildId": "'${Param.buildId}'", "binary": "app", "status": "success"}'
+          echo '```flowx-yaml'
+          echo 'buildId: "'${Param.buildId}'"  # 构建ID'
+          echo 'binary: "app"  # 二进制文件名'
+          echo 'buildStatus: "success"  # 构建状态'
           echo '```'
       - id: "c3b2a10987f6e5d4c3b2a10987f6e5d4"
         name: image

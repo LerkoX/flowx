@@ -3,6 +3,7 @@ package dag
 import (
 	"testing"
 
+	"github.com/LerkoX/flowx/core"
 	"github.com/LerkoX/flowx/executor"
 )
 
@@ -21,13 +22,15 @@ func TestPipeline_OutputExtraction(t *testing.T) {
 		},
 	}
 
-	// 模拟 executeNode 中的提取逻辑
+	// 模拟 executeNode 中的提取逻辑（使用 flowx-yaml）
 	fullOutput := `
 Step: test-step
 Executing: echo 'test output with extraction'
 test output with extraction
 
-` + "```flowx-json\n{" + `"buildId": "12345",` + `"version": "1.0.0",` + `"status": "success"}` + "\n```\n"
+` + "```flowx-yaml\n" + `buildId: "12345"
+version: "1.0.0"
+status: "success"` + "\n```\n"
 
 	extractConfig, hasExtract := nodeConfig["extract"]
 	if !hasExtract {
@@ -55,16 +58,16 @@ test output with extraction
 		t.Errorf("Expected 3 extracted values, got %d", len(extracted))
 	}
 
-	if extracted["buildId"] != "12345" {
-		t.Errorf("Expected buildId=12345, got %v", extracted["buildId"])
+	if core.GetValue(extracted["buildId"].Value) != "12345" {
+		t.Errorf("Expected buildId=12345, got %v", extracted["buildId"].Value)
 	}
 
-	if extracted["version"] != "1.0.0" {
-		t.Errorf("Expected version=1.0.0, got %v", extracted["version"])
+	if core.GetValue(extracted["version"].Value) != "1.0.0" {
+		t.Errorf("Expected version=1.0.0, got %v", extracted["version"].Value)
 	}
 
-	if extracted["status"] != "success" {
-		t.Errorf("Expected status=success, got %v", extracted["status"])
+	if core.GetValue(extracted["status"].Value) != "success" {
+		t.Errorf("Expected status=success, got %v", extracted["status"].Value)
 	}
 }
 
@@ -113,12 +116,12 @@ All tests completed
 		t.Errorf("Expected 2 extracted values, got %d", len(extracted))
 	}
 
-	if extracted["coverage"] != "87.5" {
-		t.Errorf("Expected coverage=87.5, got %v", extracted["coverage"])
+	if core.GetValue(extracted["coverage"].Value) != "87.5" {
+		t.Errorf("Expected coverage=87.5, got %v", extracted["coverage"].Value)
 	}
 
-	if extracted["testsPassed"] != "15" {
-		t.Errorf("Expected testsPassed=15, got %v", extracted["testsPassed"])
+	if core.GetValue(extracted["testsPassed"].Value) != "15" {
+		t.Errorf("Expected testsPassed=15, got %v", extracted["testsPassed"].Value)
 	}
 }
 

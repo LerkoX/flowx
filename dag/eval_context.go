@@ -1,5 +1,9 @@
 package dag
 
+import (
+	"github.com/LerkoX/flowx/core"
+)
+
 // DGAEvaluationContext 是EvaluationContext接口的实现
 type DGAEvaluationContext struct {
 	data      map[string]any
@@ -76,18 +80,21 @@ func (c *DGAEvaluationContext) All() map[string]any {
 		// 将 Param 添加到上下文中，使其可以直接访问
 		if pipelineImpl, ok := c.pipeline.(*PipelineImpl); ok {
 			if len(pipelineImpl.param) > 0 {
+				paramValues := make(map[string]any)
 				for k, v := range pipelineImpl.param {
-					result[k] = v
+					val := core.GetValue(v.Value)
+					result[k] = val
+					paramValues[k] = val
 				}
 				// 同时提供 Param.xxx 的访问方式
-				convertedParam := convertBoolToString(pipelineImpl.param)
-				result["Param"] = convertedParam
+				result["Param"] = convertBoolToString(paramValues)
 			}
 		}
 
 		// 添加 metadata，并将 "NodeID.key" 格式转换为嵌套结构
 		if metadata := c.pipeline.Metadata(); metadata != nil {
 			for k, v := range metadata {
+				val := core.GetValue(v.Value)
 				// 检查键名是否包含点（节点ID.键名）
 				if dotIdx := lastIndexOfByte(k, '.'); dotIdx > 0 {
 					nodeID := k[:dotIdx]
@@ -98,11 +105,11 @@ func (c *DGAEvaluationContext) All() map[string]any {
 					}
 					// 将键值添加到节点的嵌套对象中
 					if nodeObj, ok := result[nodeID].(map[string]any); ok {
-						nodeObj[keyName] = v
+						nodeObj[keyName] = val
 					}
 				} else {
 					// 不包含点的键，直接添加
-					result[k] = v
+					result[k] = val
 				}
 			}
 		}
