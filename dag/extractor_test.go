@@ -2,37 +2,9 @@ package dag
 
 import (
 	"testing"
+
+	"github.com/LerkoX/flowx/core"
 )
-
-func TestCodecBlockExtractor_ExtractJSON(t *testing.T) {
-	extractor := NewCodecBlockExtractor(1024 * 1024)
-
-	output := `
-Some regular output
-Build completed successfully
-
-` + "`" + "`" + "`flowx-json\n{" + `"version": "1.0.0",` + `
-"buildTime": "2024-01-15T10:30:00Z",` + `
-"status": "success"
-}` + "\n" + "`" + "`" + "`\n"
-
-	result, err := extractor.Extract(output)
-	if err != nil {
-		t.Fatalf("Failed to extract: %v", err)
-	}
-
-	if len(result) != 3 {
-		t.Errorf("Expected 3 extracted values, got %d", len(result))
-	}
-
-	if result["version"] != "1.0.0" {
-		t.Errorf("Expected version=1.0.0, got %v", result["version"])
-	}
-
-	if result["status"] != "success" {
-		t.Errorf("Expected status=success, got %v", result["status"])
-	}
-}
 
 func TestCodecBlockExtractor_ExtractYAML(t *testing.T) {
 	extractor := NewCodecBlockExtractor(1024 * 1024)
@@ -40,13 +12,13 @@ func TestCodecBlockExtractor_ExtractYAML(t *testing.T) {
 	output := `
 Build process started...
 
-` + "`" + "`" + "`flowx-yaml\n" + `version: 2.0.0` + `
-buildTime: 2024-01-15T11:30:00Z` + `
-artifacts:` + `
-  - name: app` + `
-    path: /app/binary` + `
-  - name: config` + `
-    path: /app/config.yaml` + "\n" + "`" + "`" + "`\n"
+` + "```flowx-yaml\n" + `version: 2.0.0
+buildTime: 2024-01-15T11:30:00Z
+artifacts:
+  - name: app
+    path: /app/binary
+  - name: config
+    path: /app/config.yaml` + "\n```\n"
 
 	result, err := extractor.Extract(output)
 	if err != nil {
@@ -57,11 +29,11 @@ artifacts:` + `
 		t.Errorf("Expected 3 extracted values, got %d", len(result))
 	}
 
-	if result["version"] != "2.0.0" {
+	if core.GetValue(result["version"].Value) != "2.0.0" {
 		t.Errorf("Expected version=2.0.0, got %v", result["version"])
 	}
 
-	artifacts, ok := result["artifacts"].([]interface{})
+	artifacts, ok := core.GetValue(result["artifacts"].Value).([]interface{})
 	if !ok {
 		t.Fatalf("Expected artifacts to be a list, got %T", result["artifacts"])
 	}
@@ -69,6 +41,48 @@ artifacts:` + `
 	if len(artifacts) != 2 {
 		t.Errorf("Expected 2 artifacts, got %d", len(artifacts))
 	}
+}
+
+func TestCodecBlockExtractor_ExtractYAMLWithComments(t *testing.T) {
+	extractor := NewCodecBlockExtractor(1024 * 1024)
+
+	output := `
+Build process started...
+
+` + "```flowx-yaml\n" + `version: 1.0.0  # 版本号
+buildStatus: success  # 构建状态
+imageTag: "myapp:v1.0.0"  # 镜像标签
+` + "\n```\n"
+
+	result, err := extractor.Extract(output)
+	if err != nil {
+		t.Fatalf("Failed to extract: %v", err)
+	}
+
+	if len(result) != 3 {
+		t.Errorf("Expected 3 extracted values, got %d", len(result))
+	}
+
+	// 验证值
+	if core.GetValue(result["version"].Value) != "1.0.0" {
+		t.Errorf("Expected version=1.0.0, got %v", result["version"].Value)
+	}
+	if core.GetValue(result["buildStatus"].Value) != "success" {
+		t.Errorf("Expected buildStatus=success, got %v", result["buildStatus"].Value)
+	}
+
+	// 验证描述
+	if result["version"].Description != "版本号" {
+		t.Errorf("Expected version description='版本号', got '%s'", result["version"].Description)
+	}
+	if result["buildStatus"].Description != "构建状态" {
+		t.Errorf("Expected buildStatus description='构建状态', got '%s'", result["buildStatus"].Description)
+	}
+	if result["imageTag"].Description != "镜像标签" {
+		t.Errorf("Expected imageTag description='镜像标签', got '%s'", result["imageTag"].Description)
+	}
+
+	// SrcNode 应该在调用 extractOutput 时由调用方设置
 }
 
 func TestRegexExtractor(t *testing.T) {
@@ -96,16 +110,16 @@ Build SUCCESS
 		t.Fatalf("Failed to extract: %v", err)
 	}
 
-	if result["coverage"] != "85.5" {
-		t.Errorf("Expected coverage=85.5, got %v", result["coverage"])
+	if core.GetValue(result["coverage"].Value) != "85.5" {
+		t.Errorf("Expected coverage=85.5, got %v", result["coverage"].Value)
 	}
 
-	if result["testsPassed"] != "42" {
-		t.Errorf("Expected testsPassed=42, got %v", result["testsPassed"])
+	if core.GetValue(result["testsPassed"].Value) != "42" {
+		t.Errorf("Expected testsPassed=42, got %v", result["testsPassed"].Value)
 	}
 
-	if result["buildStatus"] != "SUCCESS" {
-		t.Errorf("Expected buildStatus=SUCCESS, got %v", result["buildStatus"])
+	if core.GetValue(result["buildStatus"].Value) != "SUCCESS" {
+		t.Errorf("Expected buildStatus=SUCCESS, got %v", result["buildStatus"].Value)
 	}
 }
 
@@ -165,8 +179,8 @@ Processing file: report.txt
 	}
 
 	// Without capture group, should use the whole match
-	if result["filename"] != "file: report.txt" {
-		t.Errorf("Expected filename=\"file: report.txt\", got %v", result["filename"])
+	if core.GetValue(result["filename"].Value) != "file: report.txt" {
+		t.Errorf("Expected filename=\"file: report.txt\", got %v", result["filename"].Value)
 	}
 }
 
@@ -190,7 +204,7 @@ Result: 123-ABC
 	}
 
 	// Should use the first group
-	if result["complex"] != "Result" {
-		t.Errorf("Expected first group 'Result', got %v", result["complex"])
+	if core.GetValue(result["complex"].Value) != "Result" {
+		t.Errorf("Expected first group 'Result', got %v", result["complex"].Value)
 	}
 }

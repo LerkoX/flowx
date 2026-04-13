@@ -568,7 +568,7 @@ type PipelineImpl struct {
 	mu               sync.RWMutex
 	executorProvider ExecutorProvider
 	executors        map[string]executor.Executor    // 缓存已创建的executor
-	param            map[string]interface{} // 存储渲染后的Param值
+	param            map[string]core.FieldItem // 存储渲染后的Param值
 	templateEngine   template.TemplateEngine         // 模板引擎
 	cleanupOnce      sync.Once              // 保护清理操作只执行一次
 	pauseMu          sync.Mutex             // 保护暂停/恢复操作的序列化
@@ -593,7 +593,11 @@ func NewPipeline(ctx context.Context) Pipeline {
 func (p *PipelineImpl) SetParam(param map[string]interface{}) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.param = param
+	// 将 map[string]interface{} 转换为 map[string]FieldItem
+	p.param = make(map[string]core.FieldItem)
+	for k, v := range param {
+		p.param[k] = core.ConvertToFieldItem(v)
+	}
 }
 
 // SetMaxLoopIterations 设置循环图最大迭代次数
@@ -652,7 +656,12 @@ func (p *PipelineImpl) Metadata() Metadata {
 		// 从 metadata.InConfigMetadataStore 加载所有数据
 		if inConfigStore, ok := p.metadataStore.(*metadata.InConfigMetadataStore); ok {
 			for k, v := range inConfigStore.GetAll() {
-				p.metadata[k] = v
+				// 将 string 值转换为 FieldItem
+				p.metadata[k] = core.FieldItem{
+					Value:       v,
+					Description: "",
+					SrcNode:     "",
+				}
 			}
 		}
 	}
@@ -1507,12 +1516,16 @@ func (p *PipelineImpl) GetTemplateEngine() template.TemplateEngine {
 func (p *PipelineImpl) buildRenderContext() map[string]any {
 	ctx := make(map[string]any)
 
-	// 添加 Param
+	// 添加 Param（提取 FieldItem.Value 用于模板渲染）
 	p.mu.RLock()
 	if p.param != nil {
-		ctx["Param"] = p.param
-		// 同时展开 param 到顶层，支持直接引用
+		paramValues := make(map[string]any)
 		for k, v := range p.param {
+			paramValues[k] = core.GetValue(v.Value)
+		}
+		ctx["Param"] = paramValues
+		// 同时展开 param 到顶层，支持直接引用
+		for k, v := range paramValues {
 			ctx[k] = v
 		}
 	}
@@ -1521,11 +1534,15 @@ func (p *PipelineImpl) buildRenderContext() map[string]any {
 	// 添加 Metadata 和其他动态数据（这里 Metadata 返回的是拷贝，安全）
 	metadata := p.Metadata()
 	if metadata != nil {
-		ctx["Metadata"] = metadata
+		metadataValues := make(map[string]any)
+		for k, v := range metadata {
+			metadataValues[k] = core.GetValue(v.Value)
+		}
+		ctx["Metadata"] = metadataValues
 		// 将平铺的 metadata 转换为嵌套结构
 		// 例如：Node1.value = "42", Node1.message = "hello"
 		// 转换为：Node1 = {"value": "42", "message": "hello"}
-		for k, v := range metadata {
+		for k, v := range metadataValues {
 			// 检查键名是否包含点（节点ID.键名）
 			if dotIdx := strings.LastIndex(k, "."); dotIdx > 0 {
 				nodeID := k[:dotIdx]
@@ -1595,17 +1612,22 @@ func (p *PipelineImpl) extractOutput(ctx context.Context, node Node, stepResult 
 			p.metadata = make(Metadata)
 		}
 
-		// 保存到内存 metadata
-		for key, value := range extracted {
+		// 保存到内存 metadata（使用 FieldItem，设置 SrcNode）
+		for key, fieldItem := range extracted {
 			metadataKey := fmt.Sprintf("%s.%s", node.Id(), key)
-			p.metadata[metadataKey] = convertBoolToString(value)
+			// 设置 SrcNode 为当前节点 ID
+			fieldItem.SrcNode = node.Id()
+			// 将 Value 转换为字符串存储
+			valueStr := fmt.Sprintf("%v", core.GetValue(fieldItem.Value))
+			fieldItem.Value = valueStr
+			p.metadata[metadataKey] = fieldItem
 		}
 
 		// 如果有 metadata store，同步保存
 		if p.metadataStore != nil {
-			for key, value := range extracted {
+			for key, fieldItem := range extracted {
 				metadataKey := fmt.Sprintf("%s.%s", node.Id(), key)
-				valueStr := fmt.Sprintf("%v", value)
+				valueStr := fmt.Sprintf("%v", core.GetValue(fieldItem.Value))
 				if err := p.metadataStore.Set(ctx, metadataKey, valueStr); err != nil {
 					fmt.Printf("Warning: Failed to save extracted data to store: %v\n", err)
 				}

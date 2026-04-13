@@ -45,7 +45,7 @@ type PipelineConfig struct {
 	Name              string                    `yaml:"Name"`
 	Metadate          MetadataConfig            `yaml:"Metadate"`
 	AI                AIConfig                  `yaml:"AI"`
-	Param             map[string]interface{}    `yaml:"Param"`
+	Param             map[string]interface{}  `yaml:"Param"`
 	Executors         map[string]ExecutorConfig `yaml:"Executors"`
 	Logging           LoggingConfig             `yaml:"Logging"`
 	Graph             string                    `yaml:"Graph"`

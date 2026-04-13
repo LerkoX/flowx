@@ -38,13 +38,13 @@ type RuntimeImpl struct {
 
 // renderParam 渲染Param中的模板表达式，支持自引用
 // 使用迭代方式处理参数间的相互引用，最大迭代次数防止无限循环
-func (r *RuntimeImpl) renderParam(param map[string]interface{}) (map[string]interface{}, error) {
+func (r *RuntimeImpl) renderParam(param map[string]core.FieldItem) (map[string]core.FieldItem, error) {
 	if len(param) == 0 {
 		return param, nil
 	}
 
 	// 创建结果副本，避免修改原始数据
-	result := make(map[string]interface{})
+	result := make(map[string]core.FieldItem)
 	for k, v := range param {
 		result[k] = v
 	}
@@ -59,24 +59,30 @@ func (r *RuntimeImpl) renderParam(param map[string]interface{}) (map[string]inte
 		iteration++
 
 		// 遍历所有参数，尝试渲染
-		for key, value := range result {
+		for key, fieldItem := range result {
 			// 创建上下文，Param的值可以直接访问，也可以通过Param.xxx访问
+			// 从 FieldItem 中提取值用于上下文
 			ctx := make(map[string]any)
-			// 将所有Param值直接放入上下文，使其可以直接访问
 			for k, v := range result {
-				ctx[k] = v
+				ctx[k] = core.GetValue(v.Value)
 			}
 			// 同时保留Param.xxx的访问方式
-			ctx["Param"] = result
+			paramValues := make(map[string]any)
+			for k, v := range result {
+				paramValues[k] = core.GetValue(v.Value)
+			}
+			ctx["Param"] = paramValues
 
-			renderedValue, err := r.renderValue(value, ctx, 0)
+			// 渲染 FieldItem.Value
+			renderedValue, err := r.renderValue(core.GetValue(fieldItem.Value), ctx, 0)
 			if err != nil {
 				return nil, fmt.Errorf("failed to render param '%s': %w", key, err)
 			}
 
 			// 如果值发生变化，标记为需要继续迭代
-			if !r.deepEqual(value, renderedValue) {
-				result[key] = renderedValue
+			if !r.deepEqual(fieldItem.Value, renderedValue) {
+				fieldItem.Value = renderedValue
+				result[key] = fieldItem
 				changed = true
 			}
 		}
@@ -144,24 +150,30 @@ func (r *RuntimeImpl) deepEqual(a, b interface{}) bool {
 }
 
 // renderMetadata 渲染Metadata中的模板表达式，可以引用Param
-func (r *RuntimeImpl) renderMetadata(metadataData map[string]interface{}, param map[string]interface{}) (map[string]interface{}, error) {
+func (r *RuntimeImpl) renderMetadata(metadataData map[string]core.FieldItem, param map[string]core.FieldItem) (map[string]core.FieldItem, error) {
 	if len(metadataData) == 0 {
 		return metadataData, nil
 	}
 
 	// 构建上下文，Param可以通过{{ Param.xxx }}访问
+	// 从 FieldItem 中提取值用于上下文
+	paramValues := make(map[string]any)
+	for k, v := range param {
+		paramValues[k] = core.GetValue(v.Value)
+	}
 	ctx := map[string]any{
-		"Param": param,
+		"Param": paramValues,
 	}
 
 	// 渲染metadata数据
-	result := make(map[string]interface{})
-	for key, value := range metadataData {
-		renderedValue, err := r.renderValue(value, ctx, 0)
+	result := make(map[string]core.FieldItem)
+	for key, fieldItem := range metadataData {
+		renderedValue, err := r.renderValue(core.GetValue(fieldItem.Value), ctx, 0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to render metadata '%s': %w", key, err)
 		}
-		result[key] = renderedValue
+		fieldItem.Value = renderedValue
+		result[key] = fieldItem
 	}
 
 	return result, nil
@@ -169,44 +181,53 @@ func (r *RuntimeImpl) renderMetadata(metadataData map[string]interface{}, param 
 
 // renderConfig 渲染配置中所有引用 Param 的地方（配置阶段）
 func (r *RuntimeImpl) renderConfig(config *core.PipelineConfig) error {
-	// 构建 Param 上下文
-	ctx := map[string]any{
-		"Param": config.Param,
-	}
+	// 将 Param 从 map[string]interface{} 转换为 map[string]FieldItem
+	paramFieldItem := make(map[string]core.FieldItem)
 	for k, v := range config.Param {
-		ctx[k] = v
+		paramFieldItem[k] = core.ConvertToFieldItem(v)
 	}
 
+	// 构建 Param 上下文（用于渲染）
+	ctx := map[string]any{}
+	for k, v := range paramFieldItem {
+		ctx[k] = core.GetValue(v.Value)
+	}
+	ctx["Param"] = ctx
+
 	// 1. 渲染 Param 本身（支持自引用）
-	if len(config.Param) > 0 {
-		renderedParam, err := r.renderParam(config.Param)
+	if len(paramFieldItem) > 0 {
+		renderedParam, err := r.renderParam(paramFieldItem)
 		if err != nil {
 			return fmt.Errorf("failed to render param: %w", err)
 		}
-		config.Param = renderedParam
-		// 更新上下文
-		ctx["Param"] = config.Param
-		for k, v := range config.Param {
-			ctx[k] = v
-		}
+		paramFieldItem = renderedParam
+	}
+
+	// 更新 config.Param 为渲染后的值
+	config.Param = make(map[string]interface{})
+	for k, v := range paramFieldItem {
+		config.Param[k] = v.Value
+	}
+
+	// 将 Metadata.Data 从 map[string]interface{} 转换为 map[string]FieldItem
+	metadataFieldItem := make(map[string]core.FieldItem)
+	for k, v := range config.Metadate.Data {
+		metadataFieldItem[k] = core.ConvertToFieldItem(v)
 	}
 
 	// 2. 渲染 Metadata
-	if config.Metadate.Type != "" && config.Metadate.Data != nil && len(config.Metadate.Data) > 0 {
-		renderedMetadata, err := r.renderMetadata(config.Metadate.Data, config.Param)
+	if config.Metadate.Type != "" && len(metadataFieldItem) > 0 {
+		renderedMetadata, err := r.renderMetadata(metadataFieldItem, paramFieldItem)
 		if err != nil {
 			return fmt.Errorf("failed to render metadata: %w", err)
 		}
-		config.Metadate.Data = renderedMetadata
-		// 将渲染后的 Metadata 数据加入到上下文中，供步骤 run 引用
-		for k, v := range config.Metadate.Data {
-			ctx[k] = v
+		metadataFieldItem = renderedMetadata
+		// 将渲染后的 Metadata 更新到 config.Metadate.Data
+		config.Metadate.Data = make(map[string]interface{})
+		for k, v := range metadataFieldItem {
+			config.Metadate.Data[k] = v.Value
 		}
 	}
-
-	// 注意：步骤的 run 命令不在配置阶段渲染，而是在运行时动态渲染
-	// 这样可以引用前面节点通过 extract 提取的数据
-	// 渲染逻辑移至 pipeline_impl.go 的 sendCommands 函数中
 
 	return nil
 }
@@ -487,8 +508,9 @@ func (r *RuntimeImpl) setupMetadata(ctx context.Context, pipeline dag.Pipeline, 
 
 // parseConfig 解析流水线配置
 func (r *RuntimeImpl) parseConfig(config string) (*core.PipelineConfig, error) {
+	// 直接解析为 PipelineConfig
+	// Param 和 Metadate.Data 保持 map[string]interface{}（yaml.v2 兼容）
 	var pipelineConfig core.PipelineConfig
-
 	err := yaml.Unmarshal([]byte(config), &pipelineConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal yaml config: %w", err)
