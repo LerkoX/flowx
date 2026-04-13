@@ -26,6 +26,7 @@ type InConfigMetadataStore struct {
 func NewInConfigMetadataStore(config core.MetadataConfig) (*InConfigMetadataStore, error) {
 	data := make(map[string]string)
 	for key, value := range config.Data {
+		// value 已经是 interface{}，直接处理
 		if strVal, ok := value.(string); ok {
 			data[key] = strVal
 		} else {
@@ -104,7 +105,8 @@ func NewHTTPMetadataStore(config core.MetadataConfig) (*HTTPMetadataStore, error
 	// 解析配置
 	if url, ok := config.Data["url"].(string); ok {
 		cfg.URL = url
-	} else {
+	}
+	if cfg.URL == "" {
 		return nil, fmt.Errorf("http metadata store requires url")
 	}
 
@@ -242,25 +244,36 @@ func NewRedisMetadataStore(config core.MetadataConfig) (*RedisMetadataStore, err
 	// 解析配置
 	if host, ok := config.Data["host"].(string); ok {
 		cfg.Host = host
-	} else {
+	}
+	if cfg.Host == "" {
 		cfg.Host = "localhost"
 	}
 
 	cfg.Port = 6379
-	if port, ok := config.Data["port"].(int); ok {
-		cfg.Port = port
-	} else if portStr, ok := config.Data["port"].(string); ok {
-		if p, err := strconv.Atoi(portStr); err == nil {
-			cfg.Port = p
+	if port, ok := config.Data["port"]; ok {
+		switch v := port.(type) {
+		case int:
+			cfg.Port = v
+		case float64:
+			cfg.Port = int(v)
+		case string:
+			if p, err := strconv.Atoi(v); err == nil {
+				cfg.Port = p
+			}
 		}
 	}
 
 	cfg.DB = 0
-	if db, ok := config.Data["db"].(int); ok {
-		cfg.DB = db
-	} else if dbStr, ok := config.Data["db"].(string); ok {
-		if d, err := strconv.Atoi(dbStr); err == nil {
-			cfg.DB = d
+	if db, ok := config.Data["db"]; ok {
+		switch v := db.(type) {
+		case int:
+			cfg.DB = v
+		case float64:
+			cfg.DB = int(v)
+		case string:
+			if d, err := strconv.Atoi(v); err == nil {
+				cfg.DB = d
+			}
 		}
 	}
 

@@ -408,11 +408,11 @@ func TestRuntimeImpl_MultiPipelineConcurrency(t *testing.T) {
 				}
 
 				// 验证 Generate 节点的数据是否正确传递
-				if value, ok := metadata["Generate.value"]; !ok {
+				if fieldItem, ok := metadata["Generate.value"]; !ok {
 					errors <- fmt.Errorf("pipeline %s: Generate.value not found in metadata", pipelineID)
 				} else {
 					// 允许 int 或 float64 类型
-					switch v := value.(type) {
+					switch v := core.GetValue(fieldItem.Value).(type) {
 					case string:
 						if v != "42" {
 							errors <- fmt.Errorf("pipeline %s: expected Generate.value=42, got %v", pipelineID, v)
@@ -428,10 +428,10 @@ func TestRuntimeImpl_MultiPipelineConcurrency(t *testing.T) {
 					}
 				}
 
-				if message, ok := metadata["Generate.message"]; !ok {
+				if fieldItem, ok := metadata["Generate.message"]; !ok {
 					errors <- fmt.Errorf("pipeline %s: Generate.message not found in metadata", pipelineID)
-				} else if message != "hello world" {
-					errors <- fmt.Errorf("pipeline %s: expected Generate.message='hello world', got %v", pipelineID, message)
+				} else if core.GetValue(fieldItem.Value) != "hello world" {
+					errors <- fmt.Errorf("pipeline %s: expected Generate.message='hello world', got %v", pipelineID, fieldItem.Value)
 				}
 
 				results <- pipelineResult{id: pipelineID, status: status, event: eventCount}
@@ -940,12 +940,16 @@ func TestRuntimeImpl_RenderMetadata_ReferenceParam(t *testing.T) {
 	}
 
 	// 验证metadata中的值是否正确渲染
-	if ns, ok := metadata["K8sNamespace"].(string); !ok || ns != "myapp-production" {
-		t.Errorf("Expected K8sNamespace='myapp-production', got %v", ns)
+	if ns, ok := metadata["K8sNamespace"]; !ok {
+		t.Errorf("Expected K8sNamespace, got missing")
+	} else if core.GetValue(ns.Value) != "myapp-production" {
+		t.Errorf("Expected K8sNamespace='myapp-production', got %v", ns.Value)
 	}
 
-	if prefix, ok := metadata["ImagePrefix"].(string); !ok || prefix != "myregistry.com/myapp/" {
-		t.Errorf("Expected ImagePrefix='myregistry.com/myapp/', got %v", prefix)
+	if prefix, ok := metadata["ImagePrefix"]; !ok {
+		t.Errorf("Expected ImagePrefix, got missing")
+	} else if core.GetValue(prefix.Value) != "myregistry.com/myapp/" {
+		t.Errorf("Expected ImagePrefix='myregistry.com/myapp/', got %v", prefix.Value)
 	}
 }
 
@@ -1091,33 +1095,33 @@ func TestRuntimeImpl_NodeDataPassing(t *testing.T) {
 
 	// 检查是否成功提取了 Generate 节点的数据
 	// 注意：JSON 数字可能被解析为 float64，YAML 数字可能是 int
-	value, hasValue := metadata["Generate.value"]
+	fieldItem, hasValue := metadata["Generate.value"]
 	if !hasValue {
 		t.Error("Expected Generate.value in metadata")
 	} else {
 		// 允许 42 (int) 或 42.0 (float64)
-		switch v := value.(type) {
+		switch v := core.GetValue(fieldItem.Value).(type) {
 		case string:
 			if v != "42" {
-				t.Errorf("Expected Generate.value=42 (string), got %v (type: %T)", value, value)
+				t.Errorf("Expected Generate.value=42 (string), got %v (type: %T)", fieldItem.Value, fieldItem.Value)
 			}
 		case float64:
 			if v != 42.0 {
-				t.Errorf("Expected Generate.value=42.0 (float64), got %v", value)
+				t.Errorf("Expected Generate.value=42.0 (float64), got %v", fieldItem.Value)
 			}
 		case int:
 			if v != 42 {
-				t.Errorf("Expected Generate.value=42 (int), got %v", value)
+				t.Errorf("Expected Generate.value=42 (int), got %v", fieldItem.Value)
 			}
 		default:
-			t.Errorf("Expected Generate.value=42, got %v (type: %T)", value, value)
+			t.Errorf("Expected Generate.value=42, got %v (type: %T)", fieldItem.Value, fieldItem.Value)
 		}
 	}
 
-	if message, ok := metadata["Generate.message"]; !ok {
+	if msgField, ok := metadata["Generate.message"]; !ok {
 		t.Error("Expected Generate.message in metadata")
-	} else if message != "hello world" {
-		t.Errorf("Expected Generate.message='hello world', got %v", message)
+	} else if core.GetValue(msgField.Value) != "hello world" {
+		t.Errorf("Expected Generate.message='hello world', got %v", msgField.Value)
 	}
 }
 
@@ -1378,8 +1382,8 @@ func TestRuntimeImpl_ConditionalEdge_Metadata(t *testing.T) {
 	shouldDeploy, ok := metadata["Generate.shouldDeploy"]
 	if !ok {
 		t.Error("Expected Generate.shouldDeploy in metadata")
-	} else if shouldDeploy != "true" {
-		t.Errorf("Expected Generate.shouldDeploy='true', got %v", shouldDeploy)
+	} else if core.GetValue(shouldDeploy.Value) != "true" {
+		t.Errorf("Expected Generate.shouldDeploy='true', got %v", shouldDeploy.Value)
 	}
 }
 
@@ -1422,17 +1426,17 @@ func TestRuntimeImpl_ConditionalEdge_Complex(t *testing.T) {
 
 	// Param 值可能不在 metadata 中，因为它们是单独的
 	// 让我们尝试从 metadata 或其他地方获取
-	if env, ok := metadata["env"].(string); ok {
-		if env != "staging" {
-			t.Errorf("Expected env='staging', got %v", env)
+	if env, ok := metadata["env"]; ok {
+		if core.GetValue(env.Value) != "staging" {
+			t.Errorf("Expected env='staging', got %v", env.Value)
 		}
 	} else {
 		t.Logf("env not found in metadata (this may be expected)")
 	}
 
-	if featureFlag, ok := metadata["featureFlag"].(bool); ok {
-		if featureFlag != true {
-			t.Errorf("Expected featureFlag=true, got %v", featureFlag)
+	if featureFlag, ok := metadata["featureFlag"]; ok {
+		if core.GetValue(featureFlag.Value) != true {
+			t.Errorf("Expected featureFlag=true, got %v", featureFlag.Value)
 		}
 	} else {
 		t.Logf("featureFlag not found in metadata (this may be expected)")
@@ -1571,16 +1575,22 @@ func TestComprehensivePipelineExecution(t *testing.T) {
 			t.Fatal("Metadata should not be nil")
 		}
 
-		if ns, ok := metadata["K8sNamespace"].(string); !ok || ns != "default" {
-			t.Errorf("Expected K8sNamespace='default', got %v", ns)
+		if ns, ok := metadata["K8sNamespace"]; !ok {
+			t.Errorf("Expected K8sNamespace, got missing")
+		} else if core.GetValue(ns.Value) != "default" {
+			t.Errorf("Expected K8sNamespace='default', got %v", ns.Value)
 		}
 
-		if cluster, ok := metadata["ClusterName"].(string); !ok || cluster != "prod-cluster" {
-			t.Errorf("Expected ClusterName='prod-cluster', got %v", cluster)
+		if cluster, ok := metadata["ClusterName"]; !ok {
+			t.Errorf("Expected ClusterName, got missing")
+		} else if core.GetValue(cluster.Value) != "prod-cluster" {
+			t.Errorf("Expected ClusterName='prod-cluster', got %v", cluster.Value)
 		}
 
-		if target, ok := metadata["DeployTarget"].(string); !ok || target != "prod-cluster/default" {
-			t.Errorf("Expected DeployTarget='prod-cluster/default', got %v", target)
+		if target, ok := metadata["DeployTarget"]; !ok {
+			t.Errorf("Expected DeployTarget, got missing")
+		} else if core.GetValue(target.Value) != "prod-cluster/default" {
+			t.Errorf("Expected DeployTarget='prod-cluster/default', got %v", target.Value)
 		}
 	})
 
@@ -1811,16 +1821,19 @@ func TestRuntimeImpl_CleanupCompletedPipelines(t *testing.T) {
 // TestSetPipelineParam tests setting pipeline parameters
 func TestSetPipelineParam(t *testing.T) {
 	pipeline := dag.NewPipeline(context.Background()).(*dag.PipelineImpl)
-	param := map[string]interface{}{"key1": "value1", "key2": 42}
+	param := map[string]interface{}{
+		"key1": "value1",
+		"key2": 42,
+	}
 
 	SetPipelineParam(pipeline, param)
 
 	p := pipeline.ParamForTest()
-	if p["key1"] != "value1" {
-		t.Errorf("param[key1] = %v, want 'value1'", p["key1"])
+	if core.GetValue(p["key1"].Value) != "value1" {
+		t.Errorf("param[key1] = %v, want 'value1'", p["key1"].Value)
 	}
-	if p["key2"] != 42 {
-		t.Errorf("param[key2] = %v, want 42", p["key2"])
+	if core.GetValue(p["key2"].Value) != 42 {
+		t.Errorf("param[key2] = %v, want 42", p["key2"].Value)
 	}
 }
 

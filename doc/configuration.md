@@ -76,18 +76,36 @@ Nodes:
 | `Metadate.description` | string | 可选，描述元数据用途 |
 | `Metadate.data` | map | 初始元数据键值对，支持引用 `Param` 的模板渲染 |
 
-### 示例
+### FieldItem 结构
 
+Metadate.data 中的每个字段支持两种格式：
+
+1. **简单格式**（推荐用于 AI 生成配置）：
 ```yaml
 Metadate:
   type: in-config
   data:
-    # 引用 Param 中的值
-    K8sNamespace: "{{ Param.namespace }}"
-    FullImage: "{{ Param.registry }}/myapp:{{ Param.env }}"
-    # 静态值
-    StaticValue: "this-is-static"
+    # 字段: 值  # 描述
+    K8sNamespace: "{{ Param.namespace }}"  # Kubernetes 命名空间
+    FullImage: "{{ Param.registry }}/myapp:{{ Param.env }}"  # 完整镜像地址
 ```
+
+2. **完整格式**（显式指定所有字段）：
+```yaml
+Metadate:
+  type: in-config
+  data:
+    K8sNamespace:
+      value: "{{ Param.namespace }}"
+      description: "Kubernetes 命名空间"
+      srcNode: ""  # 空表示来自配置，节点产生时会填充节点 ID
+```
+
+### 说明
+
+- **value**: 字段的实际值，支持模板渲染
+- **description**: 字段描述，用于 AI 生成配置时的参考
+- **srcNode**: 来源节点 ID，初始化时为空，节点通过 extract 产生的数据会自动填充
 
 > 更多详情参见 [元数据存储](metadata.md)
 
@@ -124,19 +142,42 @@ AI:
 |------|------|------|
 | `Param` | map | 全局变量池，支持模板渲染和自引用 |
 
+### FieldItem 结构
+
+Param 中的每个字段支持两种格式：
+
+1. **简单格式**（推荐用于 AI 生成配置）：
+```yaml
+Param:
+  env: "production"  # 部署环境
+  appName: "myapp"   # 应用名称
+  # 自引用
+  namespace: "{{ Param.appName }}-{{ Param.env }}"         # 渲染为: myapp-production
+```
+
+2. **完整格式**（显式指定所有字段）：
+```yaml
+Param:
+  env:
+    value: "production"
+    description: "部署环境"
+    srcNode: ""
+```
+
 ### 特性
 
 - **基本引用**：通过 `{{ Param.xxx }}` 语法引用其他参数
 - **自引用**：一个 Param 可以引用另一个 Param 的值
 - **嵌套结构**：支持 map 和 list 嵌套
 - **未定义变量**：引用未定义变量时，模板表达式保持原样不变
+- **Description**：字段后的注释会被提取为 description，用于 AI 生成配置
 
 ### 示例
 
 ```yaml
 Param:
-  env: "production"
-  appName: "myapp"
+  env: "production"  # 部署环境: dev, staging, 或 production
+  appName: "myapp"   # 应用名称
   # 自引用
   namespace: "{{ Param.appName }}-{{ Param.env }}"         # 渲染为: myapp-production
   registry: "myregistry.com"
