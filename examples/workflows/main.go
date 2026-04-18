@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/LerkoX/flowx"
+	"github.com/LerkoX/flowx/core"
 	"github.com/LerkoX/flowx/dag"
 	"github.com/LerkoX/flowx/logger"
 )
@@ -33,6 +35,29 @@ func getRunningNodes(p dag.Pipeline) []string {
 		}
 	}
 	return runningNodes
+}
+
+// handleInputRequest 处理输入请求
+func (l *PipelineListener) handleInputRequest(nodeID string, node dag.Node, inputRequest *core.InputRequestInfo) {
+	// 显示提示信息
+	fmt.Printf("\n[输入请求] %s\n", nodeID)
+	fmt.Printf("  步骤: %s\n", inputRequest.StepName)
+	fmt.Printf("  提示: %s\n", inputRequest.Prompt)
+	fmt.Printf("  类型: %s\n", inputRequest.Type)
+
+	status := node.GetRuntimeStatus()
+	if status != nil && status.InputChan != nil {
+		// 读取用户输入
+		fmt.Printf("\n请输入: ")
+		scanner := bufio.NewScanner(os.Stdin)
+		if scanner.Scan() {
+			input := scanner.Text() + "\n"
+			fmt.Printf("\n")
+
+			// 将输入写入节点的 InputChan
+			status.InputChan <- []byte(input)
+		}
+	}
 }
 
 func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
@@ -123,6 +148,16 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 				}
 			}
 		}
+	case dag.PipelinePaused:
+		// 处理输入请求
+		graph := p.GetGraph()
+		nodes := graph.Nodes()
+		for nodeID, node := range nodes {
+			status := node.GetRuntimeStatus()
+			if status != nil && status.Status == "PAUSED" && status.InputRequest != nil {
+				l.handleInputRequest(nodeID, node, status.InputRequest)
+			}
+		}
 	default:
 		fmt.Printf("[事件] 未知事件: %s\n", event)
 	}
@@ -136,6 +171,7 @@ func (l *PipelineListener) Events() []dag.Event {
 		dag.PipelineExecutorPrepare,
 		dag.PipelineNodeStart,
 		dag.PipelineNodeFinish,
+		dag.PipelinePaused,
 	}
 }
 
@@ -148,7 +184,7 @@ func runPipeline(configPath string) error {
 	// 创建上下文
 	ctx := context.Background()
 
-	// 创建控制台日志推送器
+	// 创建控制台日志日志推送器
 	consolePusher := logger.NewConsolePusher()
 
 	// 创建 Runtime
@@ -176,14 +212,17 @@ func runPipeline(configPath string) error {
 	fmt.Printf("Pipeline ID: %s\n", pipelineID)
 	fmt.Println("----------------------------------------")
 
-	// 运行流水线
-	pipeline, err := runtime.RunSync(ctx, pipelineID, configYAML, listener)
+	// 运行流水线 (异步)
+	pipeline, err := runtime.RunAsync(ctx, pipelineID, configYAML, listener)
 	if err != nil {
-		return fmt.Errorf("流水线执行失败: %w", err)
+		return fmt.Errorf("流水线启动失败: %w", err)
 	}
 
+	// 等待流水线完成
+	<-pipeline.Done()
+
 	fmt.Println("----------------------------------------")
-	fmt.Println("流水线执行成功!")
+	fmt.Println("流水线执行完成!")
 	fmt.Printf("Pipeline ID: %s\n", pipeline.Id())
 	fmt.Printf("最终状态: %s\n", pipeline.Status())
 

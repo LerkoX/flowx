@@ -5,6 +5,7 @@ import (
 
 	"github.com/LerkoX/flowx/core"
 	"github.com/LerkoX/flowx/executor"
+	"github.com/LerkoX/flowx/logger"
 	"github.com/LerkoX/flowx/metadata"
 	"github.com/LerkoX/flowx/template"
 )
@@ -105,6 +106,8 @@ type Pipeline interface {
 	SetTemplateEngine(engine template.TemplateEngine)
 	//GetTemplateEngine 获取模板引擎
 	GetTemplateEngine() template.TemplateEngine
+	//SetPusher 设置日志推送器
+	SetPusher(pusher logger.Pusher)
 	//Pause 暂停流水线，等待当前层执行完成后暂停
 	Pause() error
 	//Resume 恢复暂停的流水线
