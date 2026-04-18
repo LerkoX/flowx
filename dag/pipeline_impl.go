@@ -1341,8 +1341,8 @@ func (p *PipelineImpl) handleInputRequest(node Node, event *executor.InputReques
 	}
 	node.SetRuntimeStatus(runtimeStatus)
 
-	// 触发状态更新事件（如果有事件监听器）
-	// 注意：这里不阻塞，外部程序需要通过轮询或事件监听来检测状态变化
+	// 触发暂停事件，通知监听器处理输入请求
+	p.NotifyEvent(PipelinePaused)
 }
 
 // resultHandler 处理结果的辅助结构
