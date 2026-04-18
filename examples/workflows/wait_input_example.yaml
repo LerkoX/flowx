@@ -5,6 +5,13 @@ Description: "交互式输入示例 - 展示程序如何通过输出请求用户
 Param:
   defaultName: "Guest"
 
+Executors:
+  local:
+    type: local
+    config:
+      shell: bash
+      workdir: /tmp
+
 Graph: |
   stateDiagram-v2
     [*] --> InputStep
@@ -29,7 +36,7 @@ Nodes:
           echo 'type: confirm'
           echo '```'
           read confirm
-          if [ "$confirm" = "yes" ]; then
+          if [ $confirm" = "yes" ]; then
             echo "继续执行..."
           else
             echo "用户取消"

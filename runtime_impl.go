@@ -304,6 +304,8 @@ func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, li
 	// 创建流水线
 	pipeline := dag.NewPipeline(ctx)
 	pipeline.SetTemplateEngine(templateEngine)
+	pipeline.SetPusher(r.pusher)
+	pipeline.SetPusher(r.pusher)
 
 	// 设置监听器
 	if listener != nil {
@@ -385,6 +387,8 @@ func (r *RuntimeImpl) RunSync(ctx context.Context, id string, config string, lis
 	// 创建流水线
 	pipeline := dag.NewPipeline(ctx)
 	pipeline.SetTemplateEngine(r.GetTemplateEngine())
+	pipeline.SetPusher(r.pusher)
+	pipeline.SetPusher(r.pusher)
 
 	// 设置监听器
 	if listener != nil {

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import requests
 import json
+import yaml
 import sys
 import os
 from datetime import datetime
@@ -103,7 +104,7 @@ try:
         max_t = max_temps[i] if i < len(max_temps) else "-"
         min_t = min_temps[i] if i < len(min_temps) else "-"
         feels_max = max_feels[i] if i < len(max_feels) else "-"
-        feels_min = min_feels[i] if i < len(min_feels) else "-"
+        feels_min = min_feels[i]if i < len(min_feels) else "-"
 
         forecast = {
             "date": date,
@@ -121,9 +122,8 @@ try:
         print(f"  {date} ({weekday}): {min_t}~{max_t}°C, {forecast['weather']}, 降水概率 {forecast['chanceofrain']}%")
 
     print()
-    print('```pipelinex-json')
-
-    # 输出 JSON 数据供后续节点使用
+    # 输出完整 YAML 数据供下一节点通过 metadata 引用
+    print('```flowx-yaml')
     output = {
         "city": city_name,
         "temp": str(current.get('temperature_2m', '-')),
@@ -136,8 +136,7 @@ try:
         "updateTime": datetime.now().strftime("%H:%M"),
         "forecasts": forecasts
     }
-
-    print(json.dumps(output, ensure_ascii=False))
+    print(yaml.dump(output, allow_unicode=True, default_flow_style=False))
     print('```')
 
 except Exception as e:
