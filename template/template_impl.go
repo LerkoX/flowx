@@ -1,6 +1,7 @@
 package template
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,54 @@ import (
 
 // 预检查Pongo2TemplateEngine是否实现了TemplateEngine接口
 var _ TemplateEngine = (*Pongo2TemplateEngine)(nil)
+
+// 注册自定义过滤器
+func init() {
+	pongo2.RegisterFilter("tojson", filterToJSON)
+}
+
+// filterToJSON 将值转换为 JSON 字符串
+func filterToJSON(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+	var result string
+
+	switch v := in.Interface().(type) {
+	case string:
+		// 字符串类型，直接返回
+		result = v
+	case []interface{}:
+		// 切片/数组，转换为 JSON 数组
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return nil, &pongo2.Error{
+				Sender:    "filter:tojson",
+				OrigError: err,
+			}
+		}
+		result = string(jsonBytes)
+	case map[string]interface{}:
+		// Map，转换为 JSON 对象
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return nil, &pongo2.Error{
+				Sender:    "filter:tojson",
+				OrigError: err,
+			}
+		}
+		result = string(jsonBytes)
+	default:
+		// 其他类型，先转换为 interface{} 再 Marshal
+		jsonBytes, err := json.Marshal(in.Interface())
+		if err != nil {
+			return nil, &pongo2.Error{
+				Sender:    "filter:tojson",
+				OrigError: err,
+			}
+		}
+		result = string(jsonBytes)
+	}
+
+	return pongo2.AsSafeValue(result), nil
+}
 
 // Pongo2TemplateEngine 使用pongo2作为模板引擎的实现
 type Pongo2TemplateEngine struct{}
@@ -76,7 +125,7 @@ func (e *Pongo2TemplateEngine) EvaluateString(expression string, ctx map[string]
 func (e *Pongo2TemplateEngine) Validate(expression string) error {
 	_, err := pongo2.FromString(expression)
 	if err != nil {
-		return fmt.Errorf("invalid expression syntax: %w", err)
+		return fmt.Errorf("invalid expression syntax: %w", expression, err)
 	}
 	return nil
 }

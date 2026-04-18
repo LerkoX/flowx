@@ -244,3 +244,33 @@ Before completing any code modification task, verify:
 - Generate docs: `npx gitnexus wiki`
 
 <!-- gitnexus:end -->
+
+## Issue Archive
+
+### 2026-04-16: Pipeline 输出未通过 Pusher 推送
+
+**问题描述**：
+- `wait_input_example.yaml` 工作流执行成功，但脚本中的 `echo` 语句输出没有通过日志推送器（logger.Pusher）推送
+- 输出通过 `fmt.Print` 直接打印到标准输出
+- 用户反馈："How could it output here, isn't there a log adapter that can output?"
+
+**根本原因**：
+- `RuntimeImpl` 虽然有 `pusher` 字段，但从未实际使用
+- `PipelineImpl` 没有 `pusher` 字段，无法在内部推送日志
+- `resultChan` 已包含实时输出，但 `handleResult` 方法只调用 `fmt.Print`
+
+**解决方案**：
+1. 给 `PipelineImpl` 添加 `pusher logger.Pusher` 字段
+2. 在 `Pipeline` 接口中添加 `SetPusher` 方法
+3. `RuntimeImpl` 创建 Pipeline 时传递 `pusher`
+4. `handleResult` 中删除 `fmt.Print`，改用 `pusher.Push` 推送日志
+
+**影响范围**：
+- `dag/pipeline.go`：接口添加
+- `dag/p`ipeline_impl.go`：结构体和实现修改
+- `runtime_impl.go`：创建 Pipeline 时传递 pusher
+- `test/pipeline_output_test.go`：新增测试用例
+
+**验证**：
+- 单元测试：`TestOutputPusher` 验证输出通过 pusher 推送
+- 集成测试：`wait_input_example.yaml` 验证 echo 语句正确显示

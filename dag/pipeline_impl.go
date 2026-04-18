@@ -9,6 +9,7 @@ import (
 
 	"github.com/LerkoX/flowx/core"
 	"github.com/LerkoX/flowx/executor"
+	"github.com/LerkoX/flowx/logger"
 	"github.com/LerkoX/flowx/metadata"
 	"github.com/LerkoX/flowx/template"
 	"github.com/thoas/go-funk"
@@ -576,6 +577,7 @@ type PipelineImpl struct {
 	resumeChan       chan struct{}           // 恢复信号通道
 	currentLevel     int                    // 记录当前执行到的BFS层级（用于暂停恢复）
 	maxLoopIter      int                    // 循环图最大迭代次数
+	pusher           logger.Pusher           // 日志推送器
 }
 
 func NewPipeline(ctx context.Context) Pipeline {
@@ -1298,9 +1300,15 @@ func (p *PipelineImpl) handleResult(ctx context.Context, node Node, _ executor.E
 		}
 		handler.count++
 	case []byte:
-		// 实时输出
+		// 实时输出 - 通过 pusher 推送
 		output := string(v)
-		// fmt.Print(output) - removed to avoid concurrent output issues
+		if p.pusher != nil {
+			p.pusher.Push(ctx, logger.Entry{
+				Level:   logger.LevelInfo,
+				Message: output,
+				})
+			}
+
 		handler.output = output
 	case *executor.InputRequestEvent:
 		// 程序请求用户输入
@@ -1510,6 +1518,13 @@ func (p *PipelineImpl) GetTemplateEngine() template.TemplateEngine {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.templateEngine
+}
+
+// SetPusher 设置日志推送器
+func (p *PipelineImpl) SetPusher(pusher logger.Pusher) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.pusher = pusher
 }
 
 // buildRenderContext 构建渲染上下文，包含 Param 和动态 Metadata
