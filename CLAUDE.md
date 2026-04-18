@@ -35,6 +35,16 @@ go fmt ./...            # Format all Go code
 go vet ./...            # Run static analysis
 ```
 
+### Code Standards
+
+**文件行数限制**：
+- **每个 Go 文件不能超过 1000 行**
+- 如果文件接近或超过 1000 行，应按功能拆分为多个文件
+- 拆分原则：
+  - 按功能分组（如：图结构、执行流程、配置解析）
+  - 保持包名一致
+  - 接口定义单独存放
+
 ## Architecture Overview
 
 ### Core Components
