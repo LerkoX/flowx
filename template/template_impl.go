@@ -125,7 +125,7 @@ func (e *Pongo2TemplateEngine) EvaluateString(expression string, ctx map[string]
 func (e *Pongo2TemplateEngine) Validate(expression string) error {
 	_, err := pongo2.FromString(expression)
 	if err != nil {
-		return fmt.Errorf("invalid expression syntax: %w", expression, err)
+		return fmt.Errorf("invalid expression syntax: %w", err)
 	}
 	return nil
 }
