@@ -13,9 +13,9 @@ Param:
   notifyTime: "08:00"
   weatherApi: "wttr.in"
   # 飞书配置
-  feishuAppId: ""
-  feishuAppSecret: ""
-  feishuChatId: ""
+  feishuAppId: "cli_a94d1d3dcd215cd5"
+  feishuAppSecret: "LmABiaJTKlPveFAK9Fx6PfUz1hh6UF4O"
+  feishuChatId: "oc_aa891a7fbbf0d9b303ed3166fe15de72"
   # 脚本目录 (绝对路径)
   scriptDir: "/workspace/github/flowx/examples/workflows/scripts"
 
@@ -43,7 +43,7 @@ Nodes:
         run: |
           export WEATHER_CITY="{{ Param.city }}"
           export WEATHER_API="{{ Param.weatherApi }}"
-          python3 {{ Param.scriptDir }}/get_weather.py > /tmp/weather_data.json
+          python3 {{ Param.scriptDir }}/get_weather.py
     extract:
       type: codec-block
 
@@ -58,5 +58,13 @@ Nodes:
           export FEISHU_APP_ID="{{ Param.feishuAppId }}"
           export FEISHU_APP_SECRET="{{ Param.feishuAppSecret }}"
           export FEISHU_CHAT_ID="{{ Param.feishuChatId }}"
-          export WEATHER_DATA_FILE="/tmp/weather_data.json"
+          export WEATHER_CITY="{{ GetWeather.city }}"
+          export WEATHER_TEMP="{{ GetWeather.temp }}"
+          export WEATHER_FEELS_LIKE="{{ GetWeather.feelsLike }}"
+          export WEATHER_WEATHER="{{ GetWeather.weather }}"
+          export WEATHER_HUMIDITY="{{ GetWeather.humidity }}"
+          export WEATHER_WINDSPEED="{{ GetWeather.windspeed }}"
+          export WEATHER_UPDATE_TIME="{{ GetWeather.updateTime }}"
+          # 将 forecasts 数组写入临时文件供脚本读取
+          echo '{{ GetWeather.forecasts }}' > /tmp/weather_forecasts.json
           python3 {{ Param.scriptDir }}/send_feishu.py

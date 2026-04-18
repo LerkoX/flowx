@@ -9,7 +9,16 @@ from datetime import datetime
 APP_ID = os.getenv("FEISHU_APP_ID", "{{ Param.feishuAppId }}")
 APP_SECRET = os.getenv("FEISHU_APP_SECRET", "{{ Param.feishuAppSecret }}")
 CHAT_ID = os.getenv("FEISHU_CHAT_ID", "{{ Param.feishuChatId }}")
-WEATHER_DATA_FILE = os.getenv("WEATHER_DATA_FILE", "/tmp/weather_data.json")
+
+# 从环境变量获取天气数据（来自上一节点 GetWeather 的 metadata）
+WEATHER_CITY = os.getenv("WEATHER_CITY")
+WEATHER_TEMP = os.getenv("WEATHER_TEMP")
+WEATHER_FEELS_LIKE = os.getenv("WEATHER_FEELS_LIKE")
+WEATHER_WEATHER = os.getenv("WEATHER_WEATHER")
+WEATHER_HUMIDITY = os.getenv("WEATHER_HUMIDITY")
+WEATHER_WINDSPEED = os.getenv("WEATHER_WINDSPEED")
+WEATHER_UPDATE_TIME = os.getenv("WEATHER_UPDATE_TIME")
+WEATHER_FORECASTS = os.getenv("WEATHER_FORECASTS")
 
 def get_access_token(app_id, app_secret):
     """获取 tenant_access_token"""
@@ -119,26 +128,26 @@ def main():
         print("警告: 飞书群聊ID 未配置")
         sys.exit(1)
 
-    # 从文件读取天气数据
+    # 从环境变量解析天气数据（来自上一节点 GetWeather 的 metadata）
     try:
-        with open(WEATHER_DATA_FILE, 'r', encoding='utf-8') as f:
-            content = f.read()
-            # 提取 pipelinex-json 代码块中的 JSON
-            import re
-            match = re.search(r'```pipelinex-json\s*\n(.*?)\n```', content, re.DOTALL)
-            if match:
-                json_str = match.group(1)
-                weather_data = json.loads(json_str)
-            else:
-                # 如果没有代码块包装，直接解析
-                weather_data = json.loads(content)
+        # 解析 forecasts JSON 字符串
+        forecasts_data = json.loads(WEATHER_FORECASTS) if WEATHER_FORECASTS else []
 
+        weather_data = {
+            "city": WEATHER_CITY,
+            "temp": WEATHER_TEMP,
+            "feelsLike": WEATHER_FEELS_LIKE,
+            "weather": WEATHER_WEATHER,
+            "humidity": WEATHER_HUMIDITY,
+            "windspeed": WEATHER_WINDSPEED,
+            "updateTime": WEATHER_UPDATE_TIME,
+            "forecasts": forecasts_data
+        }
         print(f"天气数据: 城市={weather_data.get('city', '未知')}, 温度={weather_data.get('temp', '-')}°C")
-        forecasts = weather_data.get("forecasts", [])
-        print(f"未来预报天数: {len(forecasts)}")
+        print(f"未来预报天数: {len(forecasts_data)}")
         print()
     except Exception as e:
-        print(f"读取天气数据失败: {e}")
+        print(f"解析天气数据失败: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

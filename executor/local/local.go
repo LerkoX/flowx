@@ -108,7 +108,7 @@ func (l *LocalExecutor) Transfer(ctx context.Context, resultChan chan<- any, com
 		// 处理 commandWrapper 类型
 		cmdWrapper, ok := data.(executor.CommandWrapper)
 		if !ok {
-			resultChan <- fmt.Errorf("unsupported data type: %T, expected CommandWrapper", data)
+			resultChan <- fmt.Errorf("unsupported data type: %T, expected: CommandWrapper", data)
 			continue
 		}
 		// 执行命令（携带步骤名称）
@@ -242,17 +242,22 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 		l.streamOutput(stderr, outputCallback, stepName, nil) // stderr 不检测输入请求
 	}()
 
-	// 输入处理：支持两种模式
-	// 1. 外部通过 inputChan 提供输入（预定义输入）
-	// 2. 程序请求输入（通过 InputRequestEvent）
+	// 输入处理：从 inputChan 读取并写入 stdin
 	if inputChan != nil {
 		go func() {
 			for {
 				select {
 				case <-ctx.Done():
+					if stdin != nil {
+						stdin.Close()
+					}
 					return
 				case data, ok := <-inputChan:
 					if !ok {
+						// inputChan 关闭，关闭 stdin
+						if stdin != nil {
+							stdin.Close()
+						}
 						return
 					}
 					if len(data) > 0 {
@@ -261,12 +266,6 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 				}
 			}
 		}()
-	}
-
-	// 关闭stdin，通知命令没有更多输入
-	// 必须在wg.Wait()之前关闭，否则如果命令在等待stdin EOF，会形成死锁
-	if stdin != nil {
-		stdin.Close()
 	}
 
 	// 等待输出读取完成
