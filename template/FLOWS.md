@@ -27,7 +27,7 @@ flowchart TD
     A[EvaluateBool] --> B[提取内部表达式<br/>去除{{和}}]
     B --> C[处理布尔字面量<br/>替换true/false<br/>为字符串]
 
-    C --> D[构造if-else模板<br/>"{% if expr %}true<br/>{% else %}false<br/>{% endif %}"]
+    C --> D[构造if-else模板<br/>if expr true else false endif]
     D --> E[pongo2.FromString<br/>解析模板]
     E --> F{解析成功?}
     F -->|否| G[return false<br/>err]
@@ -36,7 +36,7 @@ flowchart TD
     H --> I{执行成功?}
     I -->|否| J[return false<br/>err]
     I -->|是| K[解析结果<br/>trim + tolower]
-    K --> L{结果 is "true"?}
+    K --> L{结果 is true?}
     L -->|是| M[return true]
     L -->|否| N[return false]
 ```
@@ -47,11 +47,11 @@ flowchart TD
 flowchart TD
     A[EvaluateString] --> B[pongo2.FromString<br/>解析表达式]
     B --> C{解析成功?}
-    C -->|否| D[return ""<br/>err]
+    C -->|否| D[return空字符串<br/>err]
     C -->|是| E[template.Execute<br/>传入ctx执行]
 
     E --> F{执行成功?}
-    F -->|否| G[return ""<br/>err]
+    F -->|否| G[return空字符串<br/>err]
     F -->|是| H[strings.TrimSpace<br/>去除空白]
     H --> I[return result]
 ```
@@ -89,11 +89,11 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph 变量访问
-    A["{{ name }}"]
+    A[双花括号name]
     A --> B[直接访问ctx.name]
-    C["{{ Param.name }}"]
+    C[双花括号Param.name]
     C --> D[访问ctx.Param.name]
-    E["{{ Metadata.key }}"]
+    E[双花括号Metadata.key]
     E --> F[访问ctx.Metadata.key]
     end
 
@@ -111,11 +111,11 @@ flowchart LR
     end
 
     subgraph 循环
-    N["{{ range .items }}"]
+    N[双花括号range .items]
     N --> O[遍历items]
-    P["{{ .name }}"]
+    P[双花括号.name]
     P --> Q[访问当前元素]
-    R["{{ end }}"]
+    R[双花括号end]
     end
 ```
 

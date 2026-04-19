@@ -60,7 +60,7 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph 输出示例
-    A["[2024-01-19 10:30:45] [info] [pipeline-123] [node-1] [step-1] 正在执行命令"]
+    A[日志格式示例<br/>timestamp level pipeline node step message]
     end
 
     A --> B[时间戳]
