@@ -125,8 +125,8 @@ flowchart LR
 flowchart TD
     A[tojson filter] --> B{输入类型}
     B -->|string| C[直接返回]
-    B -->|[]interface| D[json.Marshal]
-    B -->|map[string]interface| E[json.Marshal]
+    B -->|interface数组| D[json.Marshal]
+    B -->|mapInterface| E[json.Marshal]
     B -->|其他| F[json.Marshal<br/>interface]
 
     D --> G[返回JSON字符串]

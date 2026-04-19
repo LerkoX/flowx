@@ -20,7 +20,7 @@ flowchart TD
     K --> L[Id: string]
     K --> M[Name: string]
     K --> N[GetExecutor: string]
-    K --> O[GetSteps: []core.Step]
+    K --> O[GetSteps: core.Step列表]
     K --> P[GetRuntimeStatus: *NodeRuntimeStatus]
     K --> Q[SetRuntimeStatus]
     K --> R[EnsureIds]
@@ -212,7 +212,7 @@ flowchart TD
     H --> I{result类型}
     I -->|error| J[记录错误]
     I -->|StepResult| K[更新步骤状态]
-    I -->|[]byte| L[实时输出<br/>pusher.Push]
+    I -->|byte数组| L[实时输出<br/>pusher.Push]
     I -->|InputRequestEvent| M[handleInputRequest]
     I -->|InputReadyEvent| N[忽略]
 
