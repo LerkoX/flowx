@@ -1,56 +1,231 @@
 # Core 模块流程图
 
-## 配置结构流程
+## PipelineConfig 配置结构
 
 ```mermaid
 flowchart TD
-    A[PipelineConfig] --> B[Name: 流水线名称]
-    A --> C[Version: 版本号]
-    A --> D[Metadate: 元数据配置]
-    A --> E[AI: AI配置]
-    A --> F[Param: 参数配置]
-    A --> G[Executors: 执行器配置]
-    A --> H[Logging: 日志配置]
-    A --> I[Graph: 图结构定义]
-    A --> J[Nodes: 节点配置映射]
+    A[PipelineConfig] --> B[Version<br/>版本号]
+    A --> C[Name<br/>流水线名称]
+    A --> D[Metadate<br/>MetadataConfig<br/>元数据配置]
+    A --> E[AI<br/>AIConfig<br/>AI配置]
+    A --> F[Param<br/>map[string]interface{}<br/>参数配置]
+    A --> G[Executors<br/>map[string]ExecutorConfig<br/>执行器配置]
+    A --> H[Logging<br/>LoggingConfig<br/>日志配置]
+    A --> I[Graph<br/>string<br/>Mermaid图定义]
+    A --> J[Nodes<br/>map[string]NodeConfig<br/>节点配置]
+    A --> K[MaxLoopIterations<br/>int<br/>循环图最大迭代次数]
 
-    J --> K[NodeConfig]
-    K --> L[Id: 节点ID]
-    K --> M[Name: 节点名称]
-    K --> N[Executor: 执行器名称]
-    K --> O[Image: 镜像]
-    K --> P[Steps: 步骤列表]
-    K --> Q[Config: 节点配置]
-    K --> R[Extract: 输出提取配置]
+    J --> L[NodeConfig]
+    L --> M[Id<br/>节点ID]
+    L --> N[Name<br/>节点名称]
+    L --> O[Description<br/>业务功能描述]
+    L --> P[Executor<br/>执行器名称]
+    L --> Q[Image<br/>镜像名称]
+    L --> R[Steps<br/>[]Step<br/>步骤列表]
+    L --> S[Config<br/>map[string]interface{}<br/>节点配置]
+    L --> T[Extract<br/>*ExtractConfig<br/>输出提取配置]
+    L --> U[Runtime<br/>*NodeRuntimeStatus<br/>运行时状态]
 
-    P --> S[Step]
-    S --> T[Id: 步骤ID]
-    S --> U[Name: 步骤名称]
-    S --> V[Run: 执行命令]
+    R --> V[Step]
+    V --> W[Id<br/>步骤ID]
+    V --> X[Name<br/>步骤名称]
+    V --> Y[Description<br/>步骤描述]
+    V --> Z[Run<br/>执行命令]
 
-    R --> W[ExtractConfig]
-    W --> X[Type: 提取类型]
-    W --> Y[Patterns: 正则模式]
-    W --> Z[MaxOutputSize: 输出大小限制]
+    T --> AA[ExtractConfig]
+    AA --> AB[Type<br/>codec-block/regex]
+    AA --> AC[Patterns<br/>map[string]string<br/>正则表达式]
+    AA --> AD[MaxOutputSize<br/>字节数<br/>默认1MB]
 ```
 
-## 运行时状态流程
+## NodeConfig 节点配置
 
 ```mermaid
 flowchart LR
-    subgraph 运行时状态
-    A[NodeRuntimeStatus] --> B[Status: 状态]
-    B --> |PENDING| C[等待执行]
-    B --> |RUNNING| D[执行中]
-    B --> |SUCCESS| E[执行成功]
-    B --> |FAILED| F[执行失败]
-    B --> |CANCELLED| G[已取消]
+    subgraph 节点配置
+    A[NodeConfig] --> B[基础信息]
+    A --> C[执行配置]
+    A --> D[步骤定义]
+    A --> E[输出提取]
     end
 
-    A --> H[Steps: 步骤状态列表]
-    H --> I[StepRuntimeStatus]
-    I --> J[StartTime: 开始时间]
-    I --> K[EndTime: 结束时间]
-    I --> L[Output: 输出摘要]
-    I --> M[Error: 错误信息]
+    B --> B1[Id: 节点ID]
+    B --> B2[Name: 显示名称]
+    B --> B3[Description: 功能描述]
+
+    C --> C1[Executor: 执行器类型]
+    C --> C2[Image: 容器镜像]
+
+    D --> D1[Steps[0]: Step<br/>id/name/run]
+    D --> D2[Steps[1]: Step<br/>id/name/run]
+    D --> D3[Steps[N]: Step<br/>id/name/run]
+
+    E --> E1[Extract.Type: 提取类型]
+    E --> E2[Extract.Patterns: 键→正则]
+```
+
+## 运行时状态结构
+
+```mermaid
+flowchart TD
+    A[NodeRuntimeStatus] --> B[Id<br/>节点UUID]
+    A --> C[Status<br/>PENDING/RUNNING/<br/>SUCCESS/FAILED/<br/>CANCELLED]
+    A --> D[StartTime<br/>RFC3339格式]
+    A --> E[EndTime<br/>RFC3339格式]
+    A --> F[Steps<br/>[]StepRuntimeStatus]
+    A --> G[Executor<br/>*ExecutorRuntimeInfo]
+    A --> H[Custom<br/>map[string]interface{}]
+    A --> I[InputChan<br/>chan []byte<br/>交互式输入]
+    A --> J[InputRequest<br/>*InputRequestInfo<br/>当前输入请求]
+
+    F --> K[StepRuntimeStatus]
+    K --> L[Id<br/>步骤UUID]
+    K --> M[Name<br/>步骤名称]
+    K --> N[Status<br/>状态]
+    K --> O[StartTime<br/>开始时间]
+    K --> P[EndTime<br/>结束时间]
+    K --> Q[Error<br/>错误信息]
+    K --> R[Output<br/>输出摘要]
+
+    G --> S[ExecutorRuntimeInfo]
+    S --> T[Type<br/>docker/k8s/local/ssh]
+    S --> U[InstanceId<br/>容器/Pod ID]
+    S --> V[Status<br/>PREPARED/RUNNING/<br/>DESTROYED]
+    S --> W[Info<br/>运行时信息]
+
+    J --> X[InputRequestInfo]
+    X --> Y[StepName<br/>请求输入的步骤]
+    X --> Z[Prompt<br/>提示信息]
+    X --> AA[Type<br/>text/password/confirm]
+```
+
+## 状态流转
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: 初始化
+
+    PENDING --> RUNNING: Pipeline.Run
+
+    RUNNING --> PAUSED: Pause<br/>输入请求
+
+    PAUSED --> RUNNING: Resume
+
+    RUNNING --> SUCCESS: 所有节点完成
+    RUNNING --> FAILED: 节点失败
+    RUNNING --> CANCELLED: Cancel
+
+    PAUSED --> CANCELLED: Cancel
+
+    SUCCESS --> STOPPED: 清理完成
+    FAILED --> STOPPED: 清理完成
+    CANCELLED --> STOPPED: 清理完成
+
+    STOPPED --> [*]
+```
+
+## 执行器配置
+
+```mermaid
+flowchart TD
+    A[Executors<br/>map[string]ExecutorConfig]
+
+    A --> B["exec1: ExecutorConfig"]
+    A --> C["exec2: ExecutorConfig"]
+
+    B --> D[Type: "docker"]
+    B --> E[Description: "Docker执行器"]
+    B --> F[Config<br/>map[string]any]
+    F --> G[image: "ubuntu:20.04"]
+    F --> H[network: "bridge"]
+
+    C --> I[Type: "local"]
+    C --> J[Description: "本地执行器"]
+    C --> K[Config<br/>map[string]any]
+    K --> L[shell: "/bin/bash"]
+    K --> M[timeout: "10m"]
+```
+
+## 元数据配置
+
+```mermaid
+flowchart TD
+    A[MetadataConfig] --> B[Type<br/>metadata类型<br/>http/redis/in-config]
+    A --> C[Description<br/>用途描述]
+    A --> D[Data<br/>map[string]any<br/>元数据键值对]
+
+    subgraph HTTP Metadata
+    B -->|"http"| E[HTTPMetadataConfig]
+    E --> F[URL<br/>元数据服务地址]
+    E --> G[Method<br/>GET/POST/PUT]
+    E --> H[Headers<br/>请求头]
+    E --> I[Timeout<br/>超时时间]
+    end
+
+    subgraph Redis Metadata
+    B -->|"redis"| J[RedisMetadataConfig]
+    J --> K[Host<br/>Redis地址]
+    J --> L[Port<br/>Redis端口]
+    J --> M[DB<br/>数据库编号]
+    J --> N[Username<br/>用户名]
+    J --> O[Password<br/>密码]
+    end
+```
+
+## AI配置
+
+```mermaid
+flowchart TD
+    A[AIConfig] --> B[Intent<br/>核心意图描述]
+    A --> C[Constraints<br/>[]string<br/>约束列表]
+    A --> D[Template<br/>string<br/>模板标识]
+    A --> E[GeneratedAt<br/>生成时间]
+    A --> F[Version<br/>版本号]
+```
+
+## 日志配置
+
+```mermaid
+flowchart TD
+    A[LoggingConfig] --> B[Description<br/>用途描述]
+    A --> C[Endpoint<br/>日志服务端点]
+    A --> D[Headers<br/>map[string]string<br/>请求头]
+    A --> E[Timeout<br/>超时时间]
+    A --> F[Retry<br/>重试次数]
+```
+
+## Step 步骤结构
+
+```mermaid
+flowchart LR
+    A[Step] --> B[Id<br/>UUID<br/>无连字符]
+    A --> C[Name<br/>步骤名称]
+    A --> D[Description<br/>职责描述]
+    A --> E[Run<br/>执行命令<br/>支持模板]
+
+    subgraph 命令示例
+    E --> F["echo {{.Param.name}}"]
+    E --> G["docker build -t {{.Param.image}}"]
+    E --> H["kubectl apply -f {{.Metadata.deploy}}"]
+    end
+```
+
+## ExtractConfig 输出提取
+
+```mermaid
+flowchart TD
+    A[ExtractConfig] --> B[Type<br/>提取类型]
+    B --> |"codec-block"| C[默认类型<br/>解析```code```块]
+    B --> |"regex"| D[正则表达式提取]
+
+    A --> E[Patterns<br/>map[string]string<br/>key: 结果键名<br/>value: 正则表达式]
+
+    E --> F["result": "(?s)(.+?)<br/>必须包含捕获组"]
+
+    A --> G[MaxOutputSize<br/>输出大小限制<br/>0=无限制<br/>默认1MB]
+
+    subgraph 提取结果
+    H[extractedData] --> I["result": "提取的内容"]
+    I --> J[存储到Metadata<br/>NodeID.key格式]
+    end
 ```

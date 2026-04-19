@@ -1,47 +1,86 @@
 # Metadata 模块流程图
 
-## 元数据存储流程
+## MetadataStore 接口
 
 ```mermaid
 flowchart TD
-    A[MetadataStore Interface] --> B[Get: 获取值]
-    A --> C[Set: 设置值]
-    A --> D[Delete: 删除值]
-    A --> E[Close: 关闭连接]
-
-    B --> F[key: 元数据键]
-    F --> G[返回值或错误]
-
-    C --> H[key: 元数据键]
-    C --> I[value: 元数据值]
-    H --> J[成功或错误]
+    A[MetadataStore] --> B[Get<br/>ctx, key → value<br/>获取元数据]
+    A --> C[Set<br/>ctx, key, value<br/>设置元数据]
+    A --> D[Delete<br/>ctx, key<br/>删除元数据]
+    A --> E[Close<br/>关闭连接]
 ```
 
-## 元数据工厂流程
+## MetadataStoreFactory 工厂
 
 ```mermaid
 flowchart TD
-    A[MetadataStoreFactory] --> B[Create: 创建存储实例]
-    B --> C[MetadataConfig]
-    
-    C --> D{配置类型}
-    D -->|http| E[HTTP元数据存储]
-    D -->|redis| F[Redis元数据存储]
-    D -->|in-config| G[内存元数据存储]
+    A[MetadataStoreFactory] --> B[Create<br/>config → MetadataStore]
+
+    B --> C{MetadataConfig.Type}
+    C -->|"http"| D[创建HTTP Store]
+    C -->|"redis"| E[创建Redis Store]
+    C -->|"in-config"| F[创建InConfig Store]
 ```
 
-## In-Config元数据存储流程
+## InConfigMetadataStore 内存存储
 
 ```mermaid
 flowchart TD
-    A[InConfigMetadataStore] --> B[Get]
-    B --> C{查找键]
-    C -->|找到| D[返回值]
-    C -->|未找到| E[返回错误]
+    subgraph 内部结构
+    A[InConfigMetadataStore] --> B[data<br/>map[string]string<br/>内存存储]
+    end
 
-    A --> F[Set]
-    F --> G[保存到内存map]
+    subgraph Get流程
+    C[Get] --> D{查找key}
+    D -->|找到| E[返回值]
+    D -->|未找到| F[return "", err]
+    end
 
-    A --> H[Delete]
-    H --> I[从内存map删除]
+    subgraph Set流程
+    G[Set] --> H[data[key] = value]
+    H --> I[return nil]
+    end
+
+    subgraph Delete流程
+    J[Delete] --> K{delete data, key}
+    K --> L[return nil]
+    end
+
+    subgraph GetAll
+    M[GetAll] --> N[返回data副本<br/>map[string]string]
+    end
+```
+
+## 元数据访问上下文
+
+```mermaid
+flowchart TD
+    A[渲染上下文] --> B[Metadata<br/>map[string]any]
+    A --> C[Param<br/>map[string]any]
+    A --> D[nodeID.key<br/>平铺访问]
+
+    B --> E[从MetadataStore加载]
+    C --> F[用户传入参数]
+    D --> G[节点提取结果]
+
+    subgraph 访问方式
+    H["{{ Metadata.user }}"]
+    I["{{ Param.name }}"]
+    J["{{ Node1.result }}"]
+    end
+```
+
+## 元数据存储选择
+
+```mermaid
+flowchart TD
+    A[选择存储类型] --> B{MetadataConfig.Type}
+
+    B -->|"无配置或in-config"| C[InConfigMetadataStore]
+    B -->|"redis"| D[RedisMetadataStore]
+    B -->|"http"| E[HTTPMetadataStore]
+
+    C --> F[进程内内存<br/>快速访问]
+    D --> G[分布式Redis<br/>多进程共享]
+    E --> H[远程HTTP API<br/>自定义后端]
 ```
