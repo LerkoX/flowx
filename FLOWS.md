@@ -82,7 +82,7 @@ flowchart TD
 flowchart TD
     A[renderConfig] --> B[转换Param<br/>map string interface<br/>to map string FieldItem]
     B --> C[构建ctx<br/>包含Param值]
-    C --> D[ctx["Param"] = ctx<br/>自引用]
+    C --> D[ctx.Param = ctx<br/>自引用]
 
     D --> E{param非空?}
     E -->|是| F[renderParam<br/>迭代渲染]
