@@ -242,7 +242,7 @@ func (d *DockerExecutor) Transfer(ctx context.Context, resultChan chan<- any, co
 		}
 
 		// 处理 commandWrapper 类型
-		cmdWrapper, ok := data.( executor.CommandWrapper)
+		cmdWrapper, ok := data.(executor.CommandWrapper)
 		if !ok {
 			resultChan <- fmt.Errorf("unsupported data type: %T, expected CommandWrapper", data)
 			continue
