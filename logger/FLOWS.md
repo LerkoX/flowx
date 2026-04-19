@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TD
     A[Pusher] --> B[Push<br/>ctx, Entry<br/>推送单条日志]
-    A --> C[PushBatch<br/>ctx, []Entry<br/>批量推送]
+    A --> C[PushBatch<br/>ctx, Entry数组<br/>批量推送]
     A --> D[Close<br/>关闭连接<br/>刷新缓冲]
 ```
 
