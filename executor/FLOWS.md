@@ -31,7 +31,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[Provider] --> B[executors<br/>map[string]ExecutorConfig]
+    A[Provider] --> B[executors<br/>map string ExecutorConfig]
 
     A --> C[RegisterExecutor]
     C --> D[保存配置到map]
@@ -41,9 +41,11 @@ flowchart TD
     E -->|不存在| F[return nil<br/>err]
     E -->|存在| G{创建执行器}
 
-    G --> H{Type == "local"}
-    G --> I{Type == "docker"}
-    G --> J{Type == "ssh"}
+    G --> H{Type is "local"}
+
+    G --> I{Type is "docker"}
+
+    G --> J{Type is "ssh"}
 
     H --> K[NewLocalExecutor]
     I --> L[NewDockerExecutor]
