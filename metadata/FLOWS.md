@@ -33,7 +33,7 @@ flowchart TD
     subgraph Get流程
     C[Get] --> D{查找key}
     D -->|找到| E[返回值]
-    D -->|未找到| F[return "", err]
+    D -->|未找到| F[return空字符串<br/>err]
     end
 
     subgraph Set流程
@@ -64,9 +64,9 @@ flowchart TD
     D --> G[节点提取结果]
 
     subgraph 访问方式
-    H["{{ Metadata.user }}"]
-    I["{{ Param.name }}"]
-    J["{{ Node1.result }}"]
+    H[双花括号Metadata.user]
+    I[双花括号Param.name]
+    J[双花括号Node1.result]
     end
 ```
 

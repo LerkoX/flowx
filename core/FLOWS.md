@@ -130,20 +130,20 @@ stateDiagram-v2
 flowchart TD
     A[Executors<br/>map string ExecutorConfig]
 
-    A --> B["exec1: ExecutorConfig"]
-    A --> C["exec2: ExecutorConfig"]
+    A --> B[exec1: ExecutorConfig]
+    A --> C[exec2: ExecutorConfig]
 
-    B --> D[Type: "docker"]
-    B --> E[Description: "Docker执行器"]
+    B --> D[Type: docker]
+    B --> E[Description: Docker执行器]
     B --> F[Config<br/>map string any]
-    F --> G[image: "ubuntu:20.04"]
-    F --> H[network: "bridge"]
+    F --> G[image: ubuntu-20.04]
+    F --> H[network: bridge]
 
-    C --> I[Type: "local"]
-    C --> J[Description: "本地执行器"]
+    C --> I[Type: local]
+    C --> J[Description: 本地执行器]
     C --> K[Config<br/>map string any]
-    K --> L[shell: "/bin/bash"]
-    K --> M[timeout: "10m"]
+    K --> L[shell: bin/bash]
+    K --> M[timeout: 10m]
 ```
 
 ## 元数据配置
@@ -204,9 +204,9 @@ flowchart LR
     A --> E[Run<br/>执行命令<br/>支持模板]
 
     subgraph 命令示例
-    E --> F["echo {{.Param.name}}"]
-    E --> G["docker build -t {{.Param.image}}"]
-    E --> H["kubectl apply -f {{.Metadata.deploy}}"]
+    E --> F[echo 命令]
+    E --> G[docker build 命令]
+    E --> H[kubectl apply 命令]
     end
 ```
 
