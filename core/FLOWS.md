@@ -56,9 +56,9 @@ flowchart LR
     C --> C1[Executor: 执行器类型]
     C --> C2[Image: 容器镜像]
 
-    D --> D1[Steps[0]: Step<br/>id/name/run]
-    D --> D2[Steps[1]: Step<br/>id/name/run]
-    D --> D3[Steps[N]: Step<br/>id/name/run]
+    D --> D1[Step0<br/>id/name/run]
+    D --> D2[Step1<br/>id/name/run]
+    D --> D3[StepN<br/>id/name/run]
 
     E --> E1[Extract.Type: 提取类型]
     E --> E2[Extract.Patterns: 键→正则]
