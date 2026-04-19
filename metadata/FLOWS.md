@@ -27,7 +27,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph 内部结构
-    A[InConfigMetadataStore] --> B[data<br/>map[string]string<br/>内存存储]
+    A[InConfigMetadataStore] --> B[data<br/>map string string<br/>内存存储]
     end
 
     subgraph Get流程
@@ -47,7 +47,7 @@ flowchart TD
     end
 
     subgraph GetAll
-    M[GetAll] --> N[返回data副本<br/>map[string]string]
+    M[GetAll] --> N[返回data副本<br/>map string string]
     end
 ```
 
@@ -55,8 +55,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[渲染上下文] --> B[Metadata<br/>map[string]any]
-    A --> C[Param<br/>map[string]any]
+    A[渲染上下文] --> B[Metadata<br/>map string any]
+    A --> C[Param<br/>map string any]
     A --> D[nodeID.key<br/>平铺访问]
 
     B --> E[从MetadataStore加载]

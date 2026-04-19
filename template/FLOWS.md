@@ -36,7 +36,7 @@ flowchart TD
     H --> I{执行成功?}
     I -->|否| J[return false<br/>err]
     I -->|是| K[解析结果<br/>trim + tolower]
-    K --> L{结果 == "true"?}
+    K --> L{结果 is "true"?}
     L -->|是| M[return true]
     L -->|否| N[return false]
 ```
