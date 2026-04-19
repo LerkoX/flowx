@@ -258,7 +258,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[检测到输入请求] --> B[程序输出<br/>{"flowx":"wait-input"}]
+    A[检测到输入请求] --> B[程序输出<br/>flowx-wait-input标记]
     B --> C[解析请求信息]
     C --> D[Prompt<br/>提示信息]
     C --> E[Type<br/>text/password/confirm]
