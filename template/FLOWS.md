@@ -77,10 +77,10 @@ flowchart TD
     A --> F[nodeID.key<br/>节点提取值]
 
     subgraph 上下文示例
-    G[ctx] --> H["name": "flowx"]
-    G --> I["Param": {"name": "flowx"}]
-    G --> J["Metadata": {...}]
-    G --> K["Node1": {"result": "value"}]
+    G[ctx] --> H[name: flowx]
+    G --> I[Param: object]
+    G --> J[Metadata: object]
+    G --> K[Node1: object]
     end
 ```
 
@@ -98,15 +98,15 @@ flowchart LR
     end
 
     subgraph 条件判断
-    G["{{ if eq .Param.env \"prod\" }}"]
+    G[if eq .Param.env prod]
     G --> H[生产环境分支]
-    I["{{ else }}"]
+    I[else]
     I --> J[其他环境分支]
-    K["{{ end }}"]
+    K[end]
     end
 
     subgraph 过滤器
-    L["{{ .value | tojson }}"]
+    L[.value tojson]
     L --> M[转换为JSON字符串]
     end
 
