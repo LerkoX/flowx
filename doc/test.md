@@ -6,15 +6,15 @@
 
 | 指标 | 数量 |
 |------|------|
-| 测试文件数 | 31 |
-| 测试函数数 | 343 |
+| 测试文件数 | 38 |
+| 测试函数数 | 410 |
 | 覆盖率目标 | 80%+ |
 
 ## 核心包测试
 
-### edge_test.go
+### dag/edge_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 9
 **功能概述**: Edge 边结构的创建与条件表达式求值
 
@@ -30,9 +30,9 @@
 | `TestDGAEdge_ID` | 验证边 ID 格式为 `source->target` |
 | `TestDGAEdge_ID_SpecialChars` | 边 ID 处理节点名中的特殊字符 |
 
-### edge_extra_test.go
+### dag/edge_extra_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 4
 **功能概述**: 自定义模板引擎与边缘切换
 
@@ -43,9 +43,9 @@
 | `TestDGAEdge_SetEngine` | 运行时替换模板引擎 |
 | `TestDGAEdge_SetEngine_Overwrites` | 多次调用 SetEngine 只使用最后一次设置的引擎 |
 
-### conditional_edge_test.go
+### dag/conditional_edge_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 5
 **功能概述**: 条件边的遍历行为与路由逻辑
 
@@ -57,9 +57,9 @@
 | `TestEdge_Evaluate` | 边求值：无条件始终 true，条件边根据节点状态求值 |
 | `TestEdge_ID` | 边 ID 格式为 `source->target` |
 
-### eval_context_test.go
+### dag/eval_context_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 16
 **功能概述**: 求值上下文的创建、链式调用与不可变性
 
@@ -82,9 +82,9 @@
 | `TestConvertBoolToString` | 布尔到字符串转换的表驱动测试（多种输入类型） |
 | `TestDGAEvaluationContext_WithPipeline_DoesNotModifyOriginal` | `WithPipeline` 不修改原始上下文 |
 
-### eval_context_extra_test.go
+### dag/eval_context_extra_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 7
 **功能概述**: 迭代计数与字符串查找工具
 
@@ -98,9 +98,9 @@
 | `TestLastIndexOf` | `lastIndexOf` 字符串查找的表驱动测试 |
 | `TestLastIndexOfByte` | `lastIndexOfByte` 单字节查找的表驱动测试 |
 
-### pipeline_test.go
+### dag/pipeline_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 3
 **功能概述**: DAG 遍历算法与基本流水线执行
 
@@ -110,10 +110,10 @@
 | `TestDGA_MultipleStartNodes` | 多个根节点（A、B）都被访问 |
 | `TestPipeline_Run` | 菱形图流水线执行完成无错误 |
 
-### cycle_test.go
+### dag/cycle_test.go
 
-**包名**: `flowx`
-**测试函数数**: 15
+**包名**: `dag`
+**测试函数数**: 13
 **功能概述**: 循环检测与循环图遍历
 
 | 测试函数 | 说明 |
@@ -134,9 +134,9 @@
 | `TestDGAGraph_Traversal_CyclicGraph_ConditionalEdgeError` | 循环图中无效表达式返回错误 |
 | `TestDGAGraph_TraversalSteps_WithEntryNodes` | `TraversalSteps` 使用入口节点 |
 
-### graph_edge_test.go
+### dag/graph_edge_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 11
 **功能概述**: 图的边操作与条件边遍历
 
@@ -157,7 +157,7 @@
 ### graph_dynamic_test.go
 
 **包名**: `flowx`
-**测试函数数**: 16
+**测试函数数**: 10
 **功能概述**: 图动态修改与 UpdateConfig
 
 | 测试函数 | 说明 |
@@ -197,9 +197,9 @@
 | `TestModifyGraph_RollbackOnEdgeError` | 边添加失败时回滚图修改 |
 | `TestModifyGraph_ComplexModification` | 组合操作：删除边 + 添加节点 + 添加边 |
 
-### pipeline_extra_test.go
+### dag/pipeline_extra_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 14
 **功能概述**: 流水线生命周期、事件通知与输入请求
 
@@ -223,7 +223,7 @@
 ### runtime_test.go
 
 **包名**: `flowx`
-**测试函数数**: 41
+**测试函数数**: 60
 **功能概述**: Runtime 核心功能、流水线执行、模板渲染、并发安全
 
 | 测试函数 | 说明 |
@@ -273,8 +273,8 @@
 ### runtime_extra_test.go
 
 **包名**: `flowx`
-**测试函数数**: 19
-**功能概述**: Runtime 扩展功能、不可变字段验证、清理
+**测试函数数**: 6
+**功能概述**: Runtime UpdateConfig 动态配置更新
 
 | 测试函数 | 说明 |
 |---------|------|
@@ -298,9 +298,9 @@
 | `TestValidateImmutableFields_NodesMutable` | Nodes 允许变更 |
 | `TestValidateImmutableFields_GraphMutable` | Graph 允许变更 |
 
-### template_test.go
+### template/template_test.go
 
-**包名**: `flowx`
+**包名**: `template`
 **测试函数数**: 19
 **功能概述**: Pongo2 模板引擎的布尔求值、字符串渲染与验证
 
@@ -326,9 +326,9 @@
 | `TestPongo2TemplateEngine_EvaluateBool_WithPipelineData` | 使用 pipeline 级数据求值 |
 | `TestPongo2TemplateEngine_EvaluateBool_WithNodeData` | 使用节点级数据求值 |
 
-### pipeline_metadata_test.go
+### dag/pipeline_metadata_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 3
 **功能概述**: 元数据存储的线程安全与输出提取
 
@@ -338,9 +338,9 @@
 | `TestInConfigMetadataStore_Delete` | Delete 移除 key 且不影响其他 key |
 | `TestExtractOutput_Basic` | 从输出中解析 `flowx-yaml` codec block 并存储到流水线元数据 |
 
-### pipeline_extract_test.go
+### dag/pipeline_extract_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 3
 **功能概述**: 输出提取器与 codec block 解析
 
@@ -350,9 +350,9 @@
 | `TestPipeline_OutputExtraction_Regex` | 从输出中用正则提取（coverage、testsPassed） |
 | `TestCreateExtractor_InvalidConfig` | nil 配置、无效 type、不支持 type、无 pattern 的正则、无效正则的表驱动测试 |
 
-### extractor_test.go
+### dag/extractor_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 7
 **功能概述**: Codec block 提取器与正则提取器
 
@@ -366,9 +366,9 @@
 | `TestRegexExtractor_WithoutCaptureGroup` | 无捕获组使用完整匹配 |
 | `TestRegexExtractor_MultipleCapturingGroups` | 多捕获组使用第一个组 |
 
-### snapshot_test.go
+### dag/snapshot_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 9
 **功能概述**: 流水线快照的序列化、反序列化与深拷贝
 
@@ -384,9 +384,9 @@
 | `TestPipelineSnapshotter_TakeSnapshot_DeepCopy` | 快照为深拷贝（修改原对象不影响快照） |
 | `TestPipelineSnapshotter_TakeSnapshot_WithSteps` | 快照保留步骤 ID |
 
-### boolean_conversion_test.go
+### dag/boolean_conversion_test.go
 
-**包名**: `flowx`
+**包名**: `dag`
 **测试函数数**: 7
 **功能概述**: 布尔值转换与复杂 CI/CD 条件表达式
 
@@ -400,9 +400,9 @@
 | `TestPongo2TemplateEngine_EvaluateBool_StringBooleanComparison` | Pongo2 中字符串到布尔比较的表驱动测试 |
 | `TestPongo2TemplateEngine_EvaluateBool_ComplexCICDCondition` | 嵌套对象和布尔比较的 CI/CD 复杂条件表驱动测试 |
 
-### uuid_test.go
+### core/uuid_test.go
 
-**包名**: `flowx`
+**包名**: `core`
 **测试函数数**: 3
 **功能概述**: UUID 验证、格式化与生成
 
@@ -411,6 +411,154 @@
 | `TestValidateUUID` | UUID 验证的表驱动测试（带/不带连字符、全零、无效、空、过长、无效十六进制、大小写、错误分组） |
 | `TestFormatUUID` | 32 字符字符串格式化为带连字符 UUID，已格式化保持不变 |
 | `TestNewUUID` | `NewUUID` 返回 32 字符、无连字符、有效、唯一的 UUID |
+
+## Core 包测试
+
+### core/field_test.go
+
+**包名**: `core`
+**测试函数数**: 6
+**功能概述**: FieldItem 结构与 YAML 解析
+
+| 测试函数 | 说明 |
+|---------|------|
+| `TestNewFieldItem` | FieldItem 创建的表驱动测试 |
+| `TestGetValue` | 获取 FieldItem 值 |
+| `TestConvertToFieldItem` | 转换为 FieldItem |
+| `TestConvertFieldMap` | FieldMap 转换 |
+| `TestFieldItemUnmarshalYAML` | YAML 反序列化 FieldItem |
+| `TestFieldItemUnmarshalYAML_SimpleValue` | 简单值的 YAML 反序列化 |
+
+### core/uuid_test.go
+
+**包名**: `core`
+**测试函数数**: 3
+**功能概述**: UUID 验证、格式化与生成
+
+| 测试函数 | 说明 |
+|---------|------|
+| `TestValidateUUID` | UUID 验证的表驱动测试（带/不带连字符、全零、无效、空、过长、无效十六进制、大小写、错误分组） |
+| `TestFormatUUID` | 32 字符字符串格式化为带连字符 UUID，已格式化保持不变 |
+| `TestNewUUID` | `NewUUID` 返回 32 字符、无连字符、有效、唯一的 UUID |
+
+## 核心包测试（续）
+
+### cycle_runtime_test.go
+
+**包名**: `flowx`
+**测试函数数**: 2
+**功能概述**: 循环流水线运行时执行
+
+| 测试函数 | 说明 |
+|---------|------|
+| `TestCyclicPipeline_Execution` | 从 `cyclic_loop.yaml` 执行循环流水线 |
+| `TestAcyclicPipeline_NoRegression` | 无环流水线仍正常工作 |
+
+### dag/build_render_context_test.go
+
+**包名**: `dag`
+**测试函数数**: 10
+**功能概述**: 渲染上下文构建与参数元数据展开
+
+| 测试函数 | 说明 |
+|---------|------|
+| `TestBuildRenderContext_Empty` | 空上下文构建 |
+| `TestBuildRenderContext_WithParam` | 带 Param 的上下文 |
+| `TestBuildRenderContext_WithParam_Boolean` | 带布尔类型 Param 的上下文 |
+| `TestBuildRenderContext_WithMetadata` | 带 Metadata 的上下文 |
+| `TestBuildRenderContext_WithMetadata_StandaloneKey` | 独立键 Metadata 展开 |
+| `TestBuildRenderContext_ParamAndMetadata` | Param 和 Metadata 同时存在 |
+| `TestBuildRenderContext_ParamNil` | Param 为 nil 的处理 |
+| `TestBuildRenderContext_MetadataNil` | Metadata 为 nil 的处理 |
+| `TestBuildRenderContext_Concurrent` | 并发访问安全性 |
+| `TestBuildRenderContext_FieldItemValue` | FieldItem 值展开 |
+
+### dag/eval_context_all_test.go
+
+**包名**: `dag`
+**测试函数数**: 11
+**功能概述**: EvaluationContext All 方法与不可变性
+
+| 测试函数 | 说明 |
+|---------|------|
+| `TestDGAEvaluationContext_All_Basic` | 基本 All() 调用 |
+| `TestDGAEvaluationContext_All_WithPipeline` | 带 Pipeline 的 All() |
+| `TestDGAEvaluationContext_All_WithPipelineAndParam` | 同时带 Pipeline 和 Param |
+| `TestDGAEvaluationContext_All_WithPipelineAndMetadata` | 同时带 Pipeline 和 Metadata |
+| `TestDGAEvaluationContext_All_MultipleSources` | 多数据源组合 |
+| `TestDGAEvaluationContext_WithNode_Immutability` | WithNode 不修改原始上下文 |
+| `TestDGAEvaluationContext_WithPipeline_Immutability` | WithPipeline 不修改原始上下文 |
+| `TestDGAEvaluationContext_WithParams` | WithParams 链式调用 |
+| `TestDGAEvaluationContext_WithIteration_Chained` | WithIteration 链式调用 |
+| `TestDGAEvaluationContext_NilPipeline` | nil Pipeline 处理 |
+| `TestDGAEvaluationContext_NilNode` | nil Node 处理 |
+
+### dag/pipeline_impl_execution_test.go
+
+**包名**: `dag`
+**测试函数数**: 14
+**功能概述**: Pipeline 执行引擎与渲染
+
+| 测试函数 | 说明 |
+|---------|------|
+| `TestSetTemplateEngine` | 设置模板引擎 |
+| `TestGetTemplateEngine_Nil` | 未设置模板引擎时返回 nil |
+| `TestRenderStringWithRuntimeContext_NoEngine` | 无引擎时返回原字符串 |
+| `TestRenderStringWithRuntimeContext_WithEngine` | 有引擎时渲染字符串 |
+| `TestRenderStringWithRuntimeContext_WithMetadata` | 带 Metadata 渲染 |
+| `TestExtractOutput_NoExtractConfig` | 无提取配置时返回空 |
+| `TestExtractOutput_EmptyOutput` | 空输出处理 |
+| `TestShouldSkipStep_NoRuntimeStatus` | 无运行时状态时跳过步骤 |
+| `TestShouldSkipStep_WithRuntimeStatus` | 根据运行时状态决定跳过 |
+| `TestCreateExtractor_NilConfig` | nil 配置创建提取器 |
+| `TestCreateExtractor_CodecBlock` | CodecBlock 类型提取器创建 |
+| `TestHandleInputRequest_NilEvent` | nil 事件处理 |
+| `TestHandleInputRequest_EmptyRequest` | 空请求处理 |
+| `TestCancel` | 流水线取消功能 |
+
+### dag/pipeline_impl_graph_test.go
+
+**包名**: `dag`
+**测试函数数**: 12
+**功能概述**: DAG Graph 节点与边操作
+
+| 测试函数 | 说明 |
+|---------|------|
+| `TestDAGGraph_Edges` | 获取所有边 |
+| `TestDAGGraph_HasCycle` | 无环检测 |
+| `TestDAGGraph_GetEdge` | 获取特定边 |
+| `TestDAGGraph_IncomingEdges` | 获取入边 |
+| `TestDAGGraph_OutgoingEdges` | 获取出边 |
+| `TestDAGGraph_RemoveVertex` | 删除节点 |
+| `TestDAGGraph_RemoveEdge` | 删除边 |
+| `TestDAGGraph_SetMetadata` | 设置元数据 |
+| `TestDGANode_Get` | 获取节点属性 |
+| `TestDGANode_Set` | 设置节点属性 |
+| `TestDGANode_GetStepRuntimeStatus` | 获取步骤运行时状态 |
+| `TestDGANode_PipelineId` | 获取流水线 ID |
+
+### dag/pipeline_impl_snapshot_test.go
+
+**包名**: `dag`
+**测试函数数**: 14
+**功能概述**: Pipeline 快照序列化与事件通知
+
+| 测试函数 | 说明 |
+|---------|------|
+| `TestTakeSnapshot_Basic` | 基本快照 |
+| `TestTakeSnapshot_WithParam` | 带参数的快照 |
+| `TestTakeSnapshot_WithMetadata` | 带元数据的快照 |
+| `TestTakeSnapshot_WithNodeStatus` | 带节点状态的快照 |
+| `TestToYAML` | YAML 序列化 |
+| `TestFromYAML` | YAML 反序列化 |
+| `TestFromYAML_Invalid` | 无效 YAML 处理 |
+| `TestNotifyEvent_NoListener` | 无监听器时通知 |
+| `TestNotifyEvent_WithListener` | 带监听器时通知 |
+| `TestNotify` | 事件通知 |
+| `TestExtractOutput_WithCodecBlockConfig` | 带 CodecBlock 配置的输出提取 |
+| `TestExtractOutput_WithRegexConfig` | 带正则配置输出提取 |
+| `TestCreateExtractor_Regex` | 正则类型提取器创建 |
+| `TestCreateExtractor_UnknownType` | 未知类型处理 |
 
 ## Logger 包测试
 
