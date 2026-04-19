@@ -215,17 +215,17 @@ flowchart LR
 ```mermaid
 flowchart TD
     A[ExtractConfig] --> B[Type<br/>提取类型]
-    B --> |"codec-block"| C[默认类型<br/>解析```code```块]
-    B --> |"regex"| D[正则表达式提取]
+    B --> |codec-block| C[默认类型<br/>解析code块]
+    B --> |regex| D[正则表达式提取]
 
     A --> E[Patterns<br/>map string string<br/>key: 结果键名<br/>value: 正则表达式]
 
-    E --> F["result": "(?s)(.+?)<br/>必须包含捕获组"]
+    E --> F[result: 正则表达式<br/>必须包含捕获组]
 
-    A --> G[MaxOutputSize<br/>输出大小限制<br/>0=无限制<br/>默认1MB]
+    A --> G[MaxOutputSize<br/>输出大小限制<br/>0无限制<br/>默认1MB]
 
     subgraph 提取结果
-    H[extractedData] --> I["result": "提取的内容"]
-    I --> J[存储到Metadata<br/>NodeID.key格式]
+    H[extractedData] --> I[result: 提取的内容]
+    I --> J[存储到Metadata<br/>NodeID点key格式]
     end
 ```
