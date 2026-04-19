@@ -621,7 +621,7 @@ func TestDockerExecutor_IntegrationWithDocker(t *testing.T) {
 
 		defer exec.Destruction(ctx)
 
-		resultChan := make(chan any, 20)
+		resultChan := make(chan any, 30)
 		commandChan := make(chan any, 3)
 
 		go exec.Transfer(ctx, resultChan, commandChan, nil)
@@ -637,30 +637,26 @@ func TestDockerExecutor_IntegrationWithDocker(t *testing.T) {
 		}
 		close(commandChan)
 
-		// 接收结果（每个命令：输出 + 结果 = 6个消息）
-		results := []any{}
-		timeout := time.After(15 * time.Second)
+		// 等待所有 3 个 StepResult
+		results := make([]*executor.StepResult, 0, 3)
+		timeout := time.After(60 * time.Second)
 
-		for len(results) < 6 {
+		for len(results) < 3 {
 			select {
 			case result := <-resultChan:
-				results = append(results, result)
-				t.Logf("Received result %d: %T", len(results), result)
-				if err, ok := result.(error); ok {
-					t.Logf("Error received: %v", err)
+				if sr, ok := result.(*executor.StepResult); ok {
+					results = append(results, sr)
+					t.Logf("Received StepResult: StepName=%s, Error=%v", sr.StepName, sr.Error)
 				}
 			case <-timeout:
-				t.Fatalf("Timeout, received %d results", len(results))
+				t.Fatalf("Timeout waiting for 3 StepResults, got %d", len(results))
 			}
 		}
 
 		// 验证收到所有命令的结果
-		cmdResultCount := 0
-		for _, result := range results {
-			if _, ok := result.(*executor.StepResult); ok {
-				cmdResultCount++
-			}
-		}
-		assert.Equal(t, 3, cmdResultCount, "Should receive 3 command results")
+		assert.Equal(t, 3, len(results), "Should receive 3 command results")
+		assert.Equal(t, "step1", results[0].StepName)
+		assert.Equal(t, "step2", results[1].StepName)
+		assert.Equal(t, "step3", results[2].StepName)
 	})
 }
