@@ -1,9 +1,12 @@
 package docker
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +18,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"gopkg.in/yaml.v2"
 )
 
 // DockerExecutor Docker执行器实现
@@ -37,6 +41,64 @@ type DockerExecutor struct {
 // callbackWriter 自定义 Writer 用于实时回调输出
 type callbackWriter struct {
 	callback func([]byte)
+}
+
+// stdinConn 包装 io.PipeWriter 以实现 net.Conn 接口
+type stdinConn struct {
+	pipeWriter *io.PipeWriter
+}
+
+func (c *stdinConn) Read(b []byte) (n int, err error) {
+	return 0, io.EOF
+}
+
+func (c *stdinConn) Write(p []byte) (n int, err error) {
+	return c.pipeWriter.Write(p)
+}
+
+func (c *stdinConn) Close() error {
+	return c.pipeWriter.Close()
+}
+
+func (c *stdinConn) LocalAddr() net.Addr {
+	return nil
+}
+
+func (c *stdinConn) RemoteAddr() net.Addr {
+	return nil
+}
+
+func (c *stdinConn) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *stdinConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *stdinConn) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
+// parseInputRequest 解析输入请求代码块内容
+// 支持 YAML 或 JSON 格式
+func parseInputRequest(content string) *executor.InputRequest {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil
+	}
+
+	var req executor.InputRequest
+
+	if err := yaml.Unmarshal([]byte(content), &req); err == nil && req.Type != "" {
+		return &req
+	}
+
+	if err := json.Unmarshal([]byte(content), &req); err == nil && req.Type != "" {
+		return &req
+	}
+
+	return nil
 }
 
 // NewDockerExecutor 创建新的Docker执行器
@@ -194,9 +256,33 @@ func (d *DockerExecutor) Transfer(ctx context.Context, resultChan chan<- any, co
 func (d *DockerExecutor) executeCommandStreaming(ctx context.Context, command string, stepName string, resultChan chan<- any, inputChan <-chan []byte) {
 	startTime := time.Now()
 
+	inputRequestChan := make(chan *executor.InputRequest, 1)
+	onInputRequest := func(req *executor.InputRequest) {
+		select {
+		case inputRequestChan <- req:
+		default:
+		}
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req := <-inputRequestChan:
+				if req != nil {
+					resultChan <- &executor.InputRequestEvent{
+						StepName: stepName,
+						Request:  req,
+					}
+				}
+			}
+		}
+	}()
+
 	err := d.executeCommandInContainerStreaming(ctx, command, func(data []byte) {
 		resultChan <- data
-	}, inputChan)
+	}, inputChan, onInputRequest)
 
 	// 发送最终结果
 	resultChan <- &executor.StepResult{
@@ -210,7 +296,7 @@ func (d *DockerExecutor) executeCommandStreaming(ctx context.Context, command st
 }
 
 // executeCommandInContainerStreaming 在容器中执行命令并实时流式输出
-func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context, command string, outputCallback func([]byte), inputChan <-chan []byte) error {
+func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context, command string, outputCallback func([]byte), inputChan <-chan []byte, onInputRequest func(*executor.InputRequest)) error {
 	d.mu.RLock()
 	containerID := d.containerID
 	d.mu.RUnlock()
@@ -219,78 +305,131 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 		return fmt.Errorf("container not prepared")
 	}
 
-	// 检测shell类型
 	shell := d.detectShell()
 
-	// 创建执行配置
 	execConfig := container.ExecOptions{
 		Cmd:          []string{shell, "-c", command},
 		AttachStdout: true,
 		AttachStderr: true,
-		AttachStdin:  inputChan != nil, // 如果需要输入，启用 stdin
-		Tty:          false,
+		AttachStdin:  inputChan != nil,
+		Tty:          d.tty,
 	}
 
-	// 创建执行
 	execResp, err := d.client.ContainerExecCreate(ctx, containerID, execConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create exec: %w", err)
 	}
 
-	// 附加到执行
 	attachResp, err := d.client.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{
-		Tty: false,
+		Tty: d.tty,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to attach to exec: %w", err)
 	}
 	defer attachResp.Close()
 
-	// 创建输出回调写入器
-	writer := &callbackWriter{
-		callback: outputCallback,
-	}
-
 	var wg sync.WaitGroup
-
-	// 创建一个 done 通道用于通知输入 goroutine 退出
 	done := make(chan struct{})
 
-	// 如果有输入通道，启动输入写入goroutine
+	execCtx, execCancel := context.WithCancel(ctx)
+	defer execCancel()
+
+	var stdinWriter *io.PipeWriter
+
+	d.mu.Lock()
+	d.currentExecCancel = func() {
+		if stdinWriter != nil {
+			stdinWriter.Write([]byte{0x03})
+			stdinWriter.Close()
+		}
+		execCancel()
+	}
+	d.mu.Unlock()
+
+	go func() {
+		<-ctx.Done()
+		d.mu.RLock()
+		cancel := d.currentExecCancel
+		d.mu.RUnlock()
+		if cancel != nil {
+			cancel()
+		}
+	}()
+
 	if inputChan != nil {
+		stdinReader, sw := io.Pipe()
+		stdinWriter = sw
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer sw.Close()
 			for {
 				select {
-				case <-ctx.Done():
+				case <-execCtx.Done():
 					return
 				case <-done:
-					// 输出读取出错，退出输入 goroutine
 					return
 				case data, ok := <-inputChan:
 					if !ok {
 						return
 					}
 					if len(data) > 0 {
-						attachResp.Conn.Write(data)
+						sw.Write(data)
 					}
 				}
 			}
 		}()
+
+		stdinConn := &stdinConn{pipeWriter: stdinWriter}
+		go func() {
+			_, _ = io.Copy(stdinConn, stdinReader)
+		}()
 	}
 
-	// 读取输出并回调
-	_, err = stdcopy.StdCopy(writer, writer, attachResp.Reader)
-	if err != nil && err != io.EOF {
-		// 通知输入 goroutine 退出
+	scanner := bufio.NewScanner(attachResp.Reader)
+	scanner.Buffer(make([]byte, 4096), 1024*1024)
+
+	var buffer strings.Builder
+	inInputBlock := false
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if strings.TrimSpace(line) == "```flowx-input" {
+			inInputBlock = true
+			buffer.Reset()
+			continue
+		}
+
+		if inInputBlock && strings.TrimSpace(line) == "```" {
+			inInputBlock = false
+			if req := parseInputRequest(buffer.String()); req != nil && onInputRequest != nil {
+				onInputRequest(req)
+			}
+			continue
+		}
+
+		if inInputBlock {
+			buffer.WriteString(line)
+			buffer.WriteString("\n")
+			continue
+		}
+
+		if outputCallback != nil {
+			outputCallback(append(scanner.Bytes(), '\n'))
+		}
+	}
+
+	if err := scanner.Err(); err != nil && err != io.EOF {
 		close(done)
-		// 等待输入 goroutine 完成
 		wg.Wait()
 		return fmt.Errorf("failed to read output: %w", err)
 	}
 
-	// 等待执行完成
+	close(done)
+	wg.Wait()
+
 	for {
 		inspectResp, err := d.client.ContainerExecInspect(ctx, execResp.ID)
 		if err != nil {
@@ -306,6 +445,10 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	d.mu.Lock()
+	d.currentExecCancel = nil
+	d.mu.Unlock()
 
 	return nil
 }
