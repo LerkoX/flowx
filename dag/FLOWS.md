@@ -5,15 +5,15 @@
 ```mermaid
 flowchart TD
     subgraph DGAGraph核心结构
-    A[DGAGraph] --> B[nodes<br/>map[string]Node]
-    A --> C[edges<br/>map[string]Edge]
-    A --> D[graph<br/>map[string][]string<br/>邻接表]
-    A --> E[edgeMap<br/>map[string]map[string]Edge<br/>源→目标→边]
-    A --> F[sequence<br/>[]string]
+    A[DGAGraph] --> B[nodes<br/>map string Node]
+    A --> C[edges<br/>map string Edge]
+    A --> D[graph<br/>map string string列表<br/>邻接表]
+    A --> E[edgeMap<br/>map string map string Edge<br/>源到目标到边]
+    A --> F[sequence<br/>string列表]
     A --> G[hasCycle<br/>bool]
-    A --> H[backEdges<br/>map[string]bool<br/>被接受的回边]
-    A --> I[entryNodes<br/>map[string]bool<br/>入口节点]
-    A --> J[exitNodes<br/>map[string]bool<br/>出口节点]
+    A --> H[backEdges<br/>map string bool<br/>被接受的回边]
+    A --> I[entryNodes<br/>map string bool<br/>入口节点]
+    A --> J[exitNodes<br/>map string bool<br/>出口节点]
     end
 
     B --> K[Node接口]

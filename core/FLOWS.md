@@ -8,11 +8,11 @@ flowchart TD
     A --> C[Name<br/>流水线名称]
     A --> D[Metadate<br/>MetadataConfig<br/>元数据配置]
     A --> E[AI<br/>AIConfig<br/>AI配置]
-    A --> F[Param<br/>map[string]interface{}<br/>参数配置]
-    A --> G[Executors<br/>map[string]ExecutorConfig<br/>执行器配置]
+    A --> F[Param<br/>map string interface<br/>参数配置]
+    A --> G[Executors<br/>map string ExecutorConfig<br/>执行器配置]
     A --> H[Logging<br/>LoggingConfig<br/>日志配置]
     A --> I[Graph<br/>string<br/>Mermaid图定义]
-    A --> J[Nodes<br/>map[string]NodeConfig<br/>节点配置]
+    A --> J[Nodes<br/>map string NodeConfig<br/>节点配置]
     A --> K[MaxLoopIterations<br/>int<br/>循环图最大迭代次数]
 
     J --> L[NodeConfig]
@@ -21,10 +21,10 @@ flowchart TD
     L --> O[Description<br/>业务功能描述]
     L --> P[Executor<br/>执行器名称]
     L --> Q[Image<br/>镜像名称]
-    L --> R[Steps<br/>[]Step<br/>步骤列表]
-    L --> S[Config<br/>map[string]interface{}<br/>节点配置]
-    L --> T[Extract<br/>*ExtractConfig<br/>输出提取配置]
-    L --> U[Runtime<br/>*NodeRuntimeStatus<br/>运行时状态]
+    L --> R[Steps<br/>Step列表]
+    L --> S[Config<br/>map string interface<br/>节点配置]
+    L --> T[Extract<br/>ExtractConfig<br/>输出提取配置]
+    L --> U[Runtime<br/>NodeRuntimeStatus<br/>运行时状态]
 
     R --> V[Step]
     V --> W[Id<br/>步骤ID]
@@ -34,7 +34,7 @@ flowchart TD
 
     T --> AA[ExtractConfig]
     AA --> AB[Type<br/>codec-block/regex]
-    AA --> AC[Patterns<br/>map[string]string<br/>正则表达式]
+    AA --> AC[Patterns<br/>map string string<br/>正则表达式]
     AA --> AD[MaxOutputSize<br/>字节数<br/>默认1MB]
 ```
 
@@ -72,11 +72,11 @@ flowchart TD
     A --> C[Status<br/>PENDING/RUNNING/<br/>SUCCESS/FAILED/<br/>CANCELLED]
     A --> D[StartTime<br/>RFC3339格式]
     A --> E[EndTime<br/>RFC3339格式]
-    A --> F[Steps<br/>[]StepRuntimeStatus]
-    A --> G[Executor<br/>*ExecutorRuntimeInfo]
-    A --> H[Custom<br/>map[string]interface{}]
-    A --> I[InputChan<br/>chan []byte<br/>交互式输入]
-    A --> J[InputRequest<br/>*InputRequestInfo<br/>当前输入请求]
+    A --> F[Steps<br/>StepRuntimeStatus列表]
+    A --> G[Executor<br/>ExecutorRuntimeInfo]
+    A --> H[Custom<br/>map string interface]
+    A --> I[InputChan<br/>chan byte数组<br/>交互式输入]
+    A --> J[InputRequest<br/>InputRequestInfo<br/>当前输入请求]
 
     F --> K[StepRuntimeStatus]
     K --> L[Id<br/>步骤UUID]
@@ -128,20 +128,20 @@ stateDiagram-v2
 
 ```mermaid
 flowchart TD
-    A[Executors<br/>map[string]ExecutorConfig]
+    A[Executors<br/>map string ExecutorConfig]
 
     A --> B["exec1: ExecutorConfig"]
     A --> C["exec2: ExecutorConfig"]
 
     B --> D[Type: "docker"]
     B --> E[Description: "Docker执行器"]
-    B --> F[Config<br/>map[string]any]
+    B --> F[Config<br/>map string any]
     F --> G[image: "ubuntu:20.04"]
     F --> H[network: "bridge"]
 
     C --> I[Type: "local"]
     C --> J[Description: "本地执行器"]
-    C --> K[Config<br/>map[string]any]
+    C --> K[Config<br/>map string any]
     K --> L[shell: "/bin/bash"]
     K --> M[timeout: "10m"]
 ```
@@ -152,7 +152,7 @@ flowchart TD
 flowchart TD
     A[MetadataConfig] --> B[Type<br/>metadata类型<br/>http/redis/in-config]
     A --> C[Description<br/>用途描述]
-    A --> D[Data<br/>map[string]any<br/>元数据键值对]
+    A --> D[Data<br/>map string any<br/>元数据键值对]
 
     subgraph HTTP Metadata
     B -->|"http"| E[HTTPMetadataConfig]
@@ -177,7 +177,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[AIConfig] --> B[Intent<br/>核心意图描述]
-    A --> C[Constraints<br/>[]string<br/>约束列表]
+    A --> C[Constraints<br/>string列表<br/>约束列表]
     A --> D[Template<br/>string<br/>模板标识]
     A --> E[GeneratedAt<br/>生成时间]
     A --> F[Version<br/>版本号]
@@ -189,7 +189,7 @@ flowchart TD
 flowchart TD
     A[LoggingConfig] --> B[Description<br/>用途描述]
     A --> C[Endpoint<br/>日志服务端点]
-    A --> D[Headers<br/>map[string]string<br/>请求头]
+    A --> D[Headers<br/>map string string<br/>请求头]
     A --> E[Timeout<br/>超时时间]
     A --> F[Retry<br/>重试次数]
 ```
@@ -218,7 +218,7 @@ flowchart TD
     B --> |"codec-block"| C[默认类型<br/>解析```code```块]
     B --> |"regex"| D[正则表达式提取]
 
-    A --> E[Patterns<br/>map[string]string<br/>key: 结果键名<br/>value: 正则表达式]
+    A --> E[Patterns<br/>map string string<br/>key: 结果键名<br/>value: 正则表达式]
 
     E --> F["result": "(?s)(.+?)<br/>必须包含捕获组"]
 

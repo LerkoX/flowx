@@ -23,14 +23,14 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph RuntimeImpl
-    A[RuntimeImpl] --> B[pipelines<br/>map[string]Pipeline]
-    A --> C[pipelineIds<br/>map[string]bool]
-    A --> D[pipelineConfigs<br/>map[string]*PipelineConfig]
+    A[RuntimeImpl] --> B[pipelines<br/>map string Pipeline]
+    A --> C[pipelineIds<br/>map string bool]
+    A --> D[pipelineConfigs<br/>map string PipelineConfig]
     A --> E[mu<br/>sync.RWMutex]
     A --> F[ctx<br/>context.Context]
     A --> G[cancel<br/>context.CancelFunc]
-    A --> H[doneChan<br/>chan struct{}]
-    A --> I[background<br/>chan struct{}]
+    A --> H[doneChan<br/>chan struct]
+    A --> I[background<br/>chan struct]
     A --> J[pusher<br/>logger.Pusher]
     A --> K[templateEngine<br/>template.TemplateEngine]
     end
@@ -80,7 +80,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[renderConfig] --> B[转换Param<br/>map[string]interface{}<br/>→ map[string]FieldItem]
+    A[renderConfig] --> B[转换Param<br/>map string interface<br/>to map string FieldItem]
     B --> C[构建ctx<br/>包含Param值]
     C --> D[ctx["Param"] = ctx<br/>自引用]
 
@@ -98,7 +98,7 @@ flowchart TD
     K -->|否| Z[return]
     L --> M[构建ctx<br/>包含Param]
     M --> N[renderMetadata<br/>渲染metadata]
-    N --> O[更新config<br/>Metadate.Data]
+    N --> O[更新config<br/>MetadateData]
     O --> Z
 ```
 
@@ -146,9 +146,9 @@ flowchart TD
     K -->|是| L[遍历Statements]
 
     L --> M{是Transition?}
-    M -->|是| N{from == "[*]"?}
+    M -->|是| N{from is "[*]"?}
     N -->|是| O[AddEntryNode]
-    N -->|否| P{to == "[*]"?}
+    N -->|否| P{to is "[*]"?}
     P -->|是| Q[AddExitNode]
     P -->|否| R[提取条件表达式]
 
@@ -166,10 +166,10 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[parseGraphEdges] --> B[遍历Transition]
-    B --> C{from == "[*]"?}
+    B --> C{from is "[*]"?}
     C -->|是| D[AddEntryNode]
     D --> E[continue]
-    C -->|否| F{to == "[*]"?}
+    C -->|否| F{to is "[*]"?}
     F -->|是| G[AddExitNode]
     G --> E
     F -->|否| H[查找源和目标节点]
@@ -263,7 +263,7 @@ flowchart TD
     subgraph Pause
     A[Pause] --> B[Lock pauseMu]
     B --> C[获取status]
-    C --> D{status ==<br/>RUNNING?}
+    C --> D{status is<br/>RUNNING?}
     D -->|否| E[Unlock<br/>return err]
     D -->|是| F[close pauseChan<br/>发送暂停信号]
     F --> G[Unlock<br/>return nil]
@@ -272,7 +272,7 @@ flowchart TD
     subgraph Resume
     H[Resume] --> I[Lock pauseMu]
     I --> J[获取status]
-    J --> K{status ==<br/>PAUSED?}
+    J --> K{status is<br/>PAUSED?}
     K -->|否| L[Unlock<br/>return err]
     K -->|是| M[close resumeChan<br/>发送恢复信号]
     M --> N[Unlock<br/>return nil]
