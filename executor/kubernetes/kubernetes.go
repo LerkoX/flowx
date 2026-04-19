@@ -1,7 +1,9 @@
 package kubernetes
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -15,6 +17,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
+	"gopkg.in/yaml.v2"
 )
 
 // KubernetesExecutor Kubernetes执行器实现
@@ -345,9 +348,33 @@ func (k *KubernetesExecutor) waitForPodRunning(ctx context.Context) error {
 func (k *KubernetesExecutor) executeCommandStreaming(ctx context.Context, command string, stepName string, resultChan chan<- any, inputChan <-chan []byte) {
 	startTime := time.Now()
 
+	inputRequestChan := make(chan *executor.InputRequest, 1)
+	onInputRequest := func(req *executor.InputRequest) {
+		select {
+		case inputRequestChan <- req:
+		default:
+		}
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req := <-inputRequestChan:
+				if req != nil {
+					resultChan <- &executor.InputRequestEvent{
+						StepName: stepName,
+						Request:  req,
+					}
+				}
+			}
+		}
+	}()
+
 	err := k.executeCommandInPodStreaming(ctx, command, func(data []byte) {
 		resultChan <- data
-	}, inputChan)
+	}, inputChan, onInputRequest)
 
 	// 发送最终结果
 	resultChan <- &executor.StepResult{
@@ -362,7 +389,7 @@ func (k *KubernetesExecutor) executeCommandStreaming(ctx context.Context, comman
 
 // executeCommandInPodStreaming 在Pod中执行命令并实时流式输出
 // 当 ctx 被取消时，会向进程发送 Ctrl+C 信号 (\x03)
-func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, command string, outputCallback func([]byte), inputChan <-chan []byte) error {
+func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, command string, outputCallback func([]byte), inputChan <-chan []byte, onInputRequest func(*executor.InputRequest)) error {
 	k.mu.RLock()
 	podName := k.podName
 	namespace := k.namespace
@@ -375,10 +402,8 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 		return fmt.Errorf("pod not prepared")
 	}
 
-	// 检测shell类型
 	shell := k.detectShell()
 
-	// 构建exec请求
 	req := k.client.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -387,48 +412,33 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 		SubResource("exec").
 		Param("container", "executor")
 
-	// 添加执行参数
 	req = req.Param("command", shell)
 	req = req.Param("command", "-c")
 	req = req.Param("command", command)
 
-	// 设置TTY和流选项
 	req = req.Param("stdout", "true")
 	req = req.Param("stderr", "true")
-	// 必须启用stdin才能发送Ctrl+C或交互式输入
 	req = req.Param("stdin", "true")
 	req = req.Param("tty", fmt.Sprintf("%v", useTTY))
 
-	// 创建执行器
 	exec, err := remotecommand.NewSPDYExecutor(k.restConfig, "POST", req.URL())
 	if err != nil {
 		return fmt.Errorf("failed to create executor: %w", err)
 	}
 
-	// 创建流式输出器
-	streamer := &execStreamer{
-		callback: outputCallback,
-		useTTY:   useTTY,
-	}
-
-	// 创建stdin pipe，用于发送Ctrl+C和交互式输入
 	stdinReader, stdinWriter := io.Pipe()
 
-	// 创建一个内部可取消的上下文
 	execCtx, execCancel := context.WithCancel(ctx)
 	defer execCancel()
 
-	// 注册取消函数，供外部调用
 	k.mu.Lock()
 	k.currentExecCancel = func() {
-		// 发送 Ctrl+C (\x03)
 		stdinWriter.Write([]byte{0x03})
 		stdinWriter.Close()
 		execCancel()
 	}
 	k.mu.Unlock()
 
-	// 监听上下文取消，发送Ctrl+C
 	go func() {
 		<-ctx.Done()
 		k.mu.RLock()
@@ -439,7 +449,6 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 		}
 	}()
 
-	// 如果有输入通道，启动输入写入 goroutine
 	if inputChan != nil {
 		go func() {
 			defer stdinWriter.Close()
@@ -462,26 +471,68 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 		}()
 	}
 
-	// 执行命令
+	stdoutReader, stdoutWriter := io.Pipe()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer stdoutReader.Close()
+
+		scanner := bufio.NewScanner(stdoutReader)
+		scanner.Buffer(make([]byte, 4096), 1024*1024)
+
+		var buffer strings.Builder
+		inInputBlock := false
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if strings.TrimSpace(line) == "```flowx-input" {
+				inInputBlock = true
+				buffer.Reset()
+				continue
+			}
+
+			if inInputBlock && strings.TrimSpace(line) == "```" {
+				inInputBlock = false
+				if req := parseInputRequest(buffer.String()); req != nil && onInputRequest != nil {
+					onInputRequest(req)
+				}
+				continue
+			}
+
+			if inInputBlock {
+				buffer.WriteString(line)
+				buffer.WriteString("\n")
+				continue
+			}
+
+			if outputCallback != nil {
+				outputCallback(append(scanner.Bytes(), '\n'))
+			}
+		}
+	}()
+
 	streamOptions := remotecommand.StreamOptions{
 		Stdin:  stdinReader,
-		Stdout: streamer,
-		Stderr: streamer,
+		Stdout: stdoutWriter,
+		Stderr: stdoutWriter,
 		Tty:    useTTY,
 	}
 
-	// 如果启用TTY，设置终端大小
 	if useTTY && ttyWidth > 0 && ttyHeight > 0 {
 		streamOptions.TerminalSizeQueue = &fixedTerminalSize{
-			width: uint16(ttyWidth),
+			width:  uint16(ttyWidth),
 			height: uint16(ttyHeight),
 		}
 	}
 
 	err = exec.StreamWithContext(execCtx, streamOptions)
+	stdoutWriter.Close()
 
-	// 清理
-	stdinWriter.Close()
+	wg.Wait()
+
 	k.mu.Lock()
 	k.currentExecCancel = nil
 	k.mu.Unlock()
@@ -536,6 +587,27 @@ func (f *fixedTerminalSize) Next() *remotecommand.TerminalSize {
 		Width:  f.width,
 		Height: f.height,
 	}
+}
+
+// parseInputRequest 解析输入请求代码块内容
+// 支持 YAML 或 JSON 格式
+func parseInputRequest(content string) *executor.InputRequest {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return nil
+	}
+
+	var req executor.InputRequest
+
+	if err := yaml.Unmarshal([]byte(content), &req); err == nil && req.Type != "" {
+		return &req
+	}
+
+	if err := json.Unmarshal([]byte(content), &req); err == nil && req.Type != "" {
+		return &req
+	}
+
+	return nil
 }
 
 // detectShell 检测容器中的shell
