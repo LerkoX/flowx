@@ -59,7 +59,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph 输出示例
+    subgraph output_example["输出示例"]
     A[日志格式示例<br/>timestamp level pipeline node step message]
     end
 
