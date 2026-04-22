@@ -146,9 +146,9 @@ flowchart TD
     K -->|是| L[遍历Statements]
 
     L --> M{是Transition?}
-    M -->|是| N{from is "[*]"?}
+    M -->|是| N{from is entry?}
     N -->|是| O[AddEntryNode]
-    N -->|否| P{to is "[*]"?}
+    N -->|否| P{to is exit?}
     P -->|是| Q[AddExitNode]
     P -->|否| R[提取条件表达式]
 
@@ -166,10 +166,10 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[parseGraphEdges] --> B[遍历Transition]
-    B --> C{from is "[*]"?}
+    B --> C{from is entry?}
     C -->|是| D[AddEntryNode]
     D --> E[continue]
-    C -->|否| F{to is "[*]"?}
+    C -->|否| F{to is exit?}
     F -->|是| G[AddExitNode]
     G --> E
     F -->|否| H[查找源和目标节点]
