@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    subgraph DGAGraph核心结构
+    subgraph dga_graph_core["DGAGraph核心结构"]
     A[DGAGraph] --> B[nodes<br/>map string Node]
     A --> C[edges<br/>map string Edge]
     A --> D[graph<br/>map string string列表<br/>邻接表]
@@ -30,7 +30,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph Edge类型
+    subgraph edge_types["Edge类型"]
     A[DGAEdge] --> |无条件边| B[普通顺序执行]
     C[ConditionalEdge] --> |有表达式| D[条件判断执行]
     end
@@ -318,7 +318,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph 事件类型
+    subgraph event_types["事件类型"]
     A[PipelineInit]
     B[PipelineStart]
     C[PipelineFinish]

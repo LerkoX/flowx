@@ -13,7 +13,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph Pongo2TemplateEngine
+    subgraph pongo2_engine["Pongo2TemplateEngine"]
     A[Pongo2TemplateEngine] --> B[使用pongo2/v6库]
     B --> C[注册自定义过滤器]
     C --> D[tojson: 转换为JSON]
@@ -76,7 +76,7 @@ flowchart TD
     A --> E[Metadata对象<br/>Metadata.xxx]
     A --> F[nodeID.key<br/>节点提取值]
 
-    subgraph 上下文示例
+    subgraph context_example["上下文示例"]
     G[ctx] --> H[name: flowx]
     G --> I[Param: object]
     G --> J[Metadata: object]
@@ -88,7 +88,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph 变量访问
+    subgraph variable_access["变量访问"]
     A[双花括号name]
     A --> B[直接访问ctx.name]
     C[双花括号Param.name]
@@ -97,7 +97,7 @@ flowchart LR
     E --> F[访问ctx.Metadata.key]
     end
 
-    subgraph 条件判断
+    subgraph condition_judgment["条件判断"]
     G[if eq .Param.env prod]
     G --> H[生产环境分支]
     I[else]
@@ -105,12 +105,12 @@ flowchart LR
     K[end]
     end
 
-    subgraph 过滤器
+    subgraph filters["过滤器"]
     L[.value tojson]
     L --> M[转换为JSON字符串]
     end
 
-    subgraph 循环
+    subgraph loops["循环"]
     N[双花括号range .items]
     N --> O[遍历items]
     P[双花括号.name]
@@ -138,21 +138,21 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph 配置阶段
+    subgraph config_phase["配置阶段"]
     A[renderConfig] --> B[renderParam<br/>渲染参数中的模板]
     B --> C[renderMetadata<br/>渲染元数据中的模板]
     end
 
-    subgraph 构建阶段
+    subgraph build_phase["构建阶段"]
     D[buildGraph] --> E[解析Graph定义<br/>提取边表达式]
     end
 
-    subgraph 执行阶段
+    subgraph execution_phase["执行阶段"]
     F[sendCommands] --> G[renderStringWith<br/>RuntimeContext<br/>渲染命令模板]
     G --> H[可以引用前置节点<br/>提取的数据]
     end
 
-    subgraph 条件评估
+    subgraph condition_eval["条件评估"]
     I[边条件评估] --> J[EvaluateBool<br/>评估边条件]
     J --> K[使用当前metadata<br/>上下文]
     end

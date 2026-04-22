@@ -42,7 +42,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph 节点配置
+    subgraph node_config["节点配置"]
     A[NodeConfig] --> B[基础信息]
     A --> C[执行配置]
     A --> D[步骤定义]
@@ -203,7 +203,7 @@ flowchart LR
     A --> D[Description<br/>职责描述]
     A --> E[Run<br/>执行命令<br/>支持模板]
 
-    subgraph 命令示例
+    subgraph command_examples["命令示例"]
     E --> F[echo 命令]
     E --> G[docker build 命令]
     E --> H[kubectl apply 命令]
@@ -224,7 +224,7 @@ flowchart TD
 
     A --> G[MaxOutputSize<br/>输出大小限制<br/>0无限制<br/>默认1MB]
 
-    subgraph 提取结果
+    subgraph extract_results["提取结果"]
     H[extractedData] --> I[result: 提取的内容]
     I --> J[存储到Metadata<br/>NodeID点key格式]
     end

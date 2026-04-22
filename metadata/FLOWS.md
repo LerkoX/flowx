@@ -26,27 +26,27 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph 内部结构
+    subgraph internal_structure["内部结构"]
     A[InConfigMetadataStore] --> B[data<br/>map string string<br/>内存存储]
     end
 
-    subgraph Get流程
+    subgraph get_flow["Get流程"]
     C[Get] --> D{查找key}
     D -->|找到| E[返回值]
     D -->|未找到| F[return空字符串<br/>err]
     end
 
-    subgraph Set流程
+    subgraph set_flow["Set流程"]
     G[Set] --> H[data[key] = value]
     H --> I[return nil]
     end
 
-    subgraph Delete流程
+    subgraph delete_flow["Delete流程"]
     J[Delete] --> K{delete data, key}
     K --> L[return nil]
     end
 
-    subgraph GetAll
+    subgraph get_all["GetAll"]
     M[GetAll] --> N[返回data副本<br/>map string string]
     end
 ```
@@ -63,7 +63,7 @@ flowchart TD
     C --> F[用户传入参数]
     D --> G[节点提取结果]
 
-    subgraph 访问方式
+    subgraph access_methods["访问方式"]
     H[双花括号Metadata.user]
     I[双花括号Param.name]
     J[双花括号Node1.result]
