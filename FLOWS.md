@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    subgraph Runtime接口
+    subgraph runtime_interface["Runtime接口"]
     A[Get] --> |id| B[返回Pipeline]
     A --> C[RunAsync] --> |ctx,id,config,listener| D[异步执行]
     A --> E[RunSync] --> |ctx,id,config,listener| F[同步执行]
@@ -22,7 +22,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph RuntimeImpl
+    subgraph runtime_impl["RuntimeImpl"]
     A[RuntimeImpl] --> B[pipelines<br/>map string Pipeline]
     A --> C[pipelineIds<br/>map string bool]
     A --> D[pipelineConfigs<br/>map string PipelineConfig]
@@ -106,7 +106,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[renderParam] --> B{maxIterations = 10}
+    A[renderParam] -->     B{maxIterations: 10}
     B --> C{changed &&<br/>iteration < max}
     C -->|是| D[遍历result]
     D --> E[构建ctx<br/>包含所有Param值]

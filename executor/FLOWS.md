@@ -20,7 +20,7 @@ flowchart TD
     G --> J[GetType<br/>执行器类型]
     end
 
-    subgraph Bridge & Adapter
+    subgraph bridge_adapter["Bridge & Adapter"]
     K[Bridge] --> L[Conn<br/>连接环境]
     L --> M[Adapter]
     M --> N[Config<br/>配置]
@@ -247,7 +247,7 @@ flowchart TD
     A --> F[StartTime<br/>开始时间]
     A --> G[FinishTime<br/>结束时间]
 
-    subgraph 状态判断
+    subgraph status_judgment["状态判断"]
     H{Error != nil?}
     H -->|是| I[Status = FAILED]
     H -->|否| J[Status = SUCCESS]
@@ -280,14 +280,14 @@ flowchart TD
     A[CommandWrapper] --> B[StepName<br/>步骤名称<br/>用于映射结果]
     A --> C[Command<br/>待执行命令<br/>可能是模板]
 
-    subgraph 命令发送
+    subgraph command_send["命令发送"]
     D[Pipeline] --> E[renderString<br/>渲染命令模板]
     E --> F[CommandWrapper<br/>stepName + command]
     F --> G[commandChan <- wrapper]
     G --> H[Executor接收]
     end
 
-    subgraph 结果映射
+    subgraph result_mapping["结果映射"]
     I[Executor] --> J[StepResult<br/>包含StepName]
     J --> K[Pipeline根据StepName<br/>匹配到对应步骤]
     K --> L[更新步骤状态]
