@@ -41,11 +41,11 @@ flowchart TD
     E -->|不存在| F[return nil<br/>err]
     E -->|存在| G{创建执行器}
 
-    G --> H{Type is "local"}
+    G --> H{Type is local}
 
-    G --> I{Type is "docker"}
+    G --> I{Type is docker}
 
-    G --> J{Type is "ssh"}
+    G --> J{Type is ssh}
 
     H --> K[NewLocalExecutor]
     I --> L[NewDockerExecutor]
