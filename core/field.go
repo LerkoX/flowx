@@ -14,15 +14,6 @@ type FieldItem struct {
 	SrcNode     string      `yaml:"srcNode"`      // 来源节点ID（初始化为空）
 }
 
-// NewFieldItem 创建 FieldItem
-func NewFieldItem(value interface{}, description string, srcNode string) FieldItem {
-	return FieldItem{
-		Value:       value,
-		Description: description,
-		SrcNode:     srcNode,
-	}
-}
-
 // GetValue 获取字段值
 // 兼容简单值和 FieldItem
 func GetValue(v interface{}) interface{} {
@@ -55,15 +46,6 @@ func ConvertToFieldItem(v interface{}) FieldItem {
 	default:
 		return FieldItem{Value: val}
 	}
-}
-
-// ConvertFieldMap 将 map[string]interface{} 转换为 map[string]FieldItem
-func ConvertFieldMap(m map[string]interface{}) map[string]FieldItem {
-	result := make(map[string]FieldItem)
-	for k, v := range m {
-		result[k] = ConvertToFieldItem(v)
-	}
-	return result
 }
 
 // UnmarshalYAML 实现 yaml.Unmarshaler 接口

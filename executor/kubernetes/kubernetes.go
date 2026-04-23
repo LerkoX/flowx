@@ -71,40 +71,6 @@ func NewKubernetesExecutor() (*KubernetesExecutor, error) {
 	}, nil
 }
 
-// NewKubernetesExecutorWithConfig 使用指定的rest.Config创建执行器
-func NewKubernetesExecutorWithConfig(config *rest.Config) (*KubernetesExecutor, error) {
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
-	}
-
-	return &KubernetesExecutor{
-		client:          clientset,
-		restConfig:      config,
-		env:             make(map[string]string),
-		volumes:         make([]corev1.Volume, 0),
-		volumeMounts:    make([]corev1.VolumeMount, 0),
-		namespace:       "default",
-		podReadyTimeout: 60 * time.Second, // 默认 60 秒
-	}, nil
-}
-
-// NewKubernetesExecutorWithClient 使用指定的客户端创建执行器
-func NewKubernetesExecutorWithClient(client kubernetes.Interface, config *rest.Config, namespace string) *KubernetesExecutor {
-	if namespace == "" {
-		namespace = "default"
-	}
-
-	return &KubernetesExecutor{
-		client:       client,
-		restConfig:   config,
-		namespace:    namespace,
-		env:          make(map[string]string),
-		volumes:      make([]corev1.Volume, 0),
-		volumeMounts: make([]corev1.VolumeMount, 0),
-	}
-}
-
 // Prepare 准备Kubernetes环境
 // 创建并等待Pod运行
 func (k *KubernetesExecutor) Prepare(ctx context.Context) error {

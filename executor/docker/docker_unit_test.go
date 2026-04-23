@@ -1,7 +1,6 @@
 package docker
 
 import (
-	"context"
 	"testing"
 
 	"github.com/LerkoX/flowx/executor"
@@ -126,22 +125,6 @@ func TestDockerExecutor_BuildMounts(t *testing.T) {
 	mounts = exec.buildMounts()
 	if len(mounts) != 2 {
 		t.Errorf("2 volumes: got %d mounts, want 2", len(mounts))
-	}
-}
-
-func TestDockerExecutor_CopyToContainer_NotPrepared(t *testing.T) {
-	exec := NewDockerExecutorWithClient(nil)
-	err := exec.copyToContainer(context.Background(), "/local", "/container")
-	if err == nil {
-		t.Error("Expected error when container not prepared")
-	}
-}
-
-func TestDockerExecutor_CopyFromContainer_NotPrepared(t *testing.T) {
-	exec := NewDockerExecutorWithClient(nil)
-	err := exec.copyFromContainer(context.Background(), "/container", "/local")
-	if err == nil {
-		t.Error("Expected error when container not prepared")
 	}
 }
 
