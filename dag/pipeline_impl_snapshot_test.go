@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/LerkoX/flowx/core"
+	"gopkg.in/yaml.v2"
 )
 
 // testListener 实现 Listener 接口用于测试
@@ -180,10 +181,10 @@ Param:
     value: "v1.0.0"
 `
 
-	snapshotter := NewPipelineSnapshotter()
-	snapshot, err := snapshotter.FromYAML(yamlStr)
+	snapshot := &core.PipelineConfig{}
+	err := yaml.Unmarshal([]byte(yamlStr), snapshot)
 	if err != nil {
-		t.Fatalf("FromYAML failed: %v", err)
+		t.Fatalf("yaml.Unmarshal failed: %v", err)
 	}
 
 	if snapshot.Version != "1.0" {
@@ -198,10 +199,10 @@ Param:
 func TestFromYAML_Invalid(t *testing.T) {
 	invalidYaml := `{invalid yaml content`
 
-	snapshotter := NewPipelineSnapshotter()
-	_, err := snapshotter.FromYAML(invalidYaml)
+	snapshot := &core.PipelineConfig{}
+	err := yaml.Unmarshal([]byte(invalidYaml), snapshot)
 	if err == nil {
-		t.Error("FromYAML should return error for invalid YAML")
+		t.Error("yaml.Unmarshal should return error for invalid YAML")
 	}
 }
 

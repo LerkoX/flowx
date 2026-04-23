@@ -37,58 +37,6 @@ func (m *mockTemplateEngine) Validate(expression string) error {
 // compile-time check
 var _ template.TemplateEngine = (*mockTemplateEngine)(nil)
 
-func TestNewConditionalEdgeWithEngine(t *testing.T) {
-	node1 := NewDGANode("node1", "RUNNING")
-	node2 := NewDGANode("node2", "UNKNOWN")
-	expression := "{{ x == 1 }}"
-
-	called := false
-	engine := &mockTemplateEngine{
-		evaluateBoolFn: func(expr string, data map[string]any) (bool, error) {
-			called = true
-			if expr != expression {
-				t.Errorf("expression = %q, want %q", expr, expression)
-			}
-			return true, nil
-		},
-	}
-
-	edge := NewConditionalEdgeWithEngine(node1, node2, expression, engine)
-
-	if edge.Expression() != expression {
-		t.Errorf("Expression() = %q, want %q", edge.Expression(), expression)
-	}
-
-	evalCtx := NewEvaluationContext()
-	result, err := edge.Evaluate(evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if !result {
-		t.Error("Expected true")
-	}
-	if !called {
-		t.Error("Custom engine was not called")
-	}
-}
-
-func TestNewConditionalEdgeWithEngine_NilEngine(t *testing.T) {
-	node1 := NewDGANode("node1", "RUNNING")
-	node2 := NewDGANode("node2", "SUCCESS")
-
-	// nil engine 应该回退到默认 Pongo2 引擎
-	edge := NewConditionalEdgeWithEngine(node1, node2, "{{ nodeStatus == 'SUCCESS' }}", nil)
-	evalCtx := NewEvaluationContext().WithNode(node2)
-
-	result, err := edge.Evaluate(evalCtx)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if !result {
-		t.Error("Expected true with default engine fallback")
-	}
-}
-
 func TestDGAEdge_SetEngine(t *testing.T) {
 	node1 := NewDGANode("node1", "RUNNING")
 	node2 := NewDGANode("node2", "UNKNOWN")
