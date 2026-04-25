@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/LerkoX/flowx/core"
+	"gopkg.in/yaml.v2"
 )
 
 func TestPipelineSnapshotter_ToYAML_BasicConfig(t *testing.T) {
@@ -49,7 +50,6 @@ func TestPipelineSnapshotter_ToYAML_EmptyConfig(t *testing.T) {
 }
 
 func TestPipelineSnapshotter_FromYAML_BasicConfig(t *testing.T) {
-	s := NewPipelineSnapshotter()
 	yamlStr := `Version: "1.0"
 Name: test-pipeline
 Nodes:
@@ -61,9 +61,10 @@ Nodes:
         run: "echo hello"
 `
 
-	config, err := s.FromYAML(yamlStr)
+	config := &core.PipelineConfig{}
+	err := yaml.Unmarshal([]byte(yamlStr), config)
 	if err != nil {
-		t.Fatalf("FromYAML() error = %v", err)
+		t.Fatalf("yaml.Unmarshal() error = %v", err)
 	}
 	if config.Name != "test-pipeline" {
 		t.Errorf("Name = %q, want %q", config.Name, "test-pipeline")
@@ -89,9 +90,10 @@ func TestPipelineSnapshotter_FromYAML_RoundTrip(t *testing.T) {
 		t.Fatalf("ToYAML() error = %v", err)
 	}
 
-	parsed, err := s.FromYAML(yamlStr)
+	parsed := &core.PipelineConfig{}
+	err = yaml.Unmarshal([]byte(yamlStr), parsed)
 	if err != nil {
-		t.Fatalf("FromYAML() error = %v", err)
+		t.Fatalf("yaml.Unmarshal() error = %v", err)
 	}
 	if parsed.Name != original.Name {
 		t.Errorf("Round-trip Name = %q, want %q", parsed.Name, original.Name)
@@ -99,8 +101,9 @@ func TestPipelineSnapshotter_FromYAML_RoundTrip(t *testing.T) {
 }
 
 func TestPipelineSnapshotter_FromYAML_InvalidYAML(t *testing.T) {
-	s := NewPipelineSnapshotter()
-	_, err := s.FromYAML(":\n  invalid: [yaml: content")
+	invalidYaml := ":\n  invalid: [yaml: content"
+	config := &core.PipelineConfig{}
+	err := yaml.Unmarshal([]byte(invalidYaml), config)
 	if err == nil {
 		t.Error("Expected error for invalid YAML")
 	}

@@ -12,12 +12,10 @@ import (
 	"time"
 
 	"github.com/LerkoX/flowx/executor"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 	"gopkg.in/yaml.v2"
 )
 
@@ -453,115 +451,6 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 	return nil
 }
 
-// executeCommandInContainer 在容器中执行命令
-func (d *DockerExecutor) executeCommandInContainer(ctx context.Context, command string) (string, error) {
-	d.mu.RLock()
-	containerID := d.containerID
-	d.mu.RUnlock()
-
-	if containerID == "" {
-		return "", fmt.Errorf("container not prepared")
-	}
-
-	// 检测shell类型
-	shell := d.detectShell()
-
-	// 创建执行配置
-	execConfig := container.ExecOptions{
-		Cmd:          []string{shell, "-c", command},
-		AttachStdout: true,
-		AttachStderr: true,
-		Tty:          false,
-	}
-
-	// 创建执行
-	execResp, err := d.client.ContainerExecCreate(ctx, containerID, execConfig)
-	if err != nil {
-		return "", fmt.Errorf("failed to create exec: %w", err)
-	}
-
-	// 附加到执行
-	attachResp, err := d.client.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{
-		Tty: false,
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to attach to exec: %w", err)
-	}
-	defer attachResp.Close()
-
-	// 读取输出
-	var stdout strings.Builder
-	var stderr strings.Builder
-	_, err = stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader)
-	if err != nil && err != io.EOF {
-		return "", fmt.Errorf("failed to read output: %w", err)
-	}
-
-	// 等待执行完成
-	for {
-		inspectResp, err := d.client.ContainerExecInspect(ctx, execResp.ID)
-		if err != nil {
-			return "", fmt.Errorf("failed to inspect exec: %w", err)
-		}
-
-		if !inspectResp.Running {
-			if inspectResp.ExitCode != 0 {
-				return stdout.String() + stderr.String(), fmt.Errorf("command exited with code %d", inspectResp.ExitCode)
-			}
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	return stdout.String(), nil
-}
-
-// waitForExecCompletion 等待执行完成
-// 修复：添加 channel 关闭检查，避免资源泄漏
-func (d *DockerExecutor) waitForExecCompletion(ctx context.Context, execID string, attachResp types.HijackedResponse, outputDone chan error) error {
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			// 上下文取消，清理资源
-			attachResp.Close()
-			// 从 outputDone 读取（确保 channel 已关闭）
-			<-outputDone
-			return ctx.Err()
-		case err, ok := <-outputDone:
-			if !ok {
-				// Channel 已关闭，正常退出
-				return nil
-			}
-			if err == context.Canceled || err == context.DeadlineExceeded {
-				return ctx.Err()
-			}
-			// 收到错误，返回它
-			return err
-		case <-ticker.C:
-			// 定期检查执行状态
-			inspectResp, err := d.client.ContainerExecInspect(ctx, execID)
-			if err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				return fmt.Errorf("failed to inspect exec: %w", err)
-			}
-
-			if !inspectResp.Running {
-				if inspectResp.ExitCode != 0 {
-					return fmt.Errorf("command exited with code %d", inspectResp.ExitCode)
-				}
-				// 正常退出
-				return nil
-			}
-		}
-	}
-}
-
 // 为 callbackWriter 实现 Write 方法
 func (w *callbackWriter) Write(p []byte) (n int, err error) {
 	if w.callback != nil {
@@ -651,34 +540,6 @@ func (d *DockerExecutor) buildMounts() []mount.Mount {
 		})
 	}
 	return mounts
-}
-
-// copyToContainer 复制文件到容器
-func (d *DockerExecutor) copyToContainer(ctx context.Context, localPath, containerPath string) error {
-	d.mu.RLock()
-	containerID := d.containerID
-	d.mu.RUnlock()
-
-	if containerID == "" {
-		return fmt.Errorf("container not prepared")
-	}
-
-	// TODO: 实现文件复制
-	return fmt.Errorf("not implemented")
-}
-
-// copyFromContainer 从容器复制文件
-func (d *DockerExecutor) copyFromContainer(ctx context.Context, containerPath, localPath string) error {
-	d.mu.RLock()
-	containerID := d.containerID
-	d.mu.RUnlock()
-
-	if containerID == "" {
-		return fmt.Errorf("container not prepared")
-	}
-
-	// TODO: 实现文件复制
-	return fmt.Errorf("not implemented")
 }
 
 // setImage 设置镜像
