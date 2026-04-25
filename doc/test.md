@@ -7,7 +7,7 @@
 | 指标 | 数量 |
 |------|------|
 | 测试文件数 | 38 |
-| 测试函数数 | 410 |
+| 测试函数数 | 419 |
 | 覆盖率目标 | 80%+ |
 
 ## 核心包测试
@@ -403,13 +403,11 @@
 ### core/uuid_test.go
 
 **包名**: `core`
-**测试函数数**: 3
-**功能概述**: UUID 验证、格式化与生成
+**测试函数数**: 1
+**功能概述**: UUID 生成
 
 | 测试函数 | 说明 |
 |---------|------|
-| `TestValidateUUID` | UUID 验证的表驱动测试（带/不带连字符、全零、无效、空、过长、无效十六进制、大小写、错误分组） |
-| `TestFormatUUID` | 32 字符字符串格式化为带连字符 UUID，已格式化保持不变 |
 | `TestNewUUID` | `NewUUID` 返回 32 字符、无连字符、有效、唯一的 UUID |
 
 ## Core 包测试
@@ -417,29 +415,15 @@
 ### core/field_test.go
 
 **包名**: `core`
-**测试函数数**: 6
+**测试函数数**: 4
 **功能概述**: FieldItem 结构与 YAML 解析
 
 | 测试函数 | 说明 |
 |---------|------|
-| `TestNewFieldItem` | FieldItem 创建的表驱动测试 |
 | `TestGetValue` | 获取 FieldItem 值 |
 | `TestConvertToFieldItem` | 转换为 FieldItem |
-| `TestConvertFieldMap` | FieldMap 转换 |
 | `TestFieldItemUnmarshalYAML` | YAML 反序列化 FieldItem |
 | `TestFieldItemUnmarshalYAML_SimpleValue` | 简单值的 YAML 反序列化 |
-
-### core/uuid_test.go
-
-**包名**: `core`
-**测试函数数**: 3
-**功能概述**: UUID 验证、格式化与生成
-
-| 测试函数 | 说明 |
-|---------|------|
-| `TestValidateUUID` | UUID 验证的表驱动测试（带/不带连字符、全零、无效、空、过长、无效十六进制、大小写、错误分组） |
-| `TestFormatUUID` | 32 字符字符串格式化为带连字符 UUID，已格式化保持不变 |
-| `TestNewUUID` | `NewUUID` 返回 32 字符、无连字符、有效、唯一的 UUID |
 
 ## 核心包测试（续）
 
@@ -616,7 +600,7 @@
 ### executor/docker/docker_unit_test.go
 
 **包名**: `docker`
-**测试函数数**: 11
+**测试函数数**: 9
 **功能概述**: Docker 执行器单元测试（无需 Docker 运行时）
 
 | 测试函数 | 说明 |
@@ -628,8 +612,6 @@
 | `TestDockerExecutor_ResolveImageName` | 带/不带 registry 的镜像名解析的表驱动测试 |
 | `TestDockerExecutor_BuildEnvList` | 环境变量列表构建（空、3个变量、KEY=VALUE 格式） |
 | `TestDockerExecutor_BuildMounts` | 挂载点构建（空、2个卷） |
-| `TestDockerExecutor_CopyToContainer_NotPrepared` | 未 Prepare 时复制返回错误 |
-| `TestDockerExecutor_CopyFromContainer_NotPrepared` | 未 Prepare 时复制返回错误 |
 | `TestDockerExecutor_GetRuntimeInfo_BeforePrepare` | Prepare 前运行时信息（无 containerId，有 image/workdir/network/registry） |
 | `TestDockerExecutor_InterfaceCompliance` | 接口合规性检查 |
 
@@ -638,6 +620,18 @@
 **包名**: `docker`
 **测试函数数**: 3
 **功能概述**: Docker 配置解析与本地环境检测
+
+| 测试函数 | 说明 |
+|---------|------|
+| `TestDockerExecutor_WithDefaultRegistry` | 默认 registry 镜像拉取、命令执行、环境检查 |
+| `TestDockerExecutor_MultiCommands` | 一个容器中 3 个顺序命令 |
+| `TestDockerExecutor_CustomRegistry` | 自定义/空 registry 配置 |
+
+### executor/docker/docker_test.go
+
+**包名**: `docker`
+**测试函数数**: 13
+**功能概述**: Docker 执行器集成测试（需要 Docker 运行时）
 
 | 测试函数 | 说明 |
 |---------|------|
@@ -653,19 +647,7 @@
 | `TestDockerExecutor_AdapterConfigWithInvalidTypes` | 无效配置类型被优雅接受的表驱动测试 |
 | `TestDockerExecutor_VolumeParsing` | 适配器配置卷解析（字符串列表、任意列表、nil、空）的表驱动测试 |
 | `TestDockerExecutor_EnvConfigParsing` | 环境配置解析（map[string]string、map[string]any、nil、空）的表驱动测试 |
-
-### executor/docker/docker_test.go
-
-**包名**: `docker`
-**测试函数数**: 13
-**功能概述**: Docker 执行器集成测试（需要 Docker 运行时）
-
-| 测试函数 | 说明 |
-|---------|------|
-| `TestDockerExecutor_WithDefaultRegistry` | 默认 registry 镜像拉取、命令执行、环境检查 |
-| `TestDockerExecutor_MultiCommands` | 一个容器中 3 个顺序命令 |
-| `TestDockerExecutor_CustomRegistry` | 自定义/空 registry 配置 |
-| 所有测试在 Docker 不可用时自动跳过 |
+| `TestDockerExecutor_IntegrationWithDocker` | Docker 集成测试 |
 
 ### executor/docker/docker_extra_test.go
 
@@ -733,7 +715,7 @@
 ### executor/local/local_coverage_test.go
 
 **包名**: `local`
-**测试函数数**: 8
+**测试函数数**: 7
 **功能概述**: Local 执行器覆盖率增强测试
 
 | 测试函数 | 说明 |
@@ -743,7 +725,6 @@
 | `TestParseInputRequest_Empty` | 空内容返回 nil |
 | `TestParseInputRequest_InvalidFormat` | 不可解析内容返回 nil |
 | `TestParseInputRequest_MissingType` | 缺少 type 字段返回 nil |
-| `TestIsShellAvailable` | "sh" 可用，不存在的 shell 不可用 |
 | `TestLocalExecutor_GetInstanceId` | Prepare 前 GetInstanceId 为空 |
 | `TestLocalExecutor_InterfaceCompliance` | Executor 和 ExecutorInfoProvider 接口合规性 |
 
