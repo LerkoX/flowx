@@ -11,8 +11,6 @@ type Snapshotter interface {
 	TakeSnapshot(pipeline Pipeline, originalConfig *core.PipelineConfig) (*core.PipelineConfig, error)
 	// ToYAML 将配置转换为 YAML
 	ToYAML(config *core.PipelineConfig) (string, error)
-	// FromYAML 从 YAML 解析配置
-	FromYAML(yamlStr string) (*core.PipelineConfig, error)
 }
 
 // PipelineSnapshotter 实现
@@ -93,14 +91,4 @@ func (ps *PipelineSnapshotter) ToYAML(config *core.PipelineConfig) (string, erro
 		return "", err
 	}
 	return string(data), nil
-}
-
-// FromYAML 从 YAML 解析配置
-func (ps *PipelineSnapshotter) FromYAML(yamlStr string) (*core.PipelineConfig, error) {
-	var config core.PipelineConfig
-	err := yaml.Unmarshal([]byte(yamlStr), &config)
-	if err != nil {
-		return nil, err
-	}
-	return &config, nil
 }

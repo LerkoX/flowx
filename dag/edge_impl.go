@@ -37,16 +37,6 @@ func NewConditionalEdge(source, target Node, expression string) Edge {
 	}
 }
 
-// NewConditionalEdgeWithEngine 创建一条带有模板引擎的条件边
-func NewConditionalEdgeWithEngine(source, target Node, expression string, engine template.TemplateEngine) Edge {
-	return &DGAEdge{
-		source:     source,
-		target:     target,
-		expression: expression,
-		engine:     engine,
-	}
-}
-
 // Source 返回边的源节点
 func (e *DGAEdge) Source() Node {
 	return e.source

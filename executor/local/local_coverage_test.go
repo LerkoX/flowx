@@ -54,17 +54,6 @@ func TestParseInputRequest_MissingType(t *testing.T) {
 	}
 }
 
-func TestIsShellAvailable(t *testing.T) {
-	// sh 几乎总是可用的
-	if !isShellAvailable("sh") {
-		t.Error("sh should be available")
-	}
-	// 不存在的 shell
-	if isShellAvailable("nonexistent-shell-xyz") {
-		t.Error("nonexistent shell should not be available")
-	}
-}
-
 func TestLocalExecutor_GetInstanceId(t *testing.T) {
 	exec := NewLocalExecutor()
 	if id := exec.GetInstanceId(); id != "" {

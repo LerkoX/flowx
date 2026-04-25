@@ -14,6 +14,7 @@ import (
 	"github.com/LerkoX/flowx/dag"
 	"github.com/LerkoX/flowx/logger"
 	"github.com/LerkoX/flowx/template"
+	"gopkg.in/yaml.v2"
 )
 
 // loadTestConfig 从 test/fixtures/runtime/ 目录加载测试配置
@@ -1679,8 +1680,8 @@ func TestRuntimeImpl_ExportConfig(t *testing.T) {
 	}
 
 	// 验证导出的 YAML 可以被解析
-	snapshotter := dag.NewPipelineSnapshotter()
-	exportedConfig, err := snapshotter.FromYAML(yamlStr)
+	exportedConfig := &core.PipelineConfig{}
+	err = yaml.Unmarshal([]byte(yamlStr), exportedConfig)
 	if err != nil {
 		t.Fatalf("Failed to parse exported YAML: %v", err)
 	}

@@ -490,12 +490,6 @@ func detectDefaultShell() string {
 	}
 }
 
-// isShellAvailable 检查shell是否可用
-func isShellAvailable(shell string) bool {
-	_, err := exec.LookPath(shell)
-	return err == nil
-}
-
 // 确保LocalExecutor实现了Executor接口和ExecutorInfoProvider接口
 var _ executor.Executor = (*LocalExecutor)(nil)
 var _ executor.ExecutorInfoProvider = (*LocalExecutor)(nil)
