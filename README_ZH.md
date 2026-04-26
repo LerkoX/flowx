@@ -566,6 +566,8 @@ type Runtime interface {
     StartBackground()                                         // 启动后台处理
     SetPusher(pusher Pusher)                                  // 设置日志推送器
     SetTemplateEngine(engine TemplateEngine)                  // 设置模板引擎
+    GetTemplateEngine() TemplateEngine                        // 获取模板引擎
+    ExportConfig(id string) (string, error)                   // 导出流水线配置
 }
 ```
 
@@ -573,20 +575,24 @@ type Runtime interface {
 
 ```go
 type Pipeline interface {
-    Run(ctx context.Context) error                            // 运行流水线
-    Cancel()                                                  // 取消流水线
-    Pause() error                                             // 暂停流水线（等待当前层完成）
-    Resume(ctx context.Context) error                         // 恢复暂停的流水线
-    IsModifiable() bool                                       // 当前是否可修改图
-    Done() chan struct{}                                      // 流水线完成信号
-    SetGraph(graph Graph)                                     // 设置 DAG 图
+    Id() string                                               // 获取流水线 ID
     GetGraph() Graph                                          // 获取 DAG 图
-    SetExecutorProvider(provider ExecutorProvider)            // 设置执行器提供者
+    SetGraph(graph Graph)                                     // 设置 DAG 图
+    Status() string                                           // 获取流水线状态
+    SetMetadata(store MetadataStore)                          // 设置元数据存储
+    Metadata() Metadata                                       // 获取流水线元数据
     Listening(listener Listener)                              // 设置事件监听器
-    SetMetadata(metadata MetadataStore)                       // 设置元数据存储
-    Id() string                                                // 获取流水线 ID
-    Status() string                                             // 获取流水线状态
-    Metadata() map[string]any                                 // 获取流水线元数据
+    Done() <-chan struct{}                                    // 流水线完成信号
+    Run(ctx context.Context) error                            // 运行流水线
+    Notify()                                                  // 步骤通知流水线
+    Cancel()                                                  // 取消流水线
+    SetExecutorProvider(provider ExecutorProvider)           // 设置执行器提供者
+    SetTemplateEngine(engine TemplateEngine)                   // 设置模板引擎
+    GetTemplateEngine() TemplateEngine                        // 获取模板引擎
+    SetPusher(pusher Pusher)                                  // 设置日志推送器
+    Pause() error                                             // 暂停流水线（等待当前层完成）
+    Resume(ctx context.Context) error                          // 恢复暂停的流水线
+    IsModifiable() bool                                       // 当前是否可修改图
 }
 ```
 
