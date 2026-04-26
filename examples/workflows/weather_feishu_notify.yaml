@@ -65,6 +65,5 @@ Nodes:
           export WEATHER_HUMIDITY="{{ GetWeather.humidity }}"
           export WEATHER_WINDSPEED="{{ GetWeather.windspeed }}"
           export WEATHER_UPDATE_TIME="{{ GetWeather.updateTime }}"
-          # 将 forecasts 数组写入临时文件供脚本读取
-          echo '{{ GetWeather.forecasts }}' > /tmp/weather_forecasts.json
+          export WEATHER_FORECASTS='{{ GetWeather.forecasts | toJson }}'
           python3 {{ Param.scriptDir }}/send_feishu.py
