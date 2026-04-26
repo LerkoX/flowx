@@ -564,6 +564,8 @@ type Runtime interface {
     StartBackground()                                         // Start background processing
     SetPusher(pusher Pusher)                                  // Set log pusher
     SetTemplateEngine(engine TemplateEngine)                  // Set template engine
+    GetTemplateEngine() TemplateEngine                        // Get template engine
+    ExportConfig(id string) (string, error)                   // Export pipeline config
 }
 ```
 
@@ -571,20 +573,24 @@ type Runtime interface {
 
 ```go
 type Pipeline interface {
-    Run(ctx context.Context) error                            // Run pipeline
-    Cancel()                                                  // Cancel pipeline
-    Pause() error                                             // Pause pipeline (waits for current level)
-    Resume(ctx context.Context) error                         // Resume paused pipeline
-    IsModifiable() bool                                       // Check if graph can be modified
-    Done() chan struct{}                                      // Pipeline completion signal
-    SetGraph(graph Graph)                                     // Set DAG graph
+    Id() string                                               // Get pipeline ID
     GetGraph() Graph                                          // Get DAG graph
-    SetExecutorProvider(provider ExecutorProvider)            // Set executor provider
+    SetGraph(graph Graph)                                     // Set DAG graph
+    Status() string                                           // Get pipeline status
+    SetMetadata(store MetadataStore)                          // Set metadata store
+    Metadata() Metadata                                       // Get pipeline metadata
     Listening(listener Listener)                              // Set event listener
-    SetMetadata(metadata MetadataStore)                       // Set metadata store
-    Id() string                                                // Get pipeline ID
-    Status() string                                             // Get pipeline status
-    Metadata() map[string]any                                 // Get pipeline metadata
+    Done() <-chan struct{}                                    // Pipeline completion signal
+    Run(ctx context.Context) error                            // Run pipeline
+    Notify()                                                  // Step notifies pipeline
+    Cancel()                                                  // Cancel pipeline
+    SetExecutorProvider(provider ExecutorProvider)           // Set executor provider
+    SetTemplateEngine(engine TemplateEngine)                   // Set template engine
+    GetTemplateEngine() TemplateEngine                        // Get template engine
+    SetPusher(pusher Pusher)                                  // Set log pusher
+    Pause() error                                             // Pause pipeline (waits for current level)
+    Resume(ctx context.Context) error                          // Resume paused pipeline
+    IsModifiable() bool                                       // Check if graph can be modified
 }
 ```
 
