@@ -1,11 +1,14 @@
 package template
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/flosch/pongo2/v6"
+	"gopkg.in/yaml.v3"
 )
 
 // 预检查Pongo2TemplateEngine是否实现了TemplateEngine接口
@@ -13,7 +16,12 @@ var _ TemplateEngine = (*Pongo2TemplateEngine)(nil)
 
 // 注册自定义过滤器
 func init() {
-	pongo2.RegisterFilter("tojson", filterToJSON)
+	pongo2.RegisterFilter("toJson", filterToJSON)
+	pongo2.RegisterFilter("toYaml", filterToYaml)
+	pongo2.RegisterFilter("toBase64", filterToBase64)
+	pongo2.RegisterFilter("fromBase64", filterFromBase64)
+	pongo2.RegisterFilter("urlencode", filterURLEncode)
+	pongo2.RegisterFilter("urldecode", filterURLDecode)
 }
 
 // filterToJSON 将值转换为 JSON 字符串
@@ -29,7 +37,7 @@ func filterToJSON(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2
 		jsonBytes, err := json.Marshal(v)
 		if err != nil {
 			return nil, &pongo2.Error{
-				Sender:    "filter:tojson",
+				Sender:    "filter:toJson",
 				OrigError: err,
 			}
 		}
@@ -39,7 +47,7 @@ func filterToJSON(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2
 		jsonBytes, err := json.Marshal(v)
 		if err != nil {
 			return nil, &pongo2.Error{
-				Sender:    "filter:tojson",
+				Sender:    "filter:toJson",
 				OrigError: err,
 			}
 		}
@@ -49,7 +57,7 @@ func filterToJSON(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2
 		jsonBytes, err := json.Marshal(in.Interface())
 		if err != nil {
 			return nil, &pongo2.Error{
-				Sender:    "filter:tojson",
+				Sender:    "filter:toJson",
 				OrigError: err,
 			}
 		}
@@ -57,6 +65,80 @@ func filterToJSON(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2
 	}
 
 	return pongo2.AsSafeValue(result), nil
+}
+
+// filterToYaml 将值转换为 YAML 字符串
+func filterToYaml(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+	yamlBytes, err := yaml.Marshal(in.Interface())
+	if err != nil {
+		return nil, &pongo2.Error{
+			Sender:    "filter:toYaml",
+			OrigError: err,
+		}
+	}
+	return pongo2.AsSafeValue(string(yamlBytes)), nil
+}
+
+// filterToBase64 将字符串进行 Base64 编码
+func filterToBase64(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+	str, ok := in.Interface().(string)
+	if !ok {
+		return nil, &pongo2.Error{
+			Sender:    "filter:toBase64",
+			OrigError: fmt.Errorf("expected string, got %T", in.Interface()),
+		}
+	}
+	return pongo2.AsSafeValue(base64.StdEncoding.EncodeToString([]byte(str))), nil
+}
+
+// filterFromBase64 将 Base64 字符串进行解码
+func filterFromBase64(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+	str, ok := in.Interface().(string)
+	if !ok {
+		return nil, &pongo2.Error{
+			Sender:    "filter:fromBase64",
+			OrigError: fmt.Errorf("expected string, got %T", in.Interface()),
+		}
+	}
+	decoded, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		return nil, &pongo2.Error{
+			Sender:    "filter:fromBase64",
+			OrigError: err,
+		}
+	}
+	return pongo2.AsSafeValue(string(decoded)), nil
+}
+
+// filterURLEncode 对字符串进行 URL 编码
+func filterURLEncode(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+	str, ok := in.Interface().(string)
+	if !ok {
+		return nil, &pongo2.Error{
+			Sender:    "filter:urlencode",
+			OrigError: fmt.Errorf("expected string, got %T", in.Interface()),
+		}
+	}
+	return pongo2.AsSafeValue(url.QueryEscape(str)), nil
+}
+
+// filterURLDecode 对 URL 编码的字符串进行解码
+func filterURLDecode(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+	str, ok := in.Interface().(string)
+	if !ok {
+		return nil, &pongo2.Error{
+			Sender:    "filter:urldecode",
+			OrigError: fmt.Errorf("expected string, got %T", in.Interface()),
+		}
+	}
+	decoded, err := url.QueryUnescape(str)
+	if err != nil {
+		return nil, &pongo2.Error{
+			Sender:    "filter:urldecode",
+			OrigError: err,
+		}
+	}
+	return pongo2.AsSafeValue(decoded), nil
 }
 
 // Pongo2TemplateEngine 使用pongo2作为模板引擎的实现

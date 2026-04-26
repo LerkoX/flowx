@@ -2,6 +2,7 @@ package dag
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/LerkoX/flowx/core"
@@ -49,9 +50,8 @@ func (p *PipelineImpl) extractOutput(ctx context.Context, node Node, stepResult 
 			metadataKey := fmt.Sprintf("%s.%s", node.Id(), key)
 			// 设置 SrcNode 为当前节点 ID
 			fieldItem.SrcNode = node.Id()
-			// 将 Value 转换为字符串存储
-			valueStr := fmt.Sprintf("%v", core.GetValue(fieldItem.Value))
-			fieldItem.Value = valueStr
+			// 将 Value 转换为字符串存储，复杂类型序列化为 JSON
+			fieldItem.Value = convertToString(core.GetValue(fieldItem.Value))
 			p.metadata[metadataKey] = fieldItem
 		}
 
@@ -59,7 +59,7 @@ func (p *PipelineImpl) extractOutput(ctx context.Context, node Node, stepResult 
 		if p.metadataStore != nil {
 			for key, fieldItem := range extracted {
 				metadataKey := fmt.Sprintf("%s.%s", node.Id(), key)
-				valueStr := fmt.Sprintf("%v", core.GetValue(fieldItem.Value))
+				valueStr := convertToString(core.GetValue(fieldItem.Value))
 				if err := p.metadataStore.Set(ctx, metadataKey, valueStr); err != nil {
 					fmt.Printf("Warning: Failed to save extracted data to store: %v\n", err)
 				}
@@ -68,6 +68,23 @@ func (p *PipelineImpl) extractOutput(ctx context.Context, node Node, stepResult 
 	}
 
 	return nil
+}
+
+// convertToString 将值转换为字符串存储
+// 复杂类型（slice、map）序列化为 JSON，简单类型直接转字符串
+func convertToString(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case []interface{}, map[string]interface{}:
+		jsonBytes, err := json.Marshal(val)
+		if err != nil {
+			return fmt.Sprintf("%v", val)
+		}
+		return string(jsonBytes)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }
 
 // createExtractor 根据配置创建提取器

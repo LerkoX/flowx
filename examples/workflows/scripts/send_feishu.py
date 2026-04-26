@@ -129,6 +129,11 @@ def main():
         sys.exit(1)
 
     # 从环境变量解析天气数据（来自上一节点 GetWeather 的 metadata）
+    print(f"[DEBUG] WEATHER_FORECASTS 环境变量值: {WEATHER_FORECASTS}")
+    print(f"[DEBUG] WEATHER_FORECASTS 类型: {type(WEATHER_FORECASTS)}")
+    if WEATHER_FORECASTS:
+        print(f"[DEBUG] WEATHER_FORECASTS 前100字符: {WEATHER_FORECASTS[:100]}")
+    print()
     try:
         # 解析 forecasts JSON 字符串
         forecasts_data = json.loads(WEATHER_FORECASTS) if WEATHER_FORECASTS else []

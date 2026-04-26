@@ -2,6 +2,7 @@ package dag
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -356,6 +357,33 @@ func (p *PipelineImpl) SetPusher(pusher logger.Pusher) {
 	p.pusher = pusher
 }
 
+// tryParseJSON 尝试将字符串解析为 JSON 对象或数组
+// 性能优化：通过首字符快速判断，避免不必要的反序列化
+func tryParseJSON(v interface{}) interface{} {
+	str, ok := v.(string)
+	if !ok {
+		return v
+	}
+
+	trimmed := strings.TrimSpace(str)
+	if len(trimmed) < 2 {
+		return v
+	}
+
+	first := trimmed[0]
+	last := trimmed[len(trimmed)-1]
+
+	if !((first == '{' && last == '}') || (first == '[' && last == ']')) {
+		return v
+	}
+
+	var result interface{}
+	if err := json.Unmarshal([]byte(str), &result); err != nil {
+		return v
+	}
+	return result
+}
+
 // buildRenderContext 构建渲染上下文，包含 Param 和动态 Metadata
 func (p *PipelineImpl) buildRenderContext() map[string]any {
 	ctx := make(map[string]any)
@@ -380,7 +408,7 @@ func (p *PipelineImpl) buildRenderContext() map[string]any {
 	if metadata != nil {
 		metadataValues := make(map[string]any)
 		for k, v := range metadata {
-			metadataValues[k] = core.GetValue(v.Value)
+			metadataValues[k] = tryParseJSON(core.GetValue(v.Value))
 		}
 		ctx["Metadata"] = metadataValues
 		// 将平铺的 metadata 转换为嵌套结构
