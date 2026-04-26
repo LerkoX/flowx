@@ -20,7 +20,7 @@ func (r *RuntimeImpl) setupMetadata(ctx context.Context, pipeline dag.Pipeline, 
 
 	// 创建metadata store
 	factory := metadata.NewMetadataStoreFactory()
-	store, err := factory.Create(config.Metadate)
+	store, err := factory.Create(config.Metadate, pipeline.Id())
 	if err != nil {
 		return fmt.Errorf("failed to create metadata store: %w", err)
 	}

@@ -92,14 +92,15 @@ func (s *InConfigMetadataStore) Keys() []string {
 
 // HTTPMetadataStore HTTP 元数据存储
 type HTTPMetadataStore struct {
-	url     string
-	method  string
-	headers map[string]string
-	client  *http.Client
+	url        string
+	method     string
+	headers    map[string]string
+	pipelineId string
+	client     *http.Client
 }
 
 // NewHTTPMetadataStore 创建基于HTTP的元数据存储
-func NewHTTPMetadataStore(config core.MetadataConfig) (*HTTPMetadataStore, error) {
+func NewHTTPMetadataStore(config core.MetadataConfig, pipelineId string) (*HTTPMetadataStore, error) {
 	cfg := core.HTTPMetadataConfig{}
 
 	// 解析配置
@@ -132,9 +133,10 @@ func NewHTTPMetadataStore(config core.MetadataConfig) (*HTTPMetadataStore, error
 	}
 
 	return &HTTPMetadataStore{
-		url:     cfg.URL,
-		method:  cfg.Method,
-		headers: cfg.Headers,
+		url:        cfg.URL,
+		method:     cfg.Method,
+		headers:    cfg.Headers,
+		pipelineId: pipelineId,
 		client: &http.Client{
 			Timeout: timeout,
 		},
@@ -149,6 +151,10 @@ func (s *HTTPMetadataStore) Get(ctx context.Context, key string) (string, error)
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
+	req.Header.Set("Content-Type", "application/json")
+	if s.pipelineId != "" {
+		req.Header.Set("X-Pipeline-ID", s.pipelineId)
+	}
 	for k, v := range s.headers {
 		req.Header.Set(k, v)
 	}
@@ -185,6 +191,9 @@ func (s *HTTPMetadataStore) Set(ctx context.Context, key string, value string) e
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	if s.pipelineId != "" {
+		req.Header.Set("X-Pipeline-ID", s.pipelineId)
+	}
 	for k, v := range s.headers {
 		req.Header.Set(k, v)
 	}
@@ -210,6 +219,10 @@ func (s *HTTPMetadataStore) Delete(ctx context.Context, key string) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
+	req.Header.Set("Content-Type", "application/json")
+	if s.pipelineId != "" {
+		req.Header.Set("X-Pipeline-ID", s.pipelineId)
+	}
 	for k, v := range s.headers {
 		req.Header.Set(k, v)
 	}
@@ -234,11 +247,12 @@ func (s *HTTPMetadataStore) Close() error {
 
 // RedisMetadataStore Redis 元数据存储
 type RedisMetadataStore struct {
-	client *redis.Client
+	client     *redis.Client
+	pipelineId string
 }
 
 // NewRedisMetadataStore 创建基于Redis的元数据存储
-func NewRedisMetadataStore(config core.MetadataConfig) (*RedisMetadataStore, error) {
+func NewRedisMetadataStore(config core.MetadataConfig, pipelineId string) (*RedisMetadataStore, error) {
 	cfg := core.RedisMetadataConfig{}
 
 	// 解析配置
@@ -293,14 +307,23 @@ func NewRedisMetadataStore(config core.MetadataConfig) (*RedisMetadataStore, err
 		DB:       cfg.DB,
 	})
 
-	return &RedisMetadataStore{client: client}, nil
+	return &RedisMetadataStore{client: client, pipelineId: pipelineId}, nil
+}
+
+// buildRedisKey 构建带前缀的 Redis key，格式: flowx/{pipelineId}/{key}
+func (s *RedisMetadataStore) buildRedisKey(key string) string {
+	if s.pipelineId == "" {
+		return key
+	}
+	return fmt.Sprintf("flowx/%s/%s", s.pipelineId, key)
 }
 
 // Get 从Redis获取元数据
 func (s *RedisMetadataStore) Get(ctx context.Context, key string) (string, error) {
-	val, err := s.client.Get(ctx, key).Result()
+	fullKey := s.buildRedisKey(key)
+	val, err := s.client.Get(ctx, fullKey).Result()
 	if err == redis.Nil {
-		return "", fmt.Errorf("key %s not found", key)
+		return "", fmt.Errorf("key %s not found", fullKey)
 	}
 	if err != nil {
 		return "", fmt.Errorf("failed to get from redis: %w", err)
@@ -310,7 +333,8 @@ func (s *RedisMetadataStore) Get(ctx context.Context, key string) (string, error
 
 // Set 设置Redis元数据
 func (s *RedisMetadataStore) Set(ctx context.Context, key string, value string) error {
-	err := s.client.Set(ctx, key, value, 0).Err()
+	fullKey := s.buildRedisKey(key)
+	err := s.client.Set(ctx, fullKey, value, 0).Err()
 	if err != nil {
 		return fmt.Errorf("failed to set to redis: %w", err)
 	}
@@ -319,7 +343,8 @@ func (s *RedisMetadataStore) Set(ctx context.Context, key string, value string) 
 
 // Delete 删除Redis元数据
 func (s *RedisMetadataStore) Delete(ctx context.Context, key string) error {
-	err := s.client.Del(ctx, key).Err()
+	fullKey := s.buildRedisKey(key)
+	err := s.client.Del(ctx, fullKey).Err()
 	if err != nil {
 		return fmt.Errorf("failed to delete from redis: %w", err)
 	}
@@ -339,15 +364,15 @@ func NewMetadataStoreFactory() MetadataStoreFactory {
 	return &DefaultMetadataStoreFactory{}
 }
 
-// Create 根据配置类型创建对应的MetadataStore实例
-func (f *DefaultMetadataStoreFactory) Create(config core.MetadataConfig) (MetadataStore, error) {
+// Create 根据配置类型创建对应的MetadataStore实例，pipelineId用于隔离不同流水线的数据
+func (f *DefaultMetadataStoreFactory) Create(config core.MetadataConfig, pipelineId string) (MetadataStore, error) {
 	switch config.Type {
 	case "in-config":
 		return NewInConfigMetadataStore(config)
 	case "http":
-		return NewHTTPMetadataStore(config)
+		return NewHTTPMetadataStore(config, pipelineId)
 	case "redis":
-		return NewRedisMetadataStore(config)
+		return NewRedisMetadataStore(config, pipelineId)
 	default:
 		return nil, fmt.Errorf("unsupported metadata store type: %s", config.Type)
 	}
