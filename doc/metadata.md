@@ -17,11 +17,16 @@ type MetadataStore interface {
 
 ```go
 type MetadataStoreFactory interface {
-    Create(config MetadataConfig) (MetadataStore, error)    // 根据配置创建存储
+    Create(config MetadataConfig, pipelineId string) (MetadataStore, error)    // 根据配置创建存储，pipelineId 用于数据隔离
 }
 ```
 
 默认实现：`DefaultMetadataStoreFactory`，根据 `MetadataConfig.Type` 选择后端。
+
+**pipelineId 隔离机制：**
+- **HTTP**：通过 `X-Pipeline-ID` 请求头传递
+- **Redis**：Key 前缀为 `flowx/{pipelineId}/{key}`
+- **in-config**：不依赖 pipelineId
 
 ## InConfigMetadataStore
 
@@ -47,11 +52,11 @@ Metadate:
 ### 使用
 
 ```go
-factory := &DefaultMetadataStoreFactory{}
+factory := NewMetadataStoreFactory()
 store, _ := factory.Create(MetadataConfig{
     Type: "in-config",
     Data: map[string]any{"key1": "value1"},
-})
+}, "pipeline-001")
 
 store.Set(ctx, "key2", "value2")
 val, _ := store.Get(ctx, "key1")  // "value1"
@@ -69,8 +74,8 @@ store.Close()
 Metadate:
   type: http
   data:
-    endpoint: "http://metadata-service/api/v1/data"
-    method: "GET"        # 读取方法
+    url: "http://metadata-service/api/v1/data"
+    method: "GET"        # Get 方法（仅影响 Get 请求）
     headers:
       Authorization: "Bearer token123"
     timeout: "5s"
@@ -80,16 +85,22 @@ Metadate:
 
 | 键 | 类型 | 说明 |
 |-----|------|------|
-| `endpoint` | string | HTTP 服务地址 |
-| `method` | string | HTTP 方法（默认 GET） |
-| `headers` | map | 请求头 |
+| `url` | string | HTTP 服务地址（必填） |
+| `method` | string | Get 请求方法（默认 GET），Set/Delete 固定使用 POST/DELETE |
+| `headers` | map | 自定义请求头 |
 | `timeout` | string | 超时时间 |
 
 ### API 约定
 
-- **Get**：发送 `{method}` 请求到 `{endpoint}/{key}`
-- **Set**：发送 `POST` 请求到 `{endpoint}/{key}`，body 为 value
-- **Delete**：发送 `DELETE` 请求到 `{endpoint}/{key}`
+- **Get**：发送 `{method}` 请求到 `{url}?key={key}`（key 作为查询参数）
+- **Set**：发送 `POST` 请求到 `{url}`，body 为 JSON `{"key": "...", "value": "..."}`
+- **Delete**：发送 `DELETE` 请求到 `{url}?key={key}`
+
+### 请求头
+
+除自定义 headers 外，HTTP Store 会自动设置以下请求头：
+- `Content-Type: application/json`
+- `X-Pipeline-ID: {pipelineId}`（当 pipelineId 不为空时）
 
 ### 特点
 
@@ -128,8 +139,20 @@ Metadate:
 
 - 使用 `go-redis/v9` 客户端
 - 支持持久化存储
-- 适合分布式场景，多个 Pipeline 实例共享元数据
+- **Pipeline 隔离**：不同流水线的数据通过 key 前缀隔离，格式为 `flowx/{pipelineId}/{key}`
+- 适合分布式场景
 - `Close()` 关闭 Redis 连接
+
+### Pipeline 隔离示例
+
+```yaml
+# pipeline-001 写入 key="mykey"
+# 实际存储的 Redis key: flowx/pipeline-001/mykey
+
+# pipeline-002 写入同名 key="mykey"
+# 实际存储的 Redis key: flowx/pipeline-002/mykey
+# 两者互不干扰
+```
 
 ## 数据流
 
@@ -213,10 +236,20 @@ type MetadataConfig struct {
 }
 ```
 
+## InConfigMetadataStore 扩展方法
+
+`InConfigMetadataStore` 除接口方法外，还提供以下便捷方法：
+
+```go
+func (s *InConfigMetadataStore) GetAll() map[string]string  // 获取所有元数据的副本
+func (s *InConfigMetadataStore) Keys() []string             // 获取所有键
+```
+
 ## 线程安全
 
-所有三种实现都使用 `sync.RWMutex` 保证并发安全：
+所有三种实现都保证并发安全：
 
-- 读操作使用读锁（`RLock`）
-- 写操作使用写锁（`Lock`）
+- **InConfig**：使用 `sync.RWMutex` 保护内部 map
+- **HTTP**：依赖 HTTP 服务端实现并发控制
+- **Redis**：依赖 Redis 服务端实现并发控制
 - 多个 Pipeline 可以安全地并发访问同一个 Store 实例

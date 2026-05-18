@@ -6,11 +6,10 @@
 
 ### Executor 接口
 
-```go
 type Executor interface {
-    Prepare(ctx context.Context) error              // 准备执行环境
-    Destruction(ctx context.Context) error           // 销毁执行环境
-    Transfer(ctx, resultChan, commandChan, inputChan) // 命令循环
+    Prepare(ctx context.Context) error                                               // 准备执行环境
+    Destruction(ctx context.Context) error                                           // 销毁执行环境
+    Transfer(ctx context.Context, resultChan chan<- any, commandChan <-chan any, inputChan <-chan []byte) // 命令循环
 }
 ```
 
@@ -59,7 +58,7 @@ type CommandWrapper struct {
 type StepResult struct {
     StepName   string
     Command    string
-    Output     []byte
+    Output     string
     Error      error
     StartTime  time.Time
     FinishTime time.Time
@@ -232,7 +231,6 @@ exec := kubernetes.NewKubernetesExecutorWithClient(client, restConfig, "default"
 | 配置键 | 类型 | 说明 |
 |--------|------|------|
 | `namespace` | string | K8s 命名空间 |
-| `image` | string | 容器镜像 |
 | `workdir` | string | 工作目录 |
 | `env` | map[string]string | 环境变量 |
 | `serviceAccount` | string | ServiceAccount 名称 |

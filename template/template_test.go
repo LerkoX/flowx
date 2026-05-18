@@ -1,7 +1,12 @@
 package template
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
+
+	"github.com/flosch/pongo2/v6"
 )
 
 func TestNewPongo2TemplateEngine(t *testing.T) {
@@ -286,5 +291,162 @@ func TestPongo2TemplateEngine_EvaluateBool_WithNodeData(t *testing.T) {
 
 	if !result {
 		t.Error("Expected true for matching node status")
+	}
+}
+
+// ========== 过滤器单元测试 ==========
+
+func TestFilterToJSON_String(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{"name": "hello"}
+
+	result, err := engine.EvaluateString("{{ name | toJson }}", ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != "hello" {
+		t.Errorf("Expected 'hello', got '%s'", result)
+	}
+}
+
+func TestFilterToJSON_Map(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{"data": map[string]any{"key": "value", "num": 42}}
+
+	result, err := engine.EvaluateString("{{ data | toJson }}", ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("Failed to parse JSON result: %v", err)
+	}
+	if parsed["key"] != "value" {
+		t.Errorf("Expected key='value', got %v", parsed["key"])
+	}
+}
+
+func TestFilterToJSON_Slice(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{"items": []any{"a", "b", "c"}}
+
+	result, err := engine.EvaluateString("{{ items | toJson }}", ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	var parsed []any
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("Failed to parse JSON result: %v", err)
+	}
+	if len(parsed) != 3 {
+		t.Errorf("Expected 3 items, got %d", len(parsed))
+	}
+}
+
+func TestFilterToYaml(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{"data": map[string]any{"name": "test", "count": 42}}
+
+	result, err := engine.EvaluateString("{{ data | toYaml }}", ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result, "name: test") {
+		t.Errorf("Expected YAML to contain 'name: test', got '%s'", result)
+	}
+}
+
+func TestFilterToBase64(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{"text": "hello world"}
+
+	result, err := engine.EvaluateString("{{ text | toBase64 }}", ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expected := base64.StdEncoding.EncodeToString([]byte("hello world"))
+	if result != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, result)
+	}
+}
+
+func TestFilterToBase64_NonString(t *testing.T) {
+	val := pongo2.AsValue(123)
+	_, pongoErr := filterToBase64(val, nil)
+	if pongoErr == nil {
+		t.Error("Expected error for non-string input to toBase64")
+	}
+}
+
+func TestFilterFromBase64(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	encoded := base64.StdEncoding.EncodeToString([]byte("hello world"))
+	ctx := map[string]any{"encoded": encoded}
+
+	result, err := engine.EvaluateString("{{ encoded | fromBase64 }}", ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != "hello world" {
+		t.Errorf("Expected 'hello world', got '%s'", result)
+	}
+}
+
+func TestFilterFromBase64_Invalid(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{"bad": "!!!not-base64!!!"}
+
+	_, err := engine.EvaluateString("{{ bad | fromBase64 }}", ctx)
+	if err == nil {
+		t.Error("Expected error for invalid base64 input")
+	}
+}
+
+func TestFilterURLEncode(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{"url": "hello world!"}
+
+	result, err := engine.EvaluateString("{{ url | urlencode }}", ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != "hello+world%21" {
+		t.Errorf("Expected 'hello+world%%21', got '%s'", result)
+	}
+}
+
+func TestFilterURLEncode_NonString(t *testing.T) {
+	// 直接测试 filter 函数
+	val := pongo2.AsValue(123)
+	_, pongoErr := filterURLEncode(val, nil)
+	if pongoErr == nil {
+		t.Error("Expected error for non-string input to urlencode")
+	}
+}
+
+func TestFilterURLDecode(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{"encoded": "hello+world%21"}
+
+	result, err := engine.EvaluateString("{{ encoded | urldecode }}", ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != "hello world!" {
+		t.Errorf("Expected 'hello world!', got '%s'", result)
+	}
+}
+
+func TestFilterURLDecode_Invalid(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{"bad": "%ZZ"}
+
+	_, err := engine.EvaluateString("{{ bad | urldecode }}", ctx)
+	if err == nil {
+		t.Error("Expected error for invalid URL encoding")
 	}
 }

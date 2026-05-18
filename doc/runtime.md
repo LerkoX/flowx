@@ -22,6 +22,7 @@ type Runtime interface {
     ExportConfig(id string) (string, error)                                   // 导出运行时配置
     Pause(ctx context.Context, id string) error                               // 暂停流水线
     Resume(ctx context.Context, id string) error                              // 恢复流水线
+    UpdateConfig(ctx context.Context, id string, newConfigYAML string) error              // 通过新配置更新流水线
     ModifyGraph(ctx context.Context, id string, modifications GraphModifications) error // 动态修改图
 }
 ```
@@ -248,6 +249,42 @@ err := rt.Resume(ctx, "pipeline-001")
 ```
 
 恢复后会重新计算 BFS 层级（图可能已被修改），从暂停时的层级继续执行。
+
+## 配置更新
+
+`UpdateConfig` 通过提供新的 YAML 配置来更新流水线。FlowX 自动计算新旧配置的差异并应用变更：
+
+```go
+newConfig := `
+Version: "1.0"
+Name: updated-pipeline
+
+Graph: |
+  stateDiagram-v2
+    [*] --> Build
+    Build --> Deploy
+    Deploy --> [*]
+
+Nodes:
+  Build:
+    executor: local
+    steps:
+      - name: build
+        run: echo "Building..."
+  Deploy:
+    executor: local
+    steps:
+      - name: deploy
+        run: echo "Deploying..."
+`
+
+err := rt.UpdateConfig(ctx, "pipeline-001", newConfig)
+```
+
+**规则：**
+- 已执行的节点不能被移除或修改
+- 新节点将在恢复后执行
+- 边只能在两端节点都未执行时被移除
 
 ## 动态图修改
 

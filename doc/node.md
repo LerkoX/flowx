@@ -65,7 +65,7 @@ Nodes:
 
 ```go
 type Step struct {
-    Id          string  // 步骤唯一标识（自动生成）
+    Id          string  // 步骤唯一标识（由 EnsureIds() 自动生成，无需手动设置）
     Name        string  // 步骤名称
     Description string  // 步骤描述
     Run         string  // 执行的 shell 命令（支持模板渲染）
@@ -155,7 +155,17 @@ type ExecutorRuntimeInfo struct {
 
 输出提取功能可以从命令输出中提取结构化数据，保存到 metadata 中供后续节点使用。提取的数据会自动填充 `srcNode` 字段。
 
-### OutputExtractor 接口
+### 提取器内部实现
+
+输出提取由 Pipeline 内部方法 `extractOutput()` 处理，通过 `createExtractor()` 根据配置创建对应的提取器：
+
+```go
+// PipelineImpl 内部方法（非公开 API）
+func (p *PipelineImpl) extractOutput(ctx context.Context, node Node, stepResult *StepResult, fullOutput string) error
+func (p *PipelineImpl) createExtractor(extractConfig interface{}) (OutputExtractor, error)
+```
+
+提取器接口（内部使用）：
 
 ```go
 type OutputExtractor interface {
@@ -216,19 +226,18 @@ extract:
 
 **规则：**
 
-- 每个正则表达式必须包含至少一个捕获组
-- 第一个捕获组的内容作为值
+- 正则表达式可以包含捕获组，第一个捕获组的内容作为值
+- 如果没有捕获组，使用完整匹配作为值
 - 如果正则无效，创建时返回错误
 
-### 提取器工厂
+### 提取的数据存储
 
-```go
-// 通过配置创建提取器
-extractor, err := CreateExtractor(extractConfig)
+提取的数据会经过 `convertToString()` 转换后存储：
+- **字符串**：原样保存
+- **slice/map**：序列化为 JSON 字符串保存
+- **其他类型**：使用 `fmt.Sprintf("%v", val)` 转换
 
-// 使用
-data, err := extractor.Extract(output)
-```
+这使得复杂类型（如数组）可以在后续节点中通过 `tryParseJSON()` 自动解析回对象。
 
 ## 交互式输入
 
