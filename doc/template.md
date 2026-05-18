@@ -6,9 +6,9 @@
 
 ```go
 type TemplateEngine interface {
-    EvaluateBool(expression string, ctx EvaluationContext) (bool, error)    // 评估布尔表达式
-    EvaluateString(expression string, ctx EvaluationContext) (string, error) // 渲染字符串模板
-    Validate(expression string) error                                        // 校验语法
+    EvaluateBool(expression string, ctx map[string]any) (bool, error)    // 评估布尔表达式
+    EvaluateString(expression string, ctx map[string]any) (string, error) // 渲染字符串模板
+    Validate(expression string) error                                    // 校验语法
 }
 ```
 
@@ -144,6 +144,17 @@ pongo2 内置 60+ 过滤器，常用：
 | `length` | `{{ Param.list\|length }}` | 长度 |
 | `date` | `{{ Param.timestamp\|date:"Y-m-d" }}` | 日期格式化 |
 
+### FlowX 自定义过滤器
+
+| 过滤器 | 示例 | 说明 |
+|--------|------|------|
+| `toJson` | `{{ Param.data\|toJson }}` | 值转 JSON 字符串（map/slice 序列化，字符串原样返回） |
+| `toYaml` | `{{ Param.data\|toYaml }}` | 值转 YAML 字符串 |
+| `toBase64` | `{{ Param.text\|toBase64 }}` | 字符串 Base64 编码 |
+| `fromBase64` | `{{ Param.encoded\|fromBase64 }}` | Base64 解码为字符串 |
+| `urlencode` | `{{ Param.url\|urlencode }}` | URL 编码 |
+| `urldecode` | `{{ Param.encoded\|urldecode }}` | URL 解码 |
+
 ### 自定义过滤器
 
 ```go
@@ -163,13 +174,14 @@ pongo2.RegisterFilter("myFilter", func(in *pongo2.Value, param *pongo2.Value) (*
 // 1. Param 值作为顶层键
 // 2. Param 值同时以 "Param.xxx" 形式存在
 // 3. Metadata 键展开（点分隔键转为嵌套对象）
+// 4. Metadata 中的 JSON 字符串自动解析为对象/数组
 //
-// 例如 Param: {env: "prod"}, Metadata: {"Build.result": "ok"}
+// 例如 Param: {env: "prod"}, Metadata: {"Build.result": "ok", "Build.jsonData": '{"key": "val"}'}
 // 最终上下文：
 // {
 //   "env": "prod",
 //   "Param": {"env": "prod"},
-//   "Build": {"result": "ok"}
+//   "Build": {"result": "ok", "jsonData": {"key": "val"}}
 // }
 ```
 
@@ -183,3 +195,27 @@ Metadata 中包含点号（`.`）的键会被展开为嵌套对象：
 ```
 
 这使得模板中可以直接使用 `{{ Node1.result }}` 引用。
+
+### JSON 字符串自动解析
+
+Metadata 中的字符串值如果符合 JSON 格式（以 `{` `}` 或 `[` `]` 包裹），会自动解析为对象或数组：
+
+```yaml
+Nodes:
+  Build:
+    executor: local
+    extract:
+      type: codec-block
+    steps:
+      - name: build
+        run: |
+          echo '```flowx-yaml'
+          echo 'forecasts: "[{"day":"周一","temp":"25"}]"  # 天气数据'
+          echo '```'
+  Notify:
+    executor: local
+    steps:
+      - name: notify
+        # forecasts 在上下文中是 []interface{} 而非字符串
+        run: echo "{{ Build.forecasts[0].day }}"  # 输出：周一
+```

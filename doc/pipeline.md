@@ -20,6 +20,7 @@ type Pipeline interface {
     SetExecutorProvider(provider ExecutorProvider)        // 设置执行器工厂
     SetTemplateEngine(engine TemplateEngine)             // 设置模板引擎
     GetTemplateEngine() TemplateEngine                   // 获取模板引擎
+    SetPusher(pusher logger.Pusher)                      // 设置日志推送器
     Pause() error                                        // 暂停流水线（等待当前层完成）
     Resume(ctx context.Context) error                    // 恢复暂停的流水线
     IsModifiable() bool                                  // 当前是否可修改图
@@ -211,7 +212,7 @@ Run() 被调用
 1. 所有正在运行的执行器收到取消信号
 2. 执行器终止当前进程
 3. 节点状态更新为 `CANCELLED`
-4. 流水线状态更新为 `ABORTED`
+4. 流水线状态更新为 `CANCELLED`
 
 ## 事件系统
 
@@ -228,6 +229,7 @@ Run() 被调用
 | `EventPipelineGraphModified` | `PipelineGraphModified` | 图被动态修改 |
 | `EventPipelineExecutorPrepare` | `PipelineExecutorPrepare` | 执行器准备中 |
 | `EventPipelineExecutorPrepareDone` | `PipelineExecutorPrepareDone` | 执行器准备完成 |
+| `EventPipelineStatusUpdate` | `PipelineStatusUpdate` | 流水线状态更新 |
 | `EventPipelineNodeStart` | `PipelineNodeStart` | 节点开始执行 |
 | `EventPipelineNodeFinish` | `PipelineNodeFinish` | 节点执行完成 |
 

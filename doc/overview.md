@@ -1,8 +1,8 @@
-# Pipelinex - 项目概述
+# FlowX - 项目概述
 
 ## 简介
 
-Pipelinex 是一个基于 Go 语言开发的 CI/CD 流水线执行库。它使用 DAG（有向无环图）结构管理任务依赖关系，支持独立任务的并发执行，并提供可插拔的执行后端（Local、Docker、Kubernetes）。
+FlowX（包名 `github.com/LerkoX/flowx`）是一个基于 Go 语言开发的 CI/CD 流水线执行库。它使用 DAG（有向无环图）结构管理任务依赖关系，支持独立任务的并发执行，并提供可插拔的执行后端（Local、Docker、Kubernetes）。
 
 核心特性：
 
@@ -59,34 +59,35 @@ Pipelinex 是一个基于 Go 语言开发的 CI/CD 流水线执行库。它使�
 
 ```
 flowx/
-├── pipeline.go           # Pipeline 接口定义
-├── pipeline_impl.go      # Pipeline + DAG 图实现
-├── node.go               # Node 接口定义
-├── node_impl.go          # Node 实现
-├── edge.go               # Edge 接口定义
-├── edge_impl.go          # Edge 实现（条件边）
-├── eval_context.go       # 表达式求值上下文
-├── executor.go           # Executor 类型重导出
-├── config.go             # 配置结构体定义
-├── const.go              # 常量（状态、事件）
-├── err.go                # 错误定义
-├── uuid.go               # UUID 工具函数
-├── snapshot.go           # 快照与恢复
-├── extractor.go          # 输出提取器
-├── template.go           # 模板引擎接口
-├── template_impl.go      # pongo2 模板引擎实现
-├── metadata.go           # MetadataStore 接口
-├── metadata_impl.go      # 三种存储实现
-├── runtime.go            # Runtime 接口
-├── runtime_impl.go       # Runtime 实现
-├── executor/
+├── core/                 # 核心类型定义
+│   ├── config.go         # 配置结构体定义
+│   ├── const.go          # 常量（状态、事件）
+│   ├── field.go          # FieldItem 定义
+│   └── uuid.go           # UUID 工具函数
+├── dag/                  # DAG 流水线核心
+│   ├── pipeline.go       # Pipeline 接口定义
+│   ├── pipeline_impl.go  # Pipeline + DAG 图实现
+│   ├── node.go           # Node 接口定义
+│   ├── node_impl.go      # Node 实现
+│   ├── edge.go           # Edge 接口定义
+│   ├── edge_impl.go      # Edge 实现（条件边）
+│   ├── eval_context.go   # 表达式求值上下文
+│   ├── extractor.go      # 输出提取器
+│   └── snapshot.go       # 快照与恢复
+├── executor/             # 执行器系统
 │   ├── interfaces.go     # Executor/Adapter/Bridge 接口
 │   ├── provider/
 │   │   └── provider.go   # Executor 提供者（工厂模式）
 │   ├── docker/           # Docker 执行器
 │   ├── local/            # Local 执行器
 │   └── kubernetes/       # Kubernetes 执行器
-├── logger/
+├── template/             # 模板引擎
+│   ├── template.go       # 模板引擎接口
+│   └── template_impl.go  # pongo2 模板引擎实现
+├── metadata/             # 元数据存储
+│   ├── metadata.go       # MetadataStore 接口
+│   └── metadata_impl.go  # 三种存储实现
+├── logger/               # 日志系统
 │   ├── logger.go         # 日志接口与类型
 │   └── console_pusher.go # 控制台日志推送
 ├── doc/                  # 文档目录
@@ -156,17 +157,21 @@ Nodes:
 ### 带事件监听
 
 ```go
-// 创建监听器
-listener := &flowx.DGAListener{
-    Events: []flowx.Event{
+// 实现 Listener 接口
+type MyListener struct{}
+
+func (l *MyListener) Events() []flowx.Event {
+    return []flowx.Event{
         flowx.EventPipelineNodeStart,
         flowx.EventPipelineNodeFinish,
-    },
-    Handler: func(p flowx.Pipeline, event flowx.Event) {
-        fmt.Printf("Event: %s, Pipeline: %s\n", event, p.Id())
-    },
+    }
 }
 
+func (l *MyListener) Handle(p flowx.Pipeline, event flowx.Event) {
+    fmt.Printf("Event: %s, Pipeline: %s\n", event, p.Id())
+}
+
+listener := &MyListener{}
 p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, listener)
 ```
 

@@ -322,3 +322,125 @@ func TestBuildRenderContext_FieldItemValue(t *testing.T) {
 		t.Errorf("mapVal[key] = %v, want value", mapVal["key"])
 	}
 }
+
+// ========== tryParseJSON 单元测试 ==========
+
+func TestTryParseJSON_NonString(t *testing.T) {
+	input := 42
+	result := tryParseJSON(input)
+	if result != input {
+		t.Errorf("Expected non-string to be returned as-is, got %v", result)
+	}
+}
+
+func TestTryParseJSON_EmptyString(t *testing.T) {
+	input := ""
+	result := tryParseJSON(input)
+	if result != input {
+		t.Errorf("Expected empty string to be returned as-is, got %v", result)
+	}
+}
+
+func TestTryParseJSON_SingleChar(t *testing.T) {
+	input := "x"
+	result := tryParseJSON(input)
+	if result != input {
+		t.Errorf("Expected single char string to be returned as-is, got %v", result)
+	}
+}
+
+func TestTryParseJSON_NotJSON(t *testing.T) {
+	input := "hello world"
+	result := tryParseJSON(input)
+	if result != input {
+		t.Errorf("Expected non-JSON string to be returned as-is, got %v", result)
+	}
+}
+
+func TestTryParseJSON_InvalidJSON(t *testing.T) {
+	input := "{invalid json}"
+	result := tryParseJSON(input)
+	if result != input {
+		t.Errorf("Expected invalid JSON string to be returned as-is, got %v", result)
+	}
+}
+
+func TestTryParseJSON_Object(t *testing.T) {
+	input := `{"name":"test","count":42}`
+	result := tryParseJSON(input)
+
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected map[string]interface{}, got %T", result)
+	}
+	if m["name"] != "test" {
+		t.Errorf("Expected name='test', got %v", m["name"])
+	}
+}
+
+func TestTryParseJSON_Array(t *testing.T) {
+	input := `["a","b","c"]`
+	result := tryParseJSON(input)
+
+	arr, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+	if len(arr) != 3 {
+		t.Errorf("Expected 3 items, got %d", len(arr))
+	}
+}
+
+func TestTryParseJSON_NestedObject(t *testing.T) {
+	input := `{"outer":{"inner":"value"}}`
+	result := tryParseJSON(input)
+
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected map[string]interface{}, got %T", result)
+	}
+	outer, ok := m["outer"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected nested map, got %T", m["outer"])
+	}
+	if outer["inner"] != "value" {
+		t.Errorf("Expected inner='value', got %v", outer["inner"])
+	}
+}
+
+func TestTryParseJSON_Whitespace(t *testing.T) {
+	input := `   {"key":"val"}   `
+	result := tryParseJSON(input)
+
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected map[string]interface{}, got %T", result)
+	}
+	if m["key"] != "val" {
+		t.Errorf("Expected key='val', got %v", m["key"])
+	}
+}
+
+func TestTryParseJSON_BracketsButNotJSON(t *testing.T) {
+	input := "[not json]"
+	result := tryParseJSON(input)
+	if result != input {
+		t.Errorf("Expected brackets-but-not-JSON string to be returned as-is, got %v", result)
+	}
+}
+
+func TestTryParseJSON_Boolean(t *testing.T) {
+	input := "true"
+	result := tryParseJSON(input)
+	if result != input {
+		t.Errorf("Expected boolean string to be returned as-is, got %v", result)
+	}
+}
+
+func TestTryParseJSON_Null(t *testing.T) {
+	input := "null"
+	result := tryParseJSON(input)
+	if result != input {
+		t.Errorf("Expected null string to be returned as-is, got %v", result)
+	}
+}

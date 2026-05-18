@@ -25,3 +25,4 @@ _debug_bin*
 .claude
 examples/workflows/runner
 node_modules/
+.playwright-mcp

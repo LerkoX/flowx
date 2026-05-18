@@ -246,6 +246,7 @@ Executors:
 Executors:
   k8s:
     type: kubernetes
+    description: "K8s 执行器"      # 执行器用途说明
     config:
       namespace: default           # K8s 命名空间
       serviceAccount: default      # ServiceAccount
@@ -271,6 +272,7 @@ Executors:
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| `Logging.description` | string | 日志配置描述 |
 | `Logging.endpoint` | string | 日志接收服务 HTTP 接口地址 |
 | `Logging.headers` | map | 请求头（认证、租户标识等） |
 | `Logging.timeout` | duration | 单次推送超时时间 |
@@ -362,6 +364,9 @@ Graph: |
 | `SUCCESS` | 执行成功 |
 | `FAILED` | 执行失败 |
 | `CANCELLED` | 已取消 |
+| `PAUSED` | 已暂停 |
+| `STOPPED` | 已停止 |
+| `ABORTED` | 已终止 |
 
 ---
 
@@ -380,10 +385,31 @@ Graph: |
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `steps[].id` | string | 步骤唯一标识 |
+| `steps[].id` | string | 步骤唯一标识（自动生成，通常无需手动设置） |
 | `steps[].name` | string | 步骤名称 |
 | `steps[].description` | string | 步骤描述 |
 | `steps[].run` | string | 执行的 shell 命令（支持模板渲染） |
+
+### 节点运行时状态（恢复执行）
+
+节点配置支持 `runtime` 字段用于快照恢复：
+
+```yaml
+Nodes:
+  Build:
+    executor: local
+    runtime:                    # 运行时状态（用于恢复）
+      status: "SUCCESS"         # 已完成的节点会被跳过
+      startTime: "2026-03-30T10:00:00Z"
+      endTime: "2026-03-30T10:01:00Z"
+      steps:
+        - name: build
+          status: "SUCCESS"
+          output: "Build completed"
+    steps:
+      - name: build
+        run: echo "Building..."
+```
 
 ### 输出提取配置
 
