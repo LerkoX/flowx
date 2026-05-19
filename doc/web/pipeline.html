@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -101,10 +102,12 @@
         .content pre {
             background: var(--code-bg); border-radius: 12px; padding: 24px;
             overflow-x: auto; margin-bottom: 24px; border: 1px solid #334155;
+            white-space: pre;
         }
         .content pre code {
             background: transparent; padding: 0; color: #e2e8f0;
             font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 14px; line-height: 1.8;
+            white-space: pre;
         }
         .content blockquote {
             border-left: 4px solid var(--primary); padding-left: 16px; margin-bottom: 24px;
@@ -125,6 +128,10 @@
             background: var(--card); border: 1px solid var(--border); border-radius: 12px;
             padding: 24px; margin-bottom: 24px; font-family: 'SF Mono', monospace; font-size: 13px; line-height: 1.8;
             overflow-x: auto; color: var(--text-light);
+        }
+        .mermaid {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 24px;
         }
         @media (max-width: 768px) {
             .sidebar { display: none; }
@@ -185,8 +192,33 @@
         <h2 id="overview">概述</h2>
         <p>FlowX 的流水线基于 DAG（有向无环图）结构组织任务。每个节点代表一个执行单元，边代表执行顺序和依赖关系。引擎使用 BFS 层级遍历算法，支持无环图和有环图（通过条件回边实现循环）。</p>
 
-        <div class="diagram">
-流水线执行流程：
+        <pre class="mermaid">flowchart TD
+    Start([Run]) --> Event1[触发 PipelineStart]
+    Event1 --> Init[创建求值上下文]
+    Init --> Loop{循环检测}
+    Loop -->|有回边| SetIter[设置 iteration]
+    Loop -->|无回边| BFS[BFS 层级计算]
+    SetIter --> BFS
+    BFS --> ExecLevel[并发执行当前层级]
+    ExecLevel --> CheckPause{暂停?}
+    CheckPause -->|是| Pause[保存状态等待恢复]
+    CheckPause -->|否| CheckCancel{取消?}
+    CheckCancel -->|是| Cancel[返回 ctx.Err]
+    CheckCancel -->|否| NextLevel{还有层级?}
+    NextLevel -->|是| ExecLevel
+    NextLevel -->|否| CheckBackEdge{回边条件?}
+    CheckBackEdge -->|true| Reset[重置循环节点]
+    Reset --> Loop
+    CheckBackEdge -->|false| Cleanup[清理执行器]
+    Cleanup --> Event2[触发 PipelineFinish]
+    Event2 --> Done([关闭 doneChan])
+    Pause --> Resume[恢复] --> BFS
+
+    style Start fill:#e0f2fe,stroke:#2563eb
+    style Done fill:#dcfce7,stroke:#10b981
+    style Cancel fill:#fee2e2,stroke:#ef4444</pre>
+
+        <pre style="white-space: pre; overflow-x: auto;"><code class="language-plaintext">流水线执行流程：
 
 Run() 被调用
   ├── 触发 PipelineStart 事件
@@ -207,7 +239,7 @@ Run() 被调用
   ├── 清理所有执行器
   ├── 触发 PipelineFinish 事件
   └── 关闭 doneChan
-        </div>
+</code></pre>
 
         <h2 id="dag">DAG 图结构</h2>
         <p>FlowX 使用 Mermaid <code>stateDiagram-v2</code> 语法定义图结构。引擎解析此语法后，自动创建节点和边。</p>
@@ -249,15 +281,22 @@ Run() 被调用
             <li>重复步骤 4-6，直到所有节点执行完毕</li>
         </ol>
 
-        <div class="diagram">
-示例：Build → Test → Deploy
+        <pre class="mermaid">flowchart LR
+    subgraph Level1["层级 1"]
+        B["Build"]
+    end
+    subgraph Level2["层级 2"]
+        T["Test"]
+    end
+    subgraph Level3["层级 3"]
+        D["Deploy"]
+    end
+    B --> T
+    T --> D
 
-起始节点: [Build]           入度: Build=0, Test=1, Deploy=1
-  ↓ Build 完成
-层级 2:   [Test]            入度: Test=0, Deploy=1
-  ↓ Test 完成
-层级 3:   [Deploy]          入度: Deploy=0
-        </div>
+    style Level1 fill:#e0f2fe,stroke:#2563eb
+    style Level2 fill:#fef3c7,stroke:#f59e0b
+    style Level3 fill:#dcfce7,stroke:#10b981</pre>
 
         <h3>有环图遍历</h3>
         <p>有环图通过 <strong>forwardGraph + 回边评估</strong> 实现循环执行：</p>
@@ -273,6 +312,19 @@ Run() 被调用
             </li>
             <li><strong>迭代安全</strong>：通过 <code>MaxLoopIterations</code>（默认 100）防止无限循环</li>
         </ol>
+
+        <pre class="mermaid">stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> D
+    D --> [*]
+    C --> A: iteration < 3
+
+    note right of A
+        迭代 0,1,2 执行
+        iteration=3 时结束
+    end note</pre>
 
         <div class="diagram">
 图结构: A → B → C → D，回边 C → A（条件: iteration < 3）
@@ -312,13 +364,26 @@ Graph: |
         <h2 id="lifecycle">流水线生命周期</h2>
 
         <h3>状态流转</h3>
-        <div class="diagram">
-Init → Running → Success
-                → Failed
-                → Cancelled
-                → Paused → Running (恢复)
-                → Stopped → Running (恢复)
-        </div>
+        <pre class="mermaid">stateDiagram-v2
+    [*] --> Init
+    Init --> Running
+    Running --> Success
+    Running --> Failed
+    Running --> Cancelled
+    Running --> Paused
+    Paused --> Running: 恢复
+    Running --> Stopped
+    Stopped --> Running: 恢复
+    Success --> [*]
+    Failed --> [*]
+    Cancelled --> [*]
+
+    note right of Running
+        核心执行状态
+    end note
+    note right of Paused
+        可动态修改图结构
+    end note</pre>
 
         <h3>节点跳过机制</h3>
         <p>节点和步骤在以下终端状态下会被跳过：</p>
@@ -429,6 +494,6 @@ err := rt.ModifyGraph(ctx, "pipeline-001", mods)</code></pre>
     </article>
 </div>
 
-<script>hljs.highlightAll();</script>
+<script>mermaid.initialize({startOnLoad:true});hljs.highlightAll();</script>
 </body>
 </html>

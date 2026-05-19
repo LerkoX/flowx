@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -127,6 +128,10 @@
         }
         .tag-required { background: #fef2f2; color: #dc2626; }
         .tag-optional { background: #f1f5f9; color: var(--text-light); }
+        .mermaid {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 24px;
+        }
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .content { padding: 24px; }
@@ -186,6 +191,39 @@
         <p>FlowX 使用 YAML 格式定义流水线配置。本文档详细说明所有配置字段的含义、类型和使用方法。</p>
 
         <h2 id="overview">完整结构概览</h2>
+
+        <pre class="mermaid">flowchart TD
+    Config["YAML Config"] --> Version["Version"]
+    Config --> Name["Name"]
+    Config --> Metadate["Metadate
+元数据存储"]
+    Config --> Param["Param
+全局参数"]
+    Config --> Executors["Executors
+执行器定义"]
+    Config --> Logging["Logging
+日志配置"]
+    Config --> Graph["Graph
+DAG 流程图"]
+    Config --> Nodes["Nodes
+节点定义"]
+    Config --> MaxLoop["MaxLoopIterations
+循环上限"]
+    Config --> Status["Status
+运行时状态"]
+
+    Param -->|引用| Metadate
+    Param -->|引用| Nodes
+    Param -->|条件表达式| Graph
+    Executors -->|被引用| Nodes
+    Graph -->|定义| Nodes
+    Nodes -->|提取数据| Metadate
+
+    style Config fill:#e0f2fe,stroke:#2563eb
+    style Param fill:#fef3c7,stroke:#f59e0b
+    style Nodes fill:#dcfce7,stroke:#10b981
+    style Metadate fill:#f3e8ff,stroke:#9333ea</pre>
+
         <pre><code class="language-yaml">Version: "1.0"              # 配置版本
 Name: my-pipeline           # 流水线名称
 
@@ -463,19 +501,26 @@ Graph: |
         run: go test -cover</code></pre>
 
         <h2>字段引用关系</h2>
-        <pre><code class="language-plaintext">Param ----┬--> Metadate.data（模板渲染）
-          ├--> Nodes.steps[].run（命令参数渲染）
-          ├--> Edge 表达式（条件求值）
-          └--> Logging.headers（动态认证）
+        <pre class="mermaid">flowchart LR
+    Param["Param
+全局参数"] -->|模板渲染| Metadate["Metadate.data"]
+    Param -->|命令参数渲染| NodesRun["Nodes.steps[].run"]
+    Param -->|条件求值| Edge["Edge 表达式"]
+    Param -->|动态认证| Logging["Logging.headers"]
 
-Executors --> Nodes.executor（执行器选择）
+    Executors["Executors"] -->|执行器选择| NodesExec["Nodes.executor"]
+    Graph["Graph"] -->|定义执行顺序| GraphNodes["Nodes"]
+    Status["Status"] -->|控制跳过| StatusNodes["Nodes"]
 
-Graph --> 定义节点执行顺序和依赖关系
-
-Status --> 控制节点是否跳过（恢复执行）</code></pre>
+    style Param fill:#fef3c7,stroke:#f59e0b
+    style Metadate fill:#f3e8ff,stroke:#9333ea
+    style NodesRun fill:#dcfce7,stroke:#10b981
+    style NodesExec fill:#dcfce7,stroke:#10b981
+    style GraphNodes fill:#dcfce7,stroke:#10b981
+    style StatusNodes fill:#dcfce7,stroke:#10b981</pre>
     </article>
 </div>
 
-<script>hljs.highlightAll();</script>
+<script>mermaid.initialize({startOnLoad:true});hljs.highlightAll();</script>
 </body>
 </html>

@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -126,6 +127,10 @@
             padding: 24px; margin-bottom: 24px; font-family: 'SF Mono', monospace; font-size: 13px; line-height: 1.8;
             overflow-x: auto; color: var(--text-light);
         }
+        .mermaid {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 24px;
+        }
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .content { padding: 24px; }
@@ -180,39 +185,31 @@
 
         <h2 id="overview">架构总览</h2>
 
-        <div class="diagram">
-┌─────────────────────────────────────────────────────────┐
-│                      Runtime（运行时）                     │
-│  - 同步/异步执行                                          │
-│  - 流水线生命周期管理                                      │
-│  - 快照与恢复                                             │
-├─────────────────────────────────────────────────────────┤
-│                   Pipeline（流水线）                       │
-│  - DAG 图遍历（BFS，统一支持有环/无环）                      │
-│  - 循环执行（条件回边 + iteration 计数器）                    │
-│  - 暂停/恢复                                              │
-│  - 并发节点执行                                           │
-│  - 事件通知                                               │
-│  - 模板渲染                                               │
-├───────────────┬───────────────┬─────────────────────────┤
-│     Node      │     Edge      │    MetadataStore        │
-│  节点与步骤    │  条件边        │    元数据存储             │
-│  状态管理      │  表达式求值     │    in-config/redis/http │
-│  输出提取      │               │                         │
-├───────────────┴───────────────┴─────────────────────────┤
-│                  Executor（执行器）                        │
-│  ┌──────────┐  ┌──────────┐  ┌────────────────────┐    │
-│  │  Local   │  │  Docker  │  │    Kubernetes       │    │
-│  │ 本地Shell │  │ 容器执行  │  │    Pod 执行         │    │
-│  └──────────┘  └──────────┘  └────────────────────┘    │
-├─────────────────────────────────────────────────────────┤
-│              Template Engine（模板引擎）                    │
-│              基于 pongo2，支持条件、循环、过滤器              │
-├─────────────────────────────────────────────────────────┤
-│                 Logger（日志系统）                          │
-│           日志推送接口，支持自定义 Pusher                    │
-└─────────────────────────────────────────────────────────┘
-        </div>
+        <pre class="mermaid">block-beta
+    columns 3
+    runtime["Runtime<br/>运行时管理"]:3
+    pipeline["Pipeline<br/>流水线引擎"]:3
+    node["Node<br/>节点与步骤"] edge["Edge<br/>条件边"] meta["MetadataStore<br/>元数据存储"]
+    executor["Executor<br/>执行器系统"]:3
+    template["Template Engine<br/>模板引擎"]:3
+    logger["Logger<br/>日志系统"]:3
+
+    runtime --> pipeline
+    pipeline --> node
+    pipeline --> edge
+    pipeline --> meta
+    pipeline --> executor
+    pipeline --> template
+    pipeline --> logger
+
+    style runtime fill:#e0f2fe,stroke:#2563eb
+    style pipeline fill:#fef3c7,stroke:#f59e0b
+    style executor fill:#dcfce7,stroke:#10b981
+    style node fill:#f3e8ff,stroke:#9333ea
+    style edge fill:#f3e8ff,stroke:#9333ea
+    style meta fill:#f3e8ff,stroke:#9333ea
+    style template fill:#ffedd5,stroke:#f97316
+    style logger fill:#f1f5f9,stroke:#64748b</pre>
 
         <h2 id="structure">目录结构</h2>
 
@@ -308,36 +305,42 @@
 
         <h2 id="dataflow">执行数据流</h2>
 
-        <div class="diagram">
-1. Runtime.RunSync/RunAsync
-   ├── 解析 YAML 配置 → PipelineConfig
-   ├── 渲染 Param（自引用，最多 10 次迭代）
-   ├── 渲染 Metadata.data（引用 Param）
-   ├── 构建 DAG 图（解析 Mermaid stateDiagram-v2）
-   ├── 初始化元数据存储（MetadataStoreFactory）
-   ├── 创建执行器提供者（Provider）
-   ├── 创建 Pipeline 实例
-   └── 执行 Pipeline.Run()
+        <pre class="mermaid">flowchart TD
+    subgraph RuntimePhase["1. Runtime.RunSync/RunAsync"]
+        R1[解析 YAML 配置] --> R2[渲染 Param]
+        R2 --> R3[渲染 Metadata.data]
+        R3 --> R4[构建 DAG 图]
+        R4 --> R5[初始化元数据存储]
+        R5 --> R6[创建 Pipeline 实例]
+        R6 --> R7[执行 Pipeline.Run]
+    end
 
-2. Pipeline.Run
-   ├── 触发 PipelineStart 事件
-   ├── 逐层 BFS 执行
-   │   ├── 并发执行当前层级所有节点
-   │   ├── 每个节点：Prepare → 执行 Steps → Destruction
-   │   ├── 步骤执行：模板渲染 → 命令执行 → 输出提取
-   │   └── 评估出边条件，决定下一层级
-   ├── 触发 PipelineFinish 事件
-   └── 关闭 doneChan
+    subgraph PipelineRun["2. Pipeline.Run"]
+        P1[触发 PipelineStart 事件] --> P2[逐层 BFS 执行]
+        P2 --> P3[并发执行当前层级节点]
+        P3 --> P4[评估出边条件]
+        P4 --> P5{回边条件?}
+        P5 -->|true| P2
+        P5 -->|false| P6[触发 PipelineFinish 事件]
+        P6 --> P7[关闭 doneChan]
+    end
 
-3. 节点执行
-   ├── 模板引擎渲染 run 命令
-   ├── Executor.Transfer 执行命令
-   ├── 实时流式输出到日志
-   └── 输出提取器提取结构化数据 → MetadataStore
-        </div>
+    subgraph NodeExec["3. 节点执行"]
+        N1[模板引擎渲染 run 命令] --> N2[Executor.Transfer]
+        N2 --> N3[实时流式输出到日志]
+        N3 --> N4[输出提取器提取数据]
+        N4 --> N5[(MetadataStore)]
+    end
+
+    R7 --> P1
+    P3 --> N1
+
+    style RuntimePhase fill:#e0f2fe,stroke:#2563eb
+    style PipelineRun fill:#fef3c7,stroke:#f59e0b
+    style NodeExec fill:#dcfce7,stroke:#10b981</pre>
     </article>
 </div>
 
-<script>hljs.highlightAll();</script>
+<script>mermaid.initialize({startOnLoad:true});hljs.highlightAll();</script>
 </body>
 </html>
