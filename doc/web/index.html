@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FlowX - 灵活的流水线执行引擎</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -131,14 +135,20 @@
         .code-block {
             background: var(--code-bg); border-radius: 12px;
             padding: 24px; overflow-x: auto;
-            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-            font-size: 14px; line-height: 1.8;
+            font-size: 14px;
             border: 1px solid #334155;
         }
-        .code-block .comment { color: #64748b; }
-        .code-block .keyword { color: #c084fc; }
-        .code-block .string { color: #4ade80; }
-        .code-block .func { color: #60a5fa; }
+        .code-block pre {
+            margin: 0;
+            background: transparent;
+        }
+        .code-block pre code.hljs {
+            padding: 0;
+            background: transparent;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 14px;
+            line-height: 1.8;
+        }
         .code-header {
             display: flex; align-items: center; gap: 8px;
             margin-bottom: 16px; padding-bottom: 16px;
@@ -308,19 +318,19 @@
                 <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
                 <span>main.go</span>
             </div>
-<span class="keyword">package</span> main
+<pre><code class="language-go">package main
 
-<span class="keyword">import</span> (
-    <span class="string">"context"</span>
-    <span class="string">"fmt"</span>
-    <span class="string">"github.com/LerkoX/flowx"</span>
+import (
+    "context"
+    "fmt"
+    "github.com/LerkoX/flowx"
 )
 
-<span class="keyword">func</span> <span class="func">main</span>() {
-    ctx := context.<span class="func">Background</span>()
-    rt := flowx.<span class="func">NewRuntime</span>(ctx)
+func main() {
+    ctx := context.Background()
+    rt := flowx.NewRuntime(ctx)
 
-    config := <span class="string">`
+    config := `
 Version: "1.0"
 Name: hello-pipeline
 
@@ -341,14 +351,15 @@ Nodes:
     steps:
       - name: greet
         run: echo "Hello, FlowX!"
-`</span>
+`
 
-    p, err := rt.<span class="func">RunSync</span>(ctx, <span class="string">"hello-001"</span>, config, <span class="keyword">nil</span>)
-    <span class="keyword">if</span> err != <span class="keyword">nil</span> {
+    p, err := rt.RunSync(ctx, "hello-001", config, nil)
+    if err != nil {
         panic(err)
     }
-    fmt.<span class="func">Println</span>(<span class="string">"Status:"</span>, p.<span class="func">Status</span>())
+    fmt.Println("Status:", p.Status())
 }
+</code></pre>
         </div>
     </div>
 </section>
@@ -364,9 +375,9 @@ Nodes:
             <div class="executor-tab" onclick="switchTab(this, 'k8s')">Kubernetes</div>
         </div>
         <div id="local" class="executor-content active">
-            <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+            <div class="code-block">
                 <div class="code-header"><span>Local Executor</span></div>
-Executors:
+<pre><code class="language-yaml">Executors:
   local:
     type: local
     config:
@@ -376,6 +387,7 @@ Executors:
         KEY: value
       timeout: 60          # 超时秒数
       pty: false           # 是否使用 PTY
+</code></pre>
             </div>
             <ul style="margin-top: 20px; list-style: none;">
                 <li style="display:flex; align-items:center; gap:10px; padding: 6px 0;"><span style="color: var(--success);">&#10003;</span> 本地 Shell 执行，实时流式输出</li>
@@ -384,9 +396,9 @@ Executors:
             </ul>
         </div>
         <div id="docker" class="executor-content">
-            <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+            <div class="code-block">
                 <div class="code-header"><span>Docker Executor</span></div>
-Executors:
+<pre><code class="language-yaml">Executors:
   docker:
     type: docker
     config:
@@ -398,6 +410,7 @@ Executors:
       env:
         GO_VERSION: "1.21"
       tty: true             # 启用 TTY
+</code></pre>
             </div>
             <ul style="margin-top: 20px; list-style: none;">
                 <li style="display:flex; align-items:center; gap:10px; padding: 6px 0;"><span style="color: var(--success);">&#10003;</span> 每个节点独立容器，自动创建/销毁</li>
@@ -406,9 +419,9 @@ Executors:
             </ul>
         </div>
         <div id="k8s" class="executor-content">
-            <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+            <div class="code-block">
                 <div class="code-header"><span>Kubernetes Executor</span></div>
-Executors:
+<pre><code class="language-yaml">Executors:
   k8s:
     type: kubernetes
     config:
@@ -421,6 +434,7 @@ Executors:
       configMaps:
         - name: my-config
           mountPath: /etc/config
+</code></pre>
             </div>
             <ul style="margin-top: 20px; list-style: none;">
                 <li style="display:flex; align-items:center; gap:10px; padding: 6px 0;"><span style="color: var(--success);">&#10003;</span> 在 K8s Pod 中执行命令</li>
@@ -444,9 +458,9 @@ Executors:
                 <li>条件为 false 的分支自动剪枝</li>
             </ul>
         </div>
-        <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+        <div class="code-block">
             <div class="code-header"><span>conditional.yaml</span></div>
-Graph: |
+<pre><code class="language-yaml">Graph: |
   stateDiagram-v2
     [*] --> Validate
     Validate --> Build : {{ Param.testsPassed }}
@@ -456,6 +470,7 @@ Graph: |
     Deploy --> [*]
     Staging --> [*]
     Skip --> [*]
+</code></pre>
         </div>
     </div>
 </section>
@@ -473,9 +488,9 @@ Graph: |
                 <li>每次迭代前重置循环节点状态</li>
             </ul>
         </div>
-        <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+        <div class="code-block">
             <div class="code-header"><span>loop.yaml</span></div>
-MaxLoopIterations: 5
+<pre><code class="language-yaml">MaxLoopIterations: 5
 
 Graph: |
   stateDiagram-v2
@@ -485,6 +500,7 @@ Graph: |
     C --> A: {{ iteration < 3 }}
     C --> D
     D --> [*]
+</code></pre>
         </div>
     </div>
 </section>
@@ -511,9 +527,9 @@ Graph: |
                 </tbody>
             </table>
         </div>
-        <div class="code-block" style="background: var(--code-bg); color: #e2e8f0; margin-top: 24px;">
+        <div class="code-block" style="margin-top: 24px;">
             <div class="code-header"><span>模板使用示例</span></div>
-Param:
+<pre><code class="language-yaml">Param:
   env: "production"
   appName: "myapp"
   namespace: "{{ Param.appName }}-{{ Param.env }}"
@@ -531,6 +547,7 @@ Nodes:
     steps:
       - name: deploy
         run: echo "Deploy {{ Build.version | toJson }}"
+</code></pre>
         </div>
     </div>
 </section>
@@ -540,24 +557,24 @@ Nodes:
     <h2 class="section-title">元数据存储</h2>
     <p class="section-subtitle">三种存储后端，自动按 pipelineId 隔离数据</p>
     <div style="max-width: 900px; margin: 0 auto;">
-        <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+        <div class="code-block">
             <div class="code-header"><span>配置示例</span></div>
-<span class="comment"># in-config（内存，适合测试）</span>
+<pre><code class="language-yaml"># in-config（内存，适合测试）
 Metadate:
   type: in-config
   data:
     key1: "value1"
 
-<span class="comment"># Redis（持久化，自动隔离）</span>
+# Redis（持久化，自动隔离）
 Metadate:
   type: redis
   data:
     host: "localhost"
     port: "6379"
     db: 0
-    <span class="comment"># Redis key: flowx/{pipelineId}/{key}</span>
+    # Redis key: flowx/{pipelineId}/{key}
 
-<span class="comment"># HTTP（外部服务集成）</span>
+# HTTP（外部服务集成）
 Metadate:
   type: http
   data:
@@ -565,7 +582,8 @@ Metadate:
     method: "GET"
     headers:
       Authorization: "Bearer token"
-    <span class="comment"># 自动携带 X-Pipeline-ID 请求头</span>
+    # 自动携带 X-Pipeline-ID 请求头
+</code></pre>
         </div>
     </div>
 </section>
@@ -576,9 +594,9 @@ Metadate:
     <p class="section-subtitle">从命令输出中提取结构化数据，供后续节点使用</p>
     <div style="max-width: 900px; margin: 0 auto;">
         <div class="feature-detail" style="margin-bottom: 40px;">
-            <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+            <div class="code-block">
                 <div class="code-header"><span>codec-block 提取</span></div>
-Nodes:
+<pre><code class="language-yaml">Nodes:
   Build:
     executor: local
     extract:
@@ -590,10 +608,11 @@ Nodes:
           echo 'buildId: "12345"  # 构建ID'
           echo 'version: "1.0.0"  # 版本号'
           echo '```'
+</code></pre>
             </div>
-            <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+            <div class="code-block">
                 <div class="code-header"><span>regex 提取</span></div>
-Nodes:
+<pre><code class="language-yaml">Nodes:
   Test:
     executor: local
     extract:
@@ -604,6 +623,7 @@ Nodes:
     steps:
       - name: test
         run: go test -cover
+</code></pre>
             </div>
         </div>
     </div>
@@ -633,9 +653,9 @@ Nodes:
                 </tbody>
             </table>
         </div>
-        <div class="code-block" style="background: var(--code-bg); color: #e2e8f0; margin-top: 24px;">
+        <div class="code-block" style="margin-top: 24px;">
             <div class="code-header"><span>事件监听示例</span></div>
-type MyListener struct{}
+<pre><code class="language-go">type MyListener struct{}
 
 func (l *MyListener) Events() []flowx.Event {
     return []flowx.Event{
@@ -648,7 +668,8 @@ func (l *MyListener) Handle(p flowx.Pipeline, event flowx.Event) {
     fmt.Printf("Event: %s, Pipeline: %s\n", event, p.Id())
 }
 
-p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, &MyListener{})
+p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, &amp;MyListener{})
+</code></pre>
         </div>
     </div>
 </section>
@@ -658,9 +679,9 @@ p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, &MyListener{})
     <h2 class="section-title">动态图修改</h2>
     <p class="section-subtitle">暂停期间安全修改流水线结构</p>
     <div style="max-width: 800px; margin: 0 auto;">
-        <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+        <div class="code-block">
             <div class="code-header"><span>ModifyGraph 示例</span></div>
-mods := flowx.GraphModifications{
+<pre><code class="language-go">mods := flowx.GraphModifications{
     RemoveNodes: []string{"OldNode"},
     AddNodes: []flowx.NodeConfig{
         {
@@ -677,6 +698,7 @@ mods := flowx.GraphModifications{
 }
 
 err := rt.ModifyGraph(ctx, "pipeline-001", mods)
+</code></pre>
         </div>
     </div>
 </section>
@@ -686,16 +708,17 @@ err := rt.ModifyGraph(ctx, "pipeline-001", mods)
     <h2 class="section-title">架构概览</h2>
     <p class="section-subtitle">模块化设计，清晰的分层架构</p>
     <div style="max-width: 800px; margin: 0 auto;">
-        <div class="code-block" style="background: var(--code-bg); color: #e2e8f0;">
+        <div class="code-block">
             <div class="code-header"><span>目录结构</span></div>
-flowx/
-&#9500;&#9472;&#9472; core/          <span class="comment"># 核心类型定义（Config、Const、FieldItem）</span>
-&#9500;&#9472;&#9472; dag/           <span class="comment"># DAG 流水线核心（Pipeline、Node、Edge、遍历）</span>
-&#9500;&#9472;&#9472; executor/      <span class="comment"># 执行器系统（Local/Docker/K8s）</span>
-&#9500;&#9472;&#9472; template/      <span class="comment"># 模板引擎（pongo2 实现）</span>
-&#9500;&#9472;&#9472; metadata/      <span class="comment"># 元数据存储（in-config/Redis/HTTP）</span>
-&#9500;&#9472;&#9472; logger/        <span class="comment"># 日志系统（Pusher 接口）</span>
-&#9492;&#9472;&#9472; doc/           <span class="comment"># 文档目录</span>
+<pre><code class="language-plaintext">flowx/
+├── core/          # 核心类型定义（Config、Const、FieldItem）
+├── dag/           # DAG 流水线核心（Pipeline、Node、Edge、遍历）
+├── executor/      # 执行器系统（Local/Docker/K8s）
+├── template/      # 模板引擎（pongo2 实现）
+├── metadata/      # 元数据存储（in-config/Redis/HTTP）
+├── logger/        # 日志系统（Pusher 接口）
+└── doc/           # 文档目录
+</code></pre>
         </div>
     </div>
 </section>
@@ -718,6 +741,7 @@ function switchTab(el, id) {
     el.classList.add('active');
     document.getElementById(id).classList.add('active');
 }
+hljs.highlightAll();
 </script>
 
 </body>
