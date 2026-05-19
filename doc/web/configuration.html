@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>配置参考 - FlowX 文档</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0f172a;
+            --accent: #06b6d4;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #1e293b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        nav {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+        .nav-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 60px;
+        }
+        .logo {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a {
+            color: var(--text-light); text-decoration: none;
+            font-size: 14px; font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .layout {
+            display: flex; max-width: 1200px; margin: 0 auto;
+            padding-top: 60px; min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px; flex-shrink: 0;
+            padding: 32px 16px 32px 24px;
+            border-right: 1px solid var(--border);
+            position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            color: var(--text-light); letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .sidebar a {
+            display: block; padding: 8px 12px; border-radius: 8px;
+            color: var(--text-light); text-decoration: none; font-size: 14px;
+            transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active {
+            background: #eff6ff; color: var(--primary);
+        }
+        .sidebar-group { margin-bottom: 24px; }
+        .content {
+            flex: 1; padding: 40px 48px; max-width: 800px;
+        }
+        .content h1 {
+            font-size: 36px; font-weight: 800; margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .content h2 {
+            font-size: 24px; font-weight: 700; margin-top: 48px; margin-bottom: 16px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .content h3 {
+            font-size: 18px; font-weight: 700; margin-top: 32px; margin-bottom: 12px;
+        }
+        .content p { margin-bottom: 16px; color: var(--text-light); }
+        .content ul, .content ol { margin-bottom: 16px; padding-left: 24px; color: var(--text-light); }
+        .content li { margin-bottom: 8px; }
+        .content code {
+            background: #f1f5f9; padding: 2px 8px; border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 13px;
+        }
+        .content pre {
+            background: var(--code-bg); border-radius: 12px; padding: 24px;
+            overflow-x: auto; margin-bottom: 24px; border: 1px solid #334155;
+        }
+        .content pre code {
+            background: transparent; padding: 0; color: #e2e8f0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 14px; line-height: 1.8;
+        }
+        .content blockquote {
+            border-left: 4px solid var(--primary); padding-left: 16px; margin-bottom: 24px;
+            color: var(--text-light); background: #eff6ff; padding: 16px 16px 16px 20px; border-radius: 0 8px 8px 0;
+        }
+        .content table {
+            width: 100%; border-collapse: collapse; background: var(--card);
+            border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px;
+        }
+        .content th, .content td { padding: 12px 16px; text-align: left; font-size: 14px; }
+        .content th { background: var(--bg); font-weight: 600; color: var(--text-light); }
+        .content tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+        .breadcrumbs {
+            font-size: 13px; color: var(--text-light); margin-bottom: 24px;
+        }
+        .breadcrumbs a { color: var(--primary); text-decoration: none; }
+        .field-tag {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 11px; font-weight: 600; margin-left: 8px;
+        }
+        .tag-required { background: #fef2f2; color: #dc2626; }
+        .tag-optional { background: #f1f5f9; color: var(--text-light); }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="index.html" class="logo">FlowX</a>
+        <div class="nav-links">
+            <a href="index.html">首页</a>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html" class="active">配置参考</a>
+            <a href="executors.html">执行器</a>
+            <a href="examples.html">示例</a>
+        </div>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-group">
+            <div class="sidebar-title">配置参考</div>
+            <a href="#overview">概述</a>
+            <a href="#version">Version</a>
+            <a href="#name">Name</a>
+            <a href="#metadate">Metadate</a>
+            <a href="#param">Param</a>
+            <a href="#executors">Executors</a>
+            <a href="#logging">Logging</a>
+            <a href="#graph">Graph</a>
+            <a href="#maxloop">MaxLoopIterations</a>
+            <a href="#status">Status</a>
+            <a href="#nodes">Nodes</a>
+        </div>
+        <div class="sidebar-group">
+            <div class="sidebar-title">更多文档</div>
+            <a href="quickstart.html">快速开始</a>
+            <a href="pipeline.html">流水线核心</a>
+            <a href="executors.html">执行器系统</a>
+            <a href="node.html">节点与步骤</a>
+            <a href="edge.html">条件边与循环</a>
+            <a href="template.html">模板引擎</a>
+            <a href="metadata.html">元数据存储</a>
+            <a href="events.html">事件系统</a>
+            <a href="runtime.html">运行时管理</a>
+            <a href="examples.html">工作流示例</a>
+        </div>
+    </aside>
+
+    <article class="content">
+        <div class="breadcrumbs"><a href="index.html">首页</a> / 配置参考</div>
+        <h1>配置参考</h1>
+        <p>FlowX 使用 YAML 格式定义流水线配置。本文档详细说明所有配置字段的含义、类型和使用方法。</p>
+
+        <h2 id="overview">完整结构概览</h2>
+        <pre><code class="language-yaml">Version: "1.0"              # 配置版本
+Name: my-pipeline           # 流水线名称
+
+Metadate:                   # 元数据存储配置
+  type: in-config
+  data:
+    key: value
+
+Param:                      # 全局参数
+  env: "production"
+  appName: "myapp"
+
+Executors:                  # 执行器定义
+  local:
+    type: local
+    config: {}
+
+Logging:                    # 日志推送配置
+  endpoint: http://log-center/api/v1/logs
+
+MaxLoopIterations: 100      # 循环上限
+
+Graph: |                    # DAG 流程定义
+  stateDiagram-v2
+    [*] --> Node1
+    Node1 --> Node2
+
+Status:                     # 运行时状态（用于恢复）
+  Node1: SUCCESS
+
+Nodes:                      # 节点定义
+  NodeName:
+    executor: local
+    steps: []</code></pre>
+
+        <h2 id="version">Version</h2>
+        <p>配置文件格式版本，用于引擎兼容性判断。</p>
+        <table>
+            <thead><tr><th>属性</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td>类型</td><td>string</td></tr>
+                <tr><td>必填</td><td>是</td></tr>
+                <tr><td>示例</td><td><code>"1.0"</code></td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="name">Name</h2>
+        <p>流水线名称，用于标识、日志和监控。</p>
+        <table>
+            <thead><tr><th>属性</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td>类型</td><td>string</td></tr>
+                <tr><td>必填</td><td>是</td></tr>
+                <tr><td>示例</td><td><code>my-pipeline</code></td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="metadate">Metadate（元数据配置）</h2>
+        <p>定义元数据的存储后端和初始数据。元数据用于在节点间传递数据。</p>
+
+        <h3>字段说明</h3>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>type</code></td><td>string</td><td>存储类型：<code>in-config</code>、<code>redis</code>、<code>http</code></td></tr>
+                <tr><td><code>description</code></td><td>string</td><td>可选，描述元数据用途</td></tr>
+                <tr><td><code>data</code></td><td>map</td><td>初始元数据键值对，支持模板渲染</td></tr>
+            </tbody>
+        </table>
+
+        <h3>FieldItem 格式</h3>
+        <p><code>Metadate.data</code> 中的每个字段支持两种格式：</p>
+
+        <p><strong>1. 简单格式</strong>（推荐）：</p>
+        <pre><code class="language-yaml">Metadate:
+  type: in-config
+  data:
+    K8sNamespace: "{{ Param.namespace }}"  # Kubernetes 命名空间
+    FullImage: "{{ Param.registry }}/myapp:{{ Param.env }}"  # 完整镜像地址</code></pre>
+
+        <p><strong>2. 完整格式</strong>：</p>
+        <pre><code class="language-yaml">Metadate:
+  type: in-config
+  data:
+    K8sNamespace:
+      value: "{{ Param.namespace }}"
+      description: "Kubernetes 命名空间"
+      srcNode: ""  # 空表示来自配置，节点产生时会自动填充</code></pre>
+
+        <blockquote>
+            <strong>提示</strong>：更多详情参见 <a href="metadata.html">元数据存储</a> 文档。
+        </blockquote>
+
+        <h2 id="param">Param（参数定义）</h2>
+        <p>全局变量池，支持模板渲染和自引用。所有参数可在 <code>Nodes.steps[].run</code>、<code>Edge</code> 表达式和 <code>Metadate.data</code> 中引用。</p>
+
+        <h3>特性</h3>
+        <ul>
+            <li><strong>基本引用</strong>：通过 <code>{{ Param.xxx }}</code> 引用其他参数</li>
+            <li><strong>自引用</strong>：一个 Param 可以引用另一个 Param 的值，最多迭代 10 次</li>
+            <li><strong>嵌套结构</strong>：支持 map 和 list 嵌套</li>
+            <li><strong>未定义变量</strong>：引用未定义变量时，模板表达式保持原样不变</li>
+        </ul>
+
+        <h3>示例</h3>
+        <pre><code class="language-yaml">Param:
+  env: "production"  # 部署环境: dev, staging, 或 production
+  appName: "myapp"   # 应用名称
+  # 自引用
+  namespace: "{{ Param.appName }}-{{ Param.env }}"         # 渲染为: myapp-production
+  registry: "myregistry.com"
+  # 多层引用
+  imageName: "{{ Param.registry }}/{{ Param.appName }}"    # 渲染为: myregistry.com/myapp
+  fullImage: "{{ Param.imageName }}:latest"                # 渲染为: myregistry.com/myapp:latest
+  # 嵌套结构
+  config:
+    replicas: 3
+    envVars:
+      - name: "ENVIRONMENT"
+        value: "{{ Param.env }}"</code></pre>
+
+        <h2 id="executors">Executors（执行器定义）</h2>
+        <p>全局执行器注册表，供 Nodes 引用。支持 <code>local</code>、<code>docker</code>、<code>kubernetes</code>（或 <code>k8s</code>）三种类型。</p>
+
+        <h3>通用字段</h3>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>type</code></td><td>string</td><td>执行器类型：<code>local</code> / <code>docker</code> / <code>kubernetes</code></td></tr>
+                <tr><td><code>description</code></td><td>string</td><td>可选，执行器用途说明</td></tr>
+                <tr><td><code>config</code></td><td>object</td><td>执行器配置，被 Nodes 继承</td></tr>
+            </tbody>
+        </table>
+
+        <p>各类型执行器的详细配置参见 <a href="executors.html">执行器系统</a> 文档。</p>
+
+        <h2 id="logging">Logging（日志配置）</h2>
+        <p>配置日志推送服务，将执行日志发送到外部系统。</p>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>endpoint</code></td><td>string</td><td>日志接收服务 HTTP 接口地址</td></tr>
+                <tr><td><code>headers</code></td><td>map</td><td>请求头（认证、租户标识等）</td></tr>
+                <tr><td><code>timeout</code></td><td>duration</td><td>单次推送超时时间（如 <code>5s</code>）</td></tr>
+                <tr><td><code>retry</code></td><td>int</td><td>推送失败重试次数</td></tr>
+            </tbody>
+        </table>
+
+        <pre><code class="language-yaml">Logging:
+  endpoint: http://log-center/api/v1/logs
+  headers:
+    Authorization: Bearer xxxxxxxxx
+  timeout: 5s
+  retry: 3</code></pre>
+
+        <h2 id="graph">Graph（流程定义）</h2>
+        <p>使用 Mermaid <code>stateDiagram-v2</code> 语法定义节点执行顺序和依赖关系。</p>
+
+        <h3>基本语法</h3>
+        <pre><code class="language-yaml">Graph: |
+  stateDiagram-v2
+    [*] --> Build
+    Build --> Test
+    Test --> Deploy
+    Deploy --> [*]</code></pre>
+
+        <h3>条件边</h3>
+        <p>边的标签中可以嵌入 pongo2 表达式作为条件：</p>
+        <pre><code class="language-yaml">Graph: |
+  stateDiagram-v2
+    [*] --> Check
+    Check --> Deploy : {{ Param.env == "production" }}
+    Check --> Skip   : {{ Param.env != "production" }}</code></pre>
+
+        <blockquote>
+            <strong>提示</strong>：更多条件边语法参见 <a href="edge.html">条件边与循环</a> 文档。
+        </blockquote>
+
+        <h3>并行执行</h3>
+        <p>多个节点从同一节点出发即可实现并行：</p>
+        <pre><code class="language-yaml">Graph: |
+  stateDiagram-v2
+    [*] --> Task1
+    [*] --> Task2
+    [*] --> Task3
+    Task1 --> Merge
+    Task2 --> Merge
+    Task3 --> Merge
+    Merge --> [*]</code></pre>
+
+        <h2 id="maxloop">MaxLoopIterations（循环迭代上限）</h2>
+        <p>循环图最大迭代次数，超过则返回错误。默认值 <code>100</code>。</p>
+        <pre><code class="language-yaml">MaxLoopIterations: 5
+
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> A: {{ iteration < 3 }}
+    C --> D
+    D --> [*]</code></pre>
+
+        <h2 id="status">Status（运行时状态）</h2>
+        <p>节点运行时状态，用于快照恢复。键为节点名，值为状态枚举。</p>
+        <table>
+            <thead><tr><th>状态值</th><th>含义</th></tr></thead>
+            <tbody>
+                <tr><td><code>Pending</code></td><td>等待执行</td></tr>
+                <tr><td><code>Running</code></td><td>执行中</td></tr>
+                <tr><td><code>SUCCESS</code></td><td>执行成功（恢复时会跳过）</td></tr>
+                <tr><td><code>FAILED</code></td><td>执行失败（恢复时会跳过）</td></tr>
+                <tr><td><code>CANCELLED</code></td><td>已取消</td></tr>
+                <tr><td><code>PAUSED</code></td><td>已暂停</td></tr>
+                <tr><td><code>STOPPED</code></td><td>已停止</td></tr>
+                <tr><td><code>ABORTED</code></td><td>已终止</td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="nodes">Nodes（节点配置）</h2>
+        <p>定义每个节点的执行器、步骤、输出提取等。</p>
+
+        <h3>节点字段</h3>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>executor</code></td><td>string</td><td>是</td><td>引用 <code>Executors</code> 中定义的执行器名称</td></tr>
+                <tr><td><code>image</code></td><td>string</td><td>否</td><td>容器镜像（Docker/K8s 执行器使用）</td></tr>
+                <tr><td><code>steps</code></td><td>[]Step</td><td>是</td><td>执行步骤列表</td></tr>
+                <tr><td><code>extract</code></td><td>object</td><td>否</td><td>输出提取配置</td></tr>
+                <tr><td><code>runtime</code></td><td>object</td><td>否</td><td>节点运行时状态（用于恢复）</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Step 字段</h3>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>id</code></td><td>string</td><td>否</td><td>步骤唯一标识（自动生成）</td></tr>
+                <tr><td><code>name</code></td><td>string</td><td>是</td><td>步骤名称</td></tr>
+                <tr><td><code>description</code></td><td>string</td><td>否</td><td>步骤描述</td></tr>
+                <tr><td><code>run</code></td><td>string</td><td>是</td><td>执行的 shell 命令（支持模板渲染）</td></tr>
+            </tbody>
+        </table>
+
+        <h3>输出提取配置</h3>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>默认值</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>type</code></td><td>string</td><td><code>codec-block</code></td><td>提取类型：<code>codec-block</code> 或 <code>regex</code></td></tr>
+                <tr><td><code>patterns</code></td><td>map</td><td>-</td><td>正则表达式（type=regex 时使用）</td></tr>
+                <tr><td><code>maxOutputSize</code></td><td>int</td><td>1048576 (1MB)</td><td>输出大小限制（字节）</td></tr>
+            </tbody>
+        </table>
+
+        <pre><code class="language-yaml">Nodes:
+  Build:
+    executor: local
+    steps:
+      - name: build
+        run: echo "Building..."
+    extract:
+      type: codec-block
+      maxOutputSize: 1048576
+
+  Test:
+    executor: local
+    extract:
+      type: regex
+      patterns:
+        coverage: "coverage: (\\d+\\.\\d+)%"
+        tests: "(\\d+) tests? passed"
+    steps:
+      - name: test
+        run: go test -cover</code></pre>
+
+        <h2>字段引用关系</h2>
+        <pre><code class="language-plaintext">Param ----┬--> Metadate.data（模板渲染）
+          ├--> Nodes.steps[].run（命令参数渲染）
+          ├--> Edge 表达式（条件求值）
+          └--> Logging.headers（动态认证）
+
+Executors --> Nodes.executor（执行器选择）
+
+Graph --> 定义节点执行顺序和依赖关系
+
+Status --> 控制节点是否跳过（恢复执行）</code></pre>
+    </article>
+</div>
+
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模板引擎 - FlowX 文档</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0f172a;
+            --accent: #06b6d4;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #1e293b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        nav {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+        .nav-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 60px;
+        }
+        .logo {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a {
+            color: var(--text-light); text-decoration: none;
+            font-size: 14px; font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .layout {
+            display: flex; max-width: 1200px; margin: 0 auto;
+            padding-top: 60px; min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px; flex-shrink: 0;
+            padding: 32px 16px 32px 24px;
+            border-right: 1px solid var(--border);
+            position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            color: var(--text-light); letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .sidebar a {
+            display: block; padding: 8px 12px; border-radius: 8px;
+            color: var(--text-light); text-decoration: none; font-size: 14px;
+            transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active {
+            background: #eff6ff; color: var(--primary);
+        }
+        .sidebar-group { margin-bottom: 24px; }
+        .content {
+            flex: 1; padding: 40px 48px; max-width: 800px;
+        }
+        .content h1 {
+            font-size: 36px; font-weight: 800; margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .content h2 {
+            font-size: 24px; font-weight: 700; margin-top: 48px; margin-bottom: 16px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .content h3 {
+            font-size: 18px; font-weight: 700; margin-top: 32px; margin-bottom: 12px;
+        }
+        .content p { margin-bottom: 16px; color: var(--text-light); }
+        .content ul, .content ol { margin-bottom: 16px; padding-left: 24px; color: var(--text-light); }
+        .content li { margin-bottom: 8px; }
+        .content code {
+            background: #f1f5f9; padding: 2px 8px; border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 13px;
+        }
+        .content pre {
+            background: var(--code-bg); border-radius: 12px; padding: 24px;
+            overflow-x: auto; margin-bottom: 24px; border: 1px solid #334155;
+        }
+        .content pre code {
+            background: transparent; padding: 0; color: #e2e8f0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 14px; line-height: 1.8;
+        }
+        .content blockquote {
+            border-left: 4px solid var(--primary); padding-left: 16px; margin-bottom: 24px;
+            color: var(--text-light); background: #eff6ff; padding: 16px 16px 16px 20px; border-radius: 0 8px 8px 0;
+        }
+        .content table {
+            width: 100%; border-collapse: collapse; background: var(--card);
+            border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px;
+        }
+        .content th, .content td { padding: 12px 16px; text-align: left; font-size: 14px; }
+        .content th { background: var(--bg); font-weight: 600; color: var(--text-light); }
+        .content tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+        .breadcrumbs {
+            font-size: 13px; color: var(--text-light); margin-bottom: 24px;
+        }
+        .breadcrumbs a { color: var(--primary); text-decoration: none; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="index.html" class="logo">FlowX</a>
+        <div class="nav-links">
+            <a href="index.html">首页</a>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="executors.html">执行器</a>
+            <a href="examples.html">示例</a>
+        </div>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-group">
+            <div class="sidebar-title">模板引擎</div>
+            <a href="#overview">概述</a>
+            <a href="#render-phases">渲染阶段</a>
+            <a href="#variables">变量引用</a>
+            <a href="#filters">内置过滤器</a>
+            <a href="#custom-filters">自定义过滤器</a>
+            <a href="#context">渲染上下文</a>
+        </div>
+        <div class="sidebar-group">
+            <div class="sidebar-title">更多文档</div>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="pipeline.html">流水线核心</a>
+            <a href="executors.html">执行器系统</a>
+            <a href="node.html">节点与步骤</a>
+            <a href="edge.html">条件边与循环</a>
+            <a href="metadata.html">元数据存储</a>
+            <a href="events.html">事件系统</a>
+            <a href="runtime.html">运行时管理</a>
+            <a href="examples.html">工作流示例</a>
+        </div>
+    </aside>
+
+    <article class="content">
+        <div class="breadcrumbs"><a href="index.html">首页</a> / 模板引擎</div>
+        <h1>模板引擎</h1>
+        <p>FlowX 基于 <a href="https://github.com/flosch/pongo2" target="_blank">pongo2</a>（Django 模板语法）实现模板引擎，支持参数引用、自引用渲染、条件表达式和丰富的过滤器。</p>
+
+        <h2 id="overview">概述</h2>
+        <p>模板引擎的核心接口：</p>
+        <pre><code class="language-go">type TemplateEngine interface {
+    EvaluateBool(expression string, ctx map[string]any) (bool, error)     // 评估布尔表达式
+    EvaluateString(expression string, ctx map[string]any) (string, error) // 渲染字符串模板
+    Validate(expression string) error                                     // 校验语法
+}</code></pre>
+
+        <h2 id="render-phases">渲染阶段</h2>
+        <p>模板渲染在两个不同阶段发生：</p>
+
+        <h3>1. 配置解析阶段（Pipeline 启动前）</h3>
+        <p>在 <code>RuntimeImpl</code> 创建 Pipeline 时渲染以下字段：</p>
+        <ul>
+            <li><strong>Param</strong>：支持自引用，最多迭代 10 次防止无限循环</li>
+            <li><strong>Metadata.data</strong>：引用 <code>Param</code> 中的值</li>
+        </ul>
+
+        <pre><code class="language-yaml">Param:
+  env: "production"
+  appName: "myapp"
+  # 自引用：引用其他 Param
+  namespace: "{{ Param.appName }}-{{ Param.env }}"     # 渲染为: myapp-production
+  fullImage: "{{ Param.registry }}/{{ Param.appName }}" # 渲染为: myregistry.com/myapp
+
+Metadate:
+  type: in-config
+  data:
+    # 引用 Param
+    K8sNamespace: "{{ Param.namespace }}"</code></pre>
+
+        <table>
+            <thead><tr><th>场景</th><th>行为</th></tr></thead>
+            <tbody>
+                <tr><td>Param 引用 Param</td><td>支持自引用，迭代渲染直到稳定或达到 10 次</td></tr>
+                <tr><td>Metadata 引用 Param</td><td>使用 <code>{{ Param.xxx }}</code> 语法</td></tr>
+                <tr><td>Metadata 自引用</td><td>不支持，Metadata 只能引用 Param</td></tr>
+                <tr><td>引用未定义变量</td><td>模板表达式保持原样不变</td></tr>
+            </tbody>
+        </table>
+
+        <h3>2. 节点执行阶段（运行时）</h3>
+        <p>每个步骤的 <code>run</code> 命令在执行时实时渲染，可以引用动态产生的 Metadata：</p>
+
+        <pre><code class="language-yaml">Nodes:
+  Build:
+    executor: docker
+    image: golang:1.21
+    extract:
+      type: codec-block
+    steps:
+      - name: build
+        run: |
+          go build -o app .
+          echo '```flowx-yaml'
+          echo 'version: "{{ Param.version }}"  # 版本号'
+          echo 'binary: "app"  # 二进制文件名'
+          echo '```'
+
+  Deploy:
+    executor: k8s
+    steps:
+      - name: deploy
+        # 可以引用前面节点提取的 Metadata
+        run: kubectl set image deployment/app app={{ Metadata.binary }}:{{ Metadata.version }}</code></pre>
+
+        <h2 id="variables">变量引用</h2>
+
+        <h3>基本引用</h3>
+        <pre><code class="language-plaintext">{{ Param.key }}          # 引用 Param 中的值
+{{ Metadata.key }}       # 引用 Metadata 中的值
+{{ Param.nested.key }}   # 引用嵌套值（点分隔键自动展开）</code></pre>
+
+        <h3>条件表达式</h3>
+        <pre><code class="language-plaintext">{% if Param.env == "production" %}production{% else %}staging{% endif %}</code></pre>
+
+        <h2 id="filters">内置过滤器</h2>
+
+        <h3>pongo2 内置过滤器（60+）</h3>
+        <table>
+            <thead><tr><th>过滤器</th><th>示例</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>default</code></td><td><code>{{ Param.value|default:"fallback" }}</code></td><td>默认值</td></tr>
+                <tr><td><code>upper</code></td><td><code>{{ Param.name|upper }}</code></td><td>转大写</td></tr>
+                <tr><td><code>lower</code></td><td><code>{{ Param.name|lower }}</code></td><td>转小写</td></tr>
+                <tr><td><code>truncatechars</code></td><td><code>{{ Param.text|truncatechars:50 }}</code></td><td>截断字符串</td></tr>
+                <tr><td><code>join</code></td><td><code>{{ Param.list|join:"," }}</code></td><td>连接列表</td></tr>
+                <tr><td><code>length</code></td><td><code>{{ Param.list|length }}</code></td><td>获取长度</td></tr>
+                <tr><td><code>date</code></td><td><code>{{ Param.timestamp|date:"Y-m-d" }}</code></td><td>日期格式化</td></tr>
+            </tbody>
+        </table>
+
+        <h3>FlowX 自定义过滤器</h3>
+        <table>
+            <thead><tr><th>过滤器</th><th>示例</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>toJson</code></td><td><code>{{ Param.data|toJson }}</code></td><td>值转 JSON 字符串</td></tr>
+                <tr><td><code>toYaml</code></td><td><code>{{ Param.data|toYaml }}</code></td><td>值转 YAML 字符串</td></tr>
+                <tr><td><code>toBase64</code></td><td><code>{{ Param.text|toBase64 }}</code></td><td>Base64 编码</td></tr>
+                <tr><td><code>fromBase64</code></td><td><code>{{ Param.encoded|fromBase64 }}</code></td><td>Base64 解码</td></tr>
+                <tr><td><code>urlencode</code></td><td><code>{{ Param.url|urlencode }}</code></td><td>URL 编码</td></tr>
+                <tr><td><code>urldecode</code></td><td><code>{{ Param.encoded|urldecode }}</code></td><td>URL 解码</td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="custom-filters">自定义过滤器</h2>
+        <p>你可以注册自己的 pongo2 过滤器：</p>
+        <pre><code class="language-go">import "github.com/flosch/pongo2/v6"
+
+pongo2.RegisterFilter("myFilter", func(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+    return pongo2.AsValue(strings.ToUpper(in.String())), nil
+})</code></pre>
+
+        <h2 id="context">渲染上下文</h2>
+        <p><code>buildRenderContext()</code> 方法将 Param 和 Metadata 合并为模板上下文：</p>
+
+        <pre><code class="language-go">// 合并结果：
+// 1. Param 值作为顶层键
+// 2. Param 值同时以 "Param.xxx" 形式存在
+// 3. Metadata 键展开（点分隔键转为嵌套对象）
+// 4. Metadata 中的 JSON 字符串自动解析为对象/数组
+//
+// 例如 Param: {env: "prod"}, Metadata: {"Build.result": "ok", "Build.jsonData": '{"key": "val"}'}
+// 最终上下文：
+// {
+//   "env": "prod",
+//   "Param": {"env": "prod"},
+//   "Build": {"result": "ok", "jsonData": {"key": "val"}}
+// }</code></pre>
+
+        <h3>嵌套对象展开</h3>
+        <p>Metadata 中包含点号（<code>.</code>）的键会被展开为嵌套对象：</p>
+        <pre><code class="language-plaintext">"Node1.result" → {"Node1": {"result": "value"}}
+"Node1.data.key" → {"Node1": {"data": {"key": "value"}}}</code></pre>
+        <p>这使得模板中可以直接使用 <code>{{ Node1.result }}</code> 引用。</p>
+
+        <h3>JSON 字符串自动解析</h3>
+        <p>Metadata 中的字符串值如果符合 JSON 格式（以 <code>{</code> <code>}</code> 或 <code>[</code> <code>]</code> 包裹），会自动解析为对象或数组：</p>
+
+        <pre><code class="language-yaml">Nodes:
+  Build:
+    executor: local
+    extract:
+      type: codec-block
+    steps:
+      - name: build
+        run: |
+          echo '```flowx-yaml'
+          echo 'forecasts: "[{"day":"周一","temp":"25"}]"  # 天气数据'
+          echo '```'
+  Notify:
+    executor: local
+    steps:
+      - name: notify
+        # forecasts 在上下文中是 []interface{} 而非字符串
+        run: echo "{{ Build.forecasts[0].day }}"  # 输出：周一</code></pre>
+    </article>
+</div>
+
+<script>hljs.highlightAll();</script>
+</body>
+</html>

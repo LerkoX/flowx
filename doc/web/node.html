@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>节点与步骤 - FlowX 文档</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0f172a;
+            --accent: #06b6d4;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #1e293b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        nav {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+        .nav-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 60px;
+        }
+        .logo {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a {
+            color: var(--text-light); text-decoration: none;
+            font-size: 14px; font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .layout {
+            display: flex; max-width: 1200px; margin: 0 auto;
+            padding-top: 60px; min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px; flex-shrink: 0;
+            padding: 32px 16px 32px 24px;
+            border-right: 1px solid var(--border);
+            position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            color: var(--text-light); letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .sidebar a {
+            display: block; padding: 8px 12px; border-radius: 8px;
+            color: var(--text-light); text-decoration: none; font-size: 14px;
+            transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active {
+            background: #eff6ff; color: var(--primary);
+        }
+        .sidebar-group { margin-bottom: 24px; }
+        .content {
+            flex: 1; padding: 40px 48px; max-width: 800px;
+        }
+        .content h1 {
+            font-size: 36px; font-weight: 800; margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .content h2 {
+            font-size: 24px; font-weight: 700; margin-top: 48px; margin-bottom: 16px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .content h3 {
+            font-size: 18px; font-weight: 700; margin-top: 32px; margin-bottom: 12px;
+        }
+        .content p { margin-bottom: 16px; color: var(--text-light); }
+        .content ul, .content ol { margin-bottom: 16px; padding-left: 24px; color: var(--text-light); }
+        .content li { margin-bottom: 8px; }
+        .content code {
+            background: #f1f5f9; padding: 2px 8px; border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 13px;
+        }
+        .content pre {
+            background: var(--code-bg); border-radius: 12px; padding: 24px;
+            overflow-x: auto; margin-bottom: 24px; border: 1px solid #334155;
+        }
+        .content pre code {
+            background: transparent; padding: 0; color: #e2e8f0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 14px; line-height: 1.8;
+        }
+        .content blockquote {
+            border-left: 4px solid var(--primary); padding-left: 16px; margin-bottom: 24px;
+            color: var(--text-light); background: #eff6ff; padding: 16px 16px 16px 20px; border-radius: 0 8px 8px 0;
+        }
+        .content table {
+            width: 100%; border-collapse: collapse; background: var(--card);
+            border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px;
+        }
+        .content th, .content td { padding: 12px 16px; text-align: left; font-size: 14px; }
+        .content th { background: var(--bg); font-weight: 600; color: var(--text-light); }
+        .content tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+        .breadcrumbs {
+            font-size: 13px; color: var(--text-light); margin-bottom: 24px;
+        }
+        .breadcrumbs a { color: var(--primary); text-decoration: none; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="index.html" class="logo">FlowX</a>
+        <div class="nav-links">
+            <a href="index.html">首页</a>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="executors.html">执行器</a>
+            <a href="examples.html">示例</a>
+        </div>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-group">
+            <div class="sidebar-title">节点与步骤</div>
+            <a href="#overview">概述</a>
+            <a href="#node-config">节点配置</a>
+            <a href="#steps">步骤</a>
+            <a href="#extract">输出提取</a>
+            <a href="#status">状态管理</a>
+            <a href="#interactive">交互式输入</a>
+        </div>
+        <div class="sidebar-group">
+            <div class="sidebar-title">更多文档</div>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="pipeline.html">流水线核心</a>
+            <a href="executors.html">执行器系统</a>
+            <a href="edge.html">条件边与循环</a>
+            <a href="template.html">模板引擎</a>
+            <a href="metadata.html">元数据存储</a>
+            <a href="events.html">事件系统</a>
+            <a href="runtime.html">运行时管理</a>
+            <a href="examples.html">工作流示例</a>
+        </div>
+    </aside>
+
+    <article class="content">
+        <div class="breadcrumbs"><a href="index.html">首页</a> / 节点与步骤</div>
+        <h1>节点与步骤</h1>
+        <p>本文档介绍节点（Node）和步骤（Step）的概念、配置、状态管理以及输出提取功能。</p>
+
+        <h2 id="overview">概述</h2>
+        <p>在 FlowX 中，<strong>节点（Node）</strong>是流水线的基本执行单元，每个节点包含：</p>
+        <ul>
+            <li>一个执行器引用（决定在哪里运行）</li>
+            <li>一个或多个步骤（Step，按顺序执行）</li>
+            <li>可选的输出提取配置（将命令输出转为结构化数据）</li>
+        </ul>
+
+        <h2 id="node-config">节点配置</h2>
+        <pre><code class="language-yaml">Nodes:
+  Build:
+    name: "构建应用"                    # 显示名称
+    description: "编译并构建镜像"        # 功能描述
+    executor: docker                   # 引用的执行器名称
+    image: golang:1.21-alpine          # 容器镜像（Docker/K8s）
+    steps:                             # 步骤列表
+      - name: compile
+        run: go build -o app .
+      - name: image
+        run: docker build -t app:latest .
+    extract:                           # 输出提取配置（可选）
+      type: codec-block</code></pre>
+
+        <h3>节点字段</h3>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>executor</code></td><td>string</td><td>是</td><td>引用 Executors 中定义的执行器名称</td></tr>
+                <tr><td><code>image</code></td><td>string</td><td>否</td><td>容器镜像（Docker/K8s 执行器使用）</td></tr>
+                <tr><td><code>steps</code></td><td>[]Step</td><td>是</td><td>执行步骤列表</td></tr>
+                <tr><td><code>extract</code></td><td>object</td><td>否</td><td>输出提取配置</td></tr>
+                <tr><td><code>runtime</code></td><td>object</td><td>否</td><td>节点运行时状态（用于恢复）</td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="steps">步骤（Step）</h2>
+        <p>每个节点支持多个步骤按顺序执行。每个步骤的 <code>run</code> 命令在执行时会通过模板引擎渲染，可以引用 <code>Param</code> 和 <code>Metadata</code> 中的值。</p>
+
+        <h3>Step 字段</h3>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>id</code></td><td>string</td><td>否</td><td>步骤唯一标识（由 EnsureIds() 自动生成）</td></tr>
+                <tr><td><code>name</code></td><td>string</td><td>是</td><td>步骤名称</td></tr>
+                <tr><td><code>description</code></td><td>string</td><td>否</td><td>步骤描述</td></tr>
+                <tr><td><code>run</code></td><td>string</td><td>是</td><td>执行的 shell 命令（支持模板渲染）</td></tr>
+            </tbody>
+        </table>
+
+        <h3>多步骤执行示例</h3>
+        <pre><code class="language-yaml">Nodes:
+  Deploy:
+    executor: k8s
+    image: bitnami/kubectl:latest
+    steps:
+      - name: apply
+        description: "应用 K8s 资源配置"
+        run: kubectl apply -f ./k8s/
+      - name: verify
+        description: "等待滚动更新完成"
+        run: kubectl rollout status deployment/app -n {{ Param.namespace }}
+      - name: report
+        description: "输出部署信息"
+        run: echo "Deployed {{ Param.fullImage }} to {{ Param.namespace }}"</code></pre>
+
+        <h3>步骤跳过</h3>
+        <p>在恢复执行时，已完成的步骤会被跳过。引擎通过 <code>StepRuntimeStatus</code> 判断步骤状态：</p>
+        <ul>
+            <li>状态为 <code>SUCCESS</code>、<code>FAILED</code>、<code>CANCELLED</code> 的步骤会被跳过</li>
+            <li>输出日志中会显示 "Skipping step xxx (status: SUCCESS)"</li>
+        </ul>
+
+        <h2 id="extract">输出提取</h2>
+        <p>输出提取功能可以从命令输出中提取结构化数据，保存到 metadata 中供后续节点使用。提取的数据会自动填充 <code>srcNode</code> 字段。</p>
+
+        <h3>提取配置</h3>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>默认值</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>type</code></td><td>string</td><td><code>codec-block</code></td><td>提取类型：<code>codec-block</code> 或 <code>regex</code></td></tr>
+                <tr><td><code>patterns</code></td><td>map</td><td>-</td><td>正则表达式（type=regex 时使用）</td></tr>
+                <tr><td><code>maxOutputSize</code></td><td>int</td><td>1048576 (1MB)</td><td>输出大小限制（字节）</td></tr>
+            </tbody>
+        </table>
+
+        <h3>codec-block 模式</h3>
+        <p>识别输出中的 <code>flowx-yaml</code> 代码块并解析，支持行尾注释提取 description。</p>
+
+        <pre><code class="language-yaml">Nodes:
+  Build:
+    executor: local
+    extract:
+      type: codec-block
+      maxOutputSize: 1048576
+    steps:
+      - name: build
+        run: |
+          echo '```flowx-yaml'
+          echo 'version: "1.0.0"  # 版本号'
+          echo 'buildStatus: "success"  # 构建状态'
+          echo 'imageTag: "myapp:v1.0.0"  # 镜像标签'
+          echo '```'</code></pre>
+
+        <p>提取后的数据会自动设置 <code>srcNode</code> 为当前节点 ID，并从注释中提取 <code>description</code>。存储到 Metadata 时会添加节点前缀：<code>Metadata["Build.version"]</code>。</p>
+
+        <h3>regex 模式</h3>
+        <p>使用正则表达式提取内容，每个正则对应一个 key。</p>
+
+        <pre><code class="language-yaml">Nodes:
+  Test:
+    executor: local
+    extract:
+      type: regex
+      patterns:
+        coverage: "coverage: (\\d+\\.\\d+)%"     # 提取测试覆盖率
+        testsPassed: "(\\d+) tests passed"        # 提取通过的测试数
+        buildStatus: "Build (\\w+)"               # 提取构建状态
+      maxOutputSize: 524288
+    steps:
+      - name: test
+        run: go test -cover</code></pre>
+
+        <p><strong>规则</strong>：</p>
+        <ul>
+            <li>正则表达式可以包含捕获组，第一个捕获组的内容作为值</li>
+            <li>如果没有捕获组，使用完整匹配作为值</li>
+            <li>如果正则无效，创建时返回错误</li>
+        </ul>
+
+        <h3>提取的数据存储</h3>
+        <p>提取的数据会经过转换后存储：</p>
+        <ul>
+            <li><strong>字符串</strong>：原样保存</li>
+            <li><strong>slice/map</strong>：序列化为 JSON 字符串保存</li>
+            <li><strong>其他类型</strong>：使用 <code>fmt.Sprintf("%v", val)</code> 转换</li>
+        </ul>
+        <p>这使得复杂类型（如数组）可以在后续节点中通过自动解析回对象。</p>
+
+        <h2 id="status">状态管理</h2>
+
+        <h3>节点状态枚举</h3>
+        <table>
+            <thead><tr><th>状态</th><th>含义</th></tr></thead>
+            <tbody>
+                <tr><td><code>Pending</code></td><td>等待执行</td></tr>
+                <tr><td><code>Running</code></td><td>执行中</td></tr>
+                <tr><td><code>SUCCESS</code></td><td>执行成功</td></tr>
+                <tr><td><code>FAILED</code></td><td>执行失败</td></tr>
+                <tr><td><code>CANCELLED</code></td><td>已取消</td></tr>
+            </tbody>
+        </table>
+
+        <h3>运行时状态结构</h3>
+        <pre><code class="language-go">type NodeRuntimeStatus struct {
+    Id         string                  // 运行时 ID
+    Status     string                  // 节点状态
+    StartTime  time.Time               // 开始时间
+    EndTime    time.Time               // 结束时间
+    Steps      []StepRuntimeStatus     // 步骤状态列表
+    Executor   *ExecutorRuntimeInfo    // 执行器信息
+    Custom     map[string]interface{}  // 自定义数据
+}
+
+type StepRuntimeStatus struct {
+    Id        string        // 步骤 ID
+    Name      string        // 步骤名称
+    Status    string        // 步骤状态
+    StartTime time.Time     // 开始时间
+    EndTime   time.Time     // 结束时间
+    Error     string        // 错误信息
+    Output    string        // 输出内容
+}</code></pre>
+
+        <h2 id="interactive">交互式输入</h2>
+        <p>Local 执行器支持程序主动请求输入。当输出中包含 <code>flowx-input</code> 代码块时，执行器会发出输入请求事件。</p>
+
+        <h3>输出格式</h3>
+        <pre><code class="language-plaintext">```flowx-input
+prompt: "请输入部署目标"
+type: text
+timeout: 30
+```</code></pre>
+
+        <h3>输入类型</h3>
+        <table>
+            <thead><tr><th>type</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>text</code></td><td>普通文本输入</td></tr>
+                <tr><td><code>password</code></td><td>密码输入</td></tr>
+                <tr><td><code>confirm</code></td><td>确认输入（y/n）</td></tr>
+            </tbody>
+        </table>
+    </article>
+</div>
+
+<script>hljs.highlightAll();</script>
+</body>
+</html>

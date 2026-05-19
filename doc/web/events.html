@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>事件系统 - FlowX 文档</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0f172a;
+            --accent: #06b6d4;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #1e293b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        nav {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+        .nav-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 60px;
+        }
+        .logo {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a {
+            color: var(--text-light); text-decoration: none;
+            font-size: 14px; font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .layout {
+            display: flex; max-width: 1200px; margin: 0 auto;
+            padding-top: 60px; min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px; flex-shrink: 0;
+            padding: 32px 16px 32px 24px;
+            border-right: 1px solid var(--border);
+            position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            color: var(--text-light); letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .sidebar a {
+            display: block; padding: 8px 12px; border-radius: 8px;
+            color: var(--text-light); text-decoration: none; font-size: 14px;
+            transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active {
+            background: #eff6ff; color: var(--primary);
+        }
+        .sidebar-group { margin-bottom: 24px; }
+        .content {
+            flex: 1; padding: 40px 48px; max-width: 800px;
+        }
+        .content h1 {
+            font-size: 36px; font-weight: 800; margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .content h2 {
+            font-size: 24px; font-weight: 700; margin-top: 48px; margin-bottom: 16px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .content h3 {
+            font-size: 18px; font-weight: 700; margin-top: 32px; margin-bottom: 12px;
+        }
+        .content p { margin-bottom: 16px; color: var(--text-light); }
+        .content ul, .content ol { margin-bottom: 16px; padding-left: 24px; color: var(--text-light); }
+        .content li { margin-bottom: 8px; }
+        .content code {
+            background: #f1f5f9; padding: 2px 8px; border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 13px;
+        }
+        .content pre {
+            background: var(--code-bg); border-radius: 12px; padding: 24px;
+            overflow-x: auto; margin-bottom: 24px; border: 1px solid #334155;
+        }
+        .content pre code {
+            background: transparent; padding: 0; color: #e2e8f0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 14px; line-height: 1.8;
+        }
+        .content blockquote {
+            border-left: 4px solid var(--primary); padding-left: 16px; margin-bottom: 24px;
+            color: var(--text-light); background: #eff6ff; padding: 16px 16px 16px 20px; border-radius: 0 8px 8px 0;
+        }
+        .content table {
+            width: 100%; border-collapse: collapse; background: var(--card);
+            border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px;
+        }
+        .content th, .content td { padding: 12px 16px; text-align: left; font-size: 14px; }
+        .content th { background: var(--bg); font-weight: 600; color: var(--text-light); }
+        .content tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+        .breadcrumbs {
+            font-size: 13px; color: var(--text-light); margin-bottom: 24px;
+        }
+        .breadcrumbs a { color: var(--primary); text-decoration: none; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="index.html" class="logo">FlowX</a>
+        <div class="nav-links">
+            <a href="index.html">首页</a>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="executors.html">执行器</a>
+            <a href="examples.html">示例</a>
+        </div>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-group">
+            <div class="sidebar-title">事件系统</div>
+            <a href="#overview">概述</a>
+            <a href="#events">事件类型</a>
+            <a href="#listener">Listener 接口</a>
+            <a href="#example">使用示例</a>
+            <a href="#builtin">内置监听器</a>
+        </div>
+        <div class="sidebar-group">
+            <div class="sidebar-title">更多文档</div>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="pipeline.html">流水线核心</a>
+            <a href="executors.html">执行器系统</a>
+            <a href="node.html">节点与步骤</a>
+            <a href="edge.html">条件边与循环</a>
+            <a href="template.html">模板引擎</a>
+            <a href="metadata.html">元数据存储</a>
+            <a href="runtime.html">运行时管理</a>
+            <a href="examples.html">工作流示例</a>
+        </div>
+    </aside>
+
+    <article class="content">
+        <div class="breadcrumbs"><a href="index.html">首页</a> / 事件系统</div>
+        <h1>事件系统</h1>
+        <p>FlowX 提供完整的生命周期事件系统，支持自定义监听器来监控流水线执行过程。</p>
+
+        <h2 id="overview">概述</h2>
+        <p>通过事件系统，你可以：</p>
+        <ul>
+            <li>监控流水线和节点的执行状态</li>
+            <li>在关键节点触发自定义逻辑</li>
+            <li>集成外部监控和通知系统</li>
+            <li>记录执行日志和审计信息</li>
+        </ul>
+
+        <h2 id="events">事件类型</h2>
+
+        <table>
+            <thead><tr><th>常量</th><th>值</th><th>触发时机</th></tr></thead>
+            <tbody>
+                <tr><td><code>EventPipelineInit</code></td><td><code>PipelineInit</code></td><td>流水线初始化</td></tr>
+                <tr><td><code>EventPipelineStart</code></td><td><code>PipelineStart</code></td><td>流水线开始执行</td></tr>
+                <tr><td><code>EventPipelineFinish</code></td><td><code>PipelineFinish</code></td><td>流水线执行完成</td></tr>
+                <tr><td><code>EventPipelineCancelled</code></td><td><code>PipelineCancelled</code></td><td>流水线被取消</td></tr>
+                <tr><td><code>EventPipelinePaused</code></td><td><code>PipelinePaused</code></td><td>流水线暂停</td></tr>
+                <tr><td><code>EventPipelineResumed</code></td><td><code>PipelineResumed</code></td><td>流水线恢复</td></tr>
+                <tr><td><code>EventPipelineGraphModified</code></td><td><code>PipelineGraphModified</code></td><td>图被动态修改</td></tr>
+                <tr><td><code>EventPipelineExecutorPrepare</code></td><td><code>PipelineExecutorPrepare</code></td><td>执行器准备中</td></tr>
+                <tr><td><code>EventPipelineExecutorPrepareDone</code></td><td><code>PipelineExecutorPrepareDone</code></td><td>执行器准备完成</td></tr>
+                <tr><td><code>EventPipelineStatusUpdate</code></td><td><code>PipelineStatusUpdate</code></td><td>流水线状态更新</td></tr>
+                <tr><td><code>EventPipelineNodeStart</code></td><td><code>PipelineNodeStart</code></td><td>节点开始执行</td></tr>
+                <tr><td><code>EventPipelineNodeFinish</code></td><td><code>PipelineNodeFinish</code></td><td>节点执行完成</td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="listener">Listener 接口</h2>
+
+        <pre><code class="language-go">type Listener interface {
+    Handle(p Pipeline, event Event)  // 处理事件
+    Events() []Event                  // 订阅的事件列表
+}</code></pre>
+
+        <p><strong>使用方式</strong>：</p>
+        <ol>
+            <li>实现 <code>Listener</code> 接口</li>
+            <li>在 <code>Events()</code> 中返回感兴趣的事件列表</li>
+            <li>在 <code>Handle()</code> 中处理事件</li>
+            <li>将监听器传递给 <code>RunSync</code> 或 <code>RunAsync</code></li>
+        </ol>
+
+        <h2 id="example">使用示例</h2>
+
+        <h3>自定义监听器</h3>
+        <pre><code class="language-go">// 实现 Listener 接口
+type MyListener struct{}
+
+func (l *MyListener) Events() []flowx.Event {
+    return []flowx.Event{
+        flowx.EventPipelineNodeStart,
+        flowx.EventPipelineNodeFinish,
+    }
+}
+
+func (l *MyListener) Handle(p flowx.Pipeline, event flowx.Event) {
+    fmt.Printf("Event: %s, Pipeline: %s\n", event, p.Id())
+}
+
+// 使用
+listener := &MyListener{}
+p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, listener)</code></pre>
+
+        <h3>使用内置 DGAListener</h3>
+        <pre><code class="language-go">// 创建监听器
+listener := &flowx.DGAListener{
+    Events: []flowx.Event{
+        flowx.EventPipelineNodeStart,
+        flowx.EventPipelineNodeFinish,
+    },
+    Handler: func(p flowx.Pipeline, event flowx.Event) {
+        fmt.Printf("Event: %s\n", event)
+    },
+}
+
+p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, listener)</code></pre>
+
+        <h3>完整事件处理示例</h3>
+        <pre><code class="language-go">listener := flowx.NewListener()
+listener.Handle(func(p flowx.Pipeline, event flowx.Event) {
+    switch event {
+    case flowx.PipelineInit:
+        fmt.Println("Pipeline initialized")
+    case flowx.PipelineStart:
+        fmt.Println("Pipeline started")
+    case flowx.PipelineFinish:
+        fmt.Println("Pipeline finished")
+    case flowx.PipelineExecutorPrepare:
+        fmt.Println("Executor preparing")
+    case flowx.PipelineExecutorPrepareDone:
+        fmt.Println("Executor prepared")
+    case flowx.PipelineNodeStart:
+        fmt.Println("Node started")
+    case flowx.PipelineNodeFinish:
+        fmt.Println("Node completed")
+    case flowx.PipelineCancelled:
+        fmt.Println("Pipeline cancelled")
+    case flowx.PipelineStatusUpdate:
+        fmt.Println("Pipeline status updated")
+    case flowx.PipelinePaused:
+        fmt.Println("Pipeline paused")
+    case flowx.PipelineResumed:
+        fmt.Println("Pipeline resumed")
+    case flowx.PipelineGraphModified:
+        fmt.Println("Pipeline graph modified")
+    }
+})
+
+pipeline, err := runtime.RunSync(ctx, "id", config, listener)</code></pre>
+
+        <h2 id="builtin">内置监听器</h2>
+        <p>FlowX 提供了 <code>DGAListener</code> 结构体，方便快速创建事件监听器：</p>
+
+        <pre><code class="language-go">type DGAListener struct {
+    Events  []Event
+    Handler func(p Pipeline, event Event)
+}
+
+func (l *DGAListener) Handle(p Pipeline, event Event) {
+    if l.Handler != nil {
+        l.Handler(p, event)
+    }
+}
+
+func (l *DGAListener) EventsList() []Event {
+    return l.Events
+}</code></pre>
+
+        <p><strong>常见使用场景</strong>：</p>
+        <ul>
+            <li><strong>监控</strong>：监听 <code>PipelineNodeStart</code> 和 <code>PipelineNodeFinish</code>，将节点执行时间推送到监控系统</li>
+            <li><strong>通知</strong>：监听 <code>PipelineFinish</code>，在流水线完成时发送邮件/消息通知</li>
+            <li><strong>日志</strong>：监听所有事件，记录详细的执行日志</li>
+            <li><strong>审计</strong>：监听 <code>PipelineGraphModified</code>，记录图结构变更</li>
+        </ul>
+    </article>
+</div>
+
+<script>hljs.highlightAll();</script>
+</body>
+</html>
