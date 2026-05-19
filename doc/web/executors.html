@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -135,6 +136,10 @@
         }
         .executor-content { display: none; }
         .executor-content.active { display: block; }
+        .mermaid {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 24px;
+        }
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .content { padding: 24px; }
@@ -387,6 +392,37 @@ exec, err := provider.GetExecutor(ctx, "docker")</code></pre>
 
         <h2 id="lifecycle">执行器生命周期</h2>
         <p>每个执行器在流水线中的生命周期如下：</p>
+
+        <pre class="mermaid">flowchart TD
+    Start([Pipeline 启动]) --> Prepare[Executor.Prepare]
+    Prepare --> Transfer[Executor.Transfer
+    执行命令]
+    Transfer --> Output[实时流式输出]
+    Transfer --> More{更多命令?}
+    More -->|是| Transfer
+    More -->|否| Destruction[Executor.Destruction
+    清理环境]
+    Destruction --> End([Pipeline 完成])
+
+    subgraph Local["Local 执行器"]
+        L1[关闭 Shell 进程]
+    end
+    subgraph Docker["Docker 执行器"]
+        D1[停止并删除容器]
+    end
+    subgraph K8s["K8s 执行器"]
+        K1[删除 Pod]
+    end
+
+    Destruction --> Local
+    Destruction --> Docker
+    Destruction --> K8s
+
+    style Prepare fill:#e0f2fe,stroke:#2563eb
+    style Transfer fill:#fef3c7,stroke:#f59e0b
+    style Destruction fill:#fee2e2,stroke:#ef4444
+    style End fill:#dcfce7,stroke:#10b981</pre>
+
         <pre><code class="language-plaintext">1. Pipeline 启动
    └── 为每个节点创建/复用执行器
        └── Executor.Prepare() 初始化环境
@@ -403,6 +439,6 @@ exec, err := provider.GetExecutor(ctx, "docker")</code></pre>
     </article>
 </div>
 
-<script>hljs.highlightAll();</script>
+<script>mermaid.initialize({startOnLoad:true});hljs.highlightAll();</script>
 </body>
 </html>

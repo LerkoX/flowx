@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -125,6 +126,10 @@
             background: var(--card); border: 1px solid var(--border); border-radius: 12px;
             padding: 24px; margin-bottom: 24px; font-family: 'SF Mono', monospace; font-size: 13px; line-height: 1.8;
             overflow-x: auto; color: var(--text-light);
+        }
+        .mermaid {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 24px;
         }
         @media (max-width: 768px) {
             .sidebar { display: none; }
@@ -245,13 +250,13 @@ Check --> Skip : {{ not Param.skipTests }}</code></pre>
             <li>如果目标节点入度减为 0，加入下一轮执行队列</li>
         </ol>
 
-        <div class="diagram">
-     Check
-    /      \
-  true    false
-  /          \
-Deploy      (被剪枝)
-        </div>
+        <pre class="mermaid">flowchart TD
+    Check{条件评估} -->|true| Deploy[Deploy]
+    Check -->|false| Prune["(被剪枝)"]
+
+    style Check fill:#fef3c7,stroke:#f59e0b
+    style Deploy fill:#dcfce7,stroke:#10b981
+    style Prune fill:#fee2e2,stroke:#ef4444,stroke-dasharray: 5 5</pre>
 
         <h2 id="backedge">回边（Back-Edge）与循环图</h2>
         <p>当一条条件边在图中形成环路时，它会被标记为<strong>回边</strong>（back-edge），允许创建可控的循环执行。</p>
@@ -353,11 +358,17 @@ Nodes:
         run: echo "Validation failed"</code></pre>
 
         <p>此配置中，当 <code>Param.env == "production"</code> 且 <code>Param.testsPassed == true</code> 且 <code>Param.coverage > 80</code> 时，执行路径为：</p>
-        <div class="diagram">Validate → Build → Deploy
-        </div>
+        <pre class="mermaid">flowchart LR
+    Validate --> Build
+    Build --> Deploy
+    Deploy --> End([结束])
+
+    style Validate fill:#e0f2fe,stroke:#2563eb
+    style Build fill:#fef3c7,stroke:#f59e0b
+    style Deploy fill:#dcfce7,stroke:#10b981</pre>
     </article>
 </div>
 
-<script>hljs.highlightAll();</script>
+<script>mermaid.initialize({startOnLoad:true});hljs.highlightAll();</script>
 </body>
 </html>

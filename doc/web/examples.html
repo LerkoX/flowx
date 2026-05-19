@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -133,6 +134,10 @@
         }
         .tag-green { background: #ecfdf5; color: var(--success); }
         .tag-orange { background: #fffbeb; color: var(--warning); }
+        .mermaid {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 24px;
+        }
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .content { padding: 24px; }
@@ -165,6 +170,7 @@
             <a href="#ci-cd">CI/CD 部署</a>
             <a href="#docker-build">Docker 构建</a>
             <a href="#weather">天气通知</a>
+            <a href="#wait-input">交互式输入</a>
             <a href="#run">运行方式</a>
         </div>
         <div class="sidebar-group">
@@ -185,7 +191,7 @@
     <article class="content">
         <div class="breadcrumbs"><a href="index.html">首页</a> / 工作流示例</div>
         <h1>工作流示例</h1>
-        <p>本页面展示使用 FlowX 实现的完整工作流示例，涵盖文件处理、数据 ETL、CI/CD 部署、Docker 构建和天气通知等场景。</p>
+        <p>本页面展示使用 FlowX 实现的完整工作流示例，涵盖文件处理、数据 ETL、CI/CD 部署、Docker 构建、天气通知和交互式输入等场景。</p>
 
         <h2 id="overview">示例概览</h2>
         <div class="example-card">
@@ -193,117 +199,187 @@
             <span class="tag">并行执行</span>
             <span class="tag">codec-block</span>
             <span class="tag">参数化</span>
-            <p>自动化日志管理流水线，包含创建日志文件、压缩、生成清单和清理旧文件。</p>
+            <p>自动化日志管理流水线：创建日志目录、生成随机日志、压缩归档、生成清单、清理旧文件。</p>
         </div>
         <div class="example-card">
             <h3>&#128202; 数据 ETL 工作流</h3>
             <span class="tag">并行采集</span>
             <span class="tag">codec-block</span>
             <span class="tag">数据传递</span>
-            <p>并行采集用户、订单、产品数据，进行格式标准化和转换，生成报告。</p>
+            <p>并行采集用户、订单、产品数据，进行格式标准化和转换，生成用户报告和销售报告，最后合并并通知。</p>
         </div>
         <div class="example-card">
             <h3>&#128295; CI/CD 部署工作流</h3>
             <span class="tag tag-green">条件边</span>
             <span class="tag tag-green">质量门禁</span>
             <span class="tag tag-orange">多环境部署</span>
-            <p>完整的 CI/CD 流水线，包含代码构建、测试、质量检查和条件部署。</p>
+            <span class="tag">人工审核</span>
+            <p>完整的 CI/CD 流水线：代码检出、构建、单元测试、质量检查，支持 dev/staging/production 多环境条件部署，生产环境需人工审核。</p>
         </div>
         <div class="example-card">
             <h3>&#128674; Docker 构建工作流</h3>
             <span class="tag tag-green">Docker 执行器</span>
             <span class="tag">多镜像</span>
             <span class="tag">数据传递</span>
-            <p>使用 Docker 执行器运行完整 CI 流水线，不同节点使用不同镜像。</p>
+            <p>使用 Docker 执行器运行完整 CI 流水线，Checkout 使用 Alpine 镜像，Build 和 Test 使用 Golang 镜像，Package 使用 Alpine 镜像。</p>
         </div>
         <div class="example-card">
             <h3>&#127780; 天气通知工作流</h3>
             <span class="tag">HTTP API</span>
             <span class="tag">飞书集成</span>
-            <span class="tag">定时任务</span>
-            <p>从天气 API 获取信息，通过飞书发送富文本消息通知。</p>
+            <span class="tag">Python 脚本</span>
+            <p>从天气 API 获取深圳天气信息，通过 Python 脚本处理并调用飞书 API 发送富文本消息通知。</p>
+        </div>
+        <div class="example-card">
+            <h3>&#128172; 交互式输入工作流</h3>
+            <span class="tag">flowx-input</span>
+            <span class="tag">确认交互</span>
+            <p>展示程序如何通过输出请求用户输入，支持文本输入和确认交互。</p>
         </div>
 
         <h2 id="file-processing">文件处理工作流</h2>
         <p>自动化日志管理流水线，包含以下功能：</p>
         <ul>
-            <li>创建日志文件和归档目录</li>
-            <li>压缩日志文件</li>
+            <li>初始化并创建日志目录和归档目录</li>
+            <li>创建随机日志文件</li>
+            <li>压缩日志文件到归档目录</li>
             <li>生成归档文件清单</li>
+            <li>合并汇总所有任务结果</li>
             <li>清理超过保留天数的旧文件</li>
         </ul>
 
-        <p><strong>特性</strong>：并行执行（创建目录、压缩日志、生成清单并行运行）、数据传递（codec-block）、参数化配置。</p>
+        <p><strong>流程图</strong>：</p>
+        <pre class="mermaid">stateDiagram-v2
+    [*] --> Start
+    Start --> CreateDir
+    CreateDir --> CompressLogs
+    CreateDir --> GenerateManifest
+    CompressLogs --> Merge
+    GenerateManifest --> Merge
+    Merge --> Cleanup
+    Cleanup --> [*]</pre>
+
+        <p><strong>特性</strong>：并行执行（CompressLogs 和 GenerateManifest 并行运行）、数据传递（codec-block）、参数化配置、元数据存储。</p>
 
         <pre><code class="language-yaml">Version: "1.0"
-Name: file-processing
+Name: file-processing-pipeline
+
+Metadate:
+  type: in-config
+  description: "文件处理元数据，存储日志目录、文件统计等信息"
+  data:
+    logDir: "{{ Param.projectDir }}/logs"
+    archiveDir: "{{ Param.projectDir }}/archives"
+    timestamp: "{{ Param.timestamp }}"
 
 Param:
-  projectDir: "/var/log/myapp"
-  retentionDays: 30
-  archiveDir: "/var/log/myapp/archives"
+  projectDir: "/var/www/myapp"
+  timestamp: "2024-03-28"
+  retentionDays: 7
+  logPattern: "*.log"
 
 Executors:
   local:
     type: local
     config:
       shell: bash
-
-Graph: |
-  stateDiagram-v2
-    [*] --> Setup
-    [*] --> Compress
-    [*] --> Inventory
-    Setup --> Cleanup
-    Compress --> Cleanup
-    Inventory --> Cleanup
-    Cleanup --> [*]
+      workdir: /tmp
 
 Nodes:
-  Setup:
+  Start:
     executor: local
+    name: "初始化"
     steps:
-      - name: create-dirs
+      - name: init
         run: |
-          mkdir -p {{ Param.archiveDir }}
+          echo "Initializing file processing at {{ Param.timestamp }}"
           echo '```flowx-yaml'
-          echo "setupComplete: true  # 目录创建完成"
+          echo 'startTime: "{{ Param.timestamp }}"'
+          echo 'status: "ready"'
+          echo '```'
+
+  CreateDir:
+    executor: local
+    name: "创建日志目录"
+    steps:
+      - name: create-log-dir
+        run: mkdir -p {{ Param.projectDir }}/logs
+      - name: create-archive-dir
+        run: mkdir -p {{ Param.projectDir }}/archives
+      - name: create-random-logs
+        run: |
+          cd {{ Param.projectDir }}/logs
+          for i in {1..3}; do
+            timestamp=$(date +%s%N)
+            filename="app_${timestamp}.log"
+            echo "[$(date)] INFO: Application started" > $filename
+            echo "Created log file: $filename"
+          done
+          echo '```flowx-yaml'
+          echo 'logDir: "{{ Param.projectDir }}/logs"'
+          echo 'archiveDir: "{{ Param.projectDir }}/archives"'
+          echo 'logFilesCreated: 3'
           echo '```'
     extract:
       type: codec-block
 
-  Compress:
+  CompressLogs:
     executor: local
+    name: "压缩日志文件"
     steps:
       - name: compress
         run: |
-          cd {{ Param.projectDir }}
-          tar czf {{ Param.archiveDir }}/logs-$(date +%Y%m%d).tar.gz *.log
+          cd {{ Param.projectDir }}/logs
+          timestamp=$(date +%Y%m%d)
+          archive="{{ Param.projectDir }}/archives/logs_${timestamp}.tar.gz"
+          tar -czf $archive $(find . -name "{{ Param.logPattern }}" -type f 2>/dev/null | xargs -n 1) 2>/dev/null
+          echo "Compressed logs to: $archive"
           echo '```flowx-yaml'
-          echo "compressed: true  # 压缩完成"
+          echo 'archiveFile: "'$archive'"'
+          echo 'compressedCount: "1"'
           echo '```'
     extract:
       type: codec-block
 
-  Inventory:
+  GenerateManifest:
     executor: local
+    name: "生成 manifest 文件"
     steps:
-      - name: list
+      - name: generate
         run: |
-          ls -la {{ Param.archiveDir }}
+          cd {{ Param.projectDir }}/archives
+          manifest="manifest_{{ Param.timestamp }}.txt"
+          echo "Archive Manifest - {{ Param.timestamp }}" > $manifest
+          ls -lh *.tar.gz >> $manifest 2>/dev/null || true
+          echo "Manifest created: $manifest"
           echo '```flowx-yaml'
-          echo "inventoryComplete: true  # 清单生成完成"
+          echo 'manifestFile: "'$manifest'"'
+          echo 'status: "generated"'
           echo '```'
     extract:
       type: codec-block
+
+  Merge:
+    executor: local
+    name: "合并汇总"
+    steps:
+      - name: summary
+        run: |
+          echo "=== File Processing Summary ==="
+          echo "Log Directory: {{ CreateDir.logDir }}"
+          echo "Archive Directory: {{ CreateDir.archiveDir }}"
+          echo "Archive File: {{ CompressLogs.archiveFile }}"
+          echo "Manifest: {{ GenerateManifest.manifestFile }}"
 
   Cleanup:
     executor: local
+    name: "清理旧文件"
     steps:
-      - name: clean
+      - name: remove-old
         run: |
-          find {{ Param.archiveDir }} -name "*.tar.gz" -mtime +{{ Param.retentionDays }} -delete
-          echo "Cleaned files older than {{ Param.retentionDays }} days"</code></pre>
+          cd {{ Param.projectDir }}/archives
+          find . -name "*.tar.gz" -type f -mtime +{{ Param.retentionDays }} -delete 2>/dev/null || true
+          echo "Cleanup completed"</code></pre>
 
         <h2 id="data-etl">数据 ETL 工作流</h2>
         <p>ETL（Extract, Transform, Load）流水线，包含以下功能：</p>
@@ -311,108 +387,238 @@ Nodes:
             <li>并行采集用户、订单、产品数据</li>
             <li>数据格式标准化和转换</li>
             <li>生成用户报告和销售报告</li>
-            <li>合并所有报告</li>
+            <li>合并所有报告并发送通知</li>
         </ul>
 
+        <p><strong>流程图</strong>：</p>
+        <pre class="mermaid">stateDiagram-v2
+    [*] --> Start
+    Start --> CollectUsers
+    Start --> CollectOrders
+    Start --> CollectProducts
+    CollectUsers --> Transform
+    CollectOrders --> Transform
+    CollectProducts --> Transform
+    Transform --> UserReport
+    Transform --> SalesReport
+    UserReport --> Merge
+    SalesReport --> Merge
+    Merge --> Notify
+    Notify --> [*]</pre>
+
         <pre><code class="language-yaml">Version: "1.0"
-Name: data-etl
+Name: data-collection-pipeline
+
+Metadate:
+  type: in-config
+  description: "数据采集和处理元数据"
+  data:
+    collectionDate: "{{ Param.date }}"
+    outputDir: "{{ Param.baseDir }}/reports/{{ Param.date }}"
 
 Param:
   date: "2024-03-28"
   baseDir: "/data/analytics"
-  apiBaseUrl: "https://api.example.com"
+  apiBaseUrl: "https://api.example.com/v1"
+  apiTimeout: 30
 
 Executors:
   local:
     type: local
     config:
       shell: bash
-
-Graph: |
-  stateDiagram-v2
-    [*] --> FetchUsers
-    [*] --> FetchOrders
-    [*] --> FetchProducts
-    FetchUsers --> Transform
-    FetchOrders --> Transform
-    FetchProducts --> Transform
-    Transform --> GenerateReports
-    GenerateReports --> Merge
-    Merge --> [*]
+      workdir: /tmp
 
 Nodes:
-  FetchUsers:
+  Start:
     executor: local
+    name: "初始化"
     steps:
-      - name: fetch
+      - name: setup
         run: |
-          echo "Fetching users for {{ Param.date }}"
+          echo "Starting data collection for {{ Param.date }}"
+          outputDir="{{ Param.baseDir }}/reports/{{ Param.date }}"
+          mkdir -p $outputDir
           echo '```flowx-yaml'
-          echo "usersCount: 1500  # 用户数量"
+          echo 'outputDir: "'$outputDir'"'
+          echo 'startTime: "'$(date -Iseconds)'"'
+          echo '```'
+
+  CollectUsers:
+    executor: local
+    name: "采集用户数据"
+    steps:
+      - name: fetch-users
+        run: |
+          echo "Fetching users from {{ Param.apiBaseUrl }}/users"
+          outputDir="{{ Param.baseDir }}/raw/{{ Param.date }}"
+          mkdir -p $outputDir
+          echo '{"users": [{"id": "1", "name": "Alice"}, {"id": "2", "name": "Bob"}], "total": 2}' > $outputDir/users.json
+      - name: validate
+        run: |
+          echo '```flowx-yaml'
+          echo 'userCount: 2'
+          echo 'dataFile: "{{ Param.baseDir }}/raw/{{ Param.date }}/users.json"'
           echo '```'
     extract:
       type: codec-block
 
-  FetchOrders:
+  CollectOrders:
     executor: local
+    name: "采集订单数据"
     steps:
-      - name: fetch
+      - name: fetch-orders
         run: |
-          echo "Fetching orders for {{ Param.date }}"
+          echo "Fetching orders from {{ Param.apiBaseUrl }}/orders"
+          outputDir="{{ Param.baseDir }}/raw/{{ Param.date }}"
+          mkdir -p $outputDir
+          echo '{"orders": [{"id": "101", "amount": 100.0}, {"id": "102", "amount": 200.0}], "count": 2, "revenue": 300.0}' > $outputDir/orders.json
+      - name: validate
+        run: |
           echo '```flowx-yaml'
-          echo "ordersCount: 3200  # 订单数量"
+          echo 'orderCount: 2'
+          echo 'totalRevenue: 300.0'
+          echo 'dataFile: "{{ Param.baseDir }}/raw/{{ Param.date }}/orders.json"'
           echo '```'
     extract:
       type: codec-block
 
-  FetchProducts:
+  CollectProducts:
     executor: local
+    name: "采集产品数据"
     steps:
-      - name: fetch
+      - name: fetch-products
         run: |
-          echo "Fetching products"
+          echo "Fetching products from {{ Param.apiBaseUrl }}/products"
+          outputDir="{{ Param.baseDir }}/raw/{{ Param.date }}"
+          mkdir -p $outputDir
+          echo '{"products": [{"id": "1", "name": "Product A"}, {"id": "2", "name": "Product B"}], "total": 2}' > $outputDir/products.json
+      - name: validate
+        run: |
           echo '```flowx-yaml'
-          echo "productsCount: 500  # 产品数量"
+          echo 'productCount: 2'
+          echo 'dataFile: "{{ Param.baseDir }}/raw/{{ Param.date }}/products.json"'
           echo '```'
     extract:
       type: codec-block
 
   Transform:
     executor: local
+    name: "数据转换"
     steps:
-      - name: transform
+      - name: normalize
         run: |
-          echo "Transforming data..."
-          echo "Users: {{ .Metadata.FetchUsers.usersCount }}"
-          echo "Orders: {{ .Metadata.FetchOrders.ordersCount }}"
-          echo "Products: {{ .Metadata.FetchProducts.productsCount }}"
-
-  GenerateReports:
-    executor: local
-    steps:
-      - name: generate
-        run: |
-          echo "Generating reports..."
+          echo "Normalizing data formats"
+          outputDir="{{ Param.baseDir }}/raw/{{ Param.date }}"
+          targetDir="{{ Param.baseDir }}/processed/{{ Param.date }}"
+          mkdir -p $targetDir
+          cp $outputDir/users.json $targetDir/users_normalized.json
+          cp $outputDir/orders.json $targetDir/orders_normalized.json
+          cp $outputDir/products.json $targetDir/products_normalized.json
+          echo "Data normalization completed"
           echo '```flowx-yaml'
-          echo "reportsGenerated: true  # 报告已生成"
+          echo 'processedDir: "'$targetDir'"'
+          echo 'status: "normalized"'
+          echo '```'
+    extract:
+      type: codec-block
+
+  UserReport:
+    executor: local
+    name: "生成用户报告"
+    steps:
+      - name: analyze
+        run: |
+          reportDir="{{ Param.baseDir }}/reports/{{ Param.date }}"
+          mkdir -p $reportDir
+          echo '{"date": "{{ Param.date }}", "type": "user_report", "totalUsers": 2, "newUsers": 1}' > $reportDir/user_report.json
+          echo '```flowx-yaml'
+          echo 'userReport: "'$reportDir'/user_report.json"'
+          echo 'totalUsers: 2'
+          echo '```'
+    extract:
+      type: codec-block
+
+  SalesReport:
+    executor: local
+    name: "生成销售报告"
+    steps:
+      - name: analyze
+        run: |
+          reportDir="{{ Param.baseDir }}/reports/{{ Param.date }}"
+          mkdir -p $reportDir
+          echo '{"date": "{{ Param.date }}", "type": "sales_report", "totalRevenue": 300.0, "completedOrders": 2, "pendingOrders": 0}' > $reportDir/sales_report.json
+          echo '```flowx-yaml'
+          echo 'salesReport: "'$reportDir'/sales_report.json"'
+          echo 'totalRevenue: 300.0'
           echo '```'
     extract:
       type: codec-block
 
   Merge:
     executor: local
+    name: "合并报告"
     steps:
-      - name: merge
-        run: echo "All reports merged successfully"</code></pre>
+      - name: combine
+        run: |
+          reportDir="{{ Param.baseDir }}/reports/{{ Param.date }}"
+          echo '{"date": "{{ Param.date }}", "reports": ["user_report.json", "sales_report.json"], "generatedAt": "'$(date -Iseconds)'"}' > $reportDir/index.json
+          echo '```flowx-yaml'
+          echo 'indexFile: "'$reportDir'/index.json"'
+          echo 'reportDir: "'$reportDir'"'
+          echo '```'
+    extract:
+      type: codec-block
+
+  Notify:
+    executor: local
+    name: "通知完成"
+    steps:
+      - name: send
+        run: |
+          echo "Data collection completed for {{ Param.date }}"
+          echo "Reports available at: {{ Merge.reportDir }}"
+          echo "Total users: {{ UserReport.totalUsers }}"
+          echo "Total revenue: {{ SalesReport.totalRevenue }}"</code></pre>
 
         <h2 id="ci-cd">CI/CD 部署工作流</h2>
-        <p>完整的 CI/CD 部署流水线，包含代码构建、测试、质量检查和条件部署。</p>
+        <p>完整的 CI/CD 部署流水线，包含代码检出、构建、测试、质量检查和多环境条件部署。</p>
+
+        <p><strong>流程图</strong>：</p>
+        <pre class="mermaid">stateDiagram-v2
+    [*] --> Checkout
+    Checkout --> Build
+    Build --> UnitTests: {{ Param.skipTests == false }}
+    Build --> QualityCheck: {{ Param.skipTests == false }}
+    Build --> DeployDev: {{ Param.environment == "dev" and Param.skipTests == true }}
+    UnitTests --> QualityCheck
+    QualityCheck --> DeployDev: {{ Param.environment == "dev" and QualityCheck.allTestsPassed == true }}
+    QualityCheck --> DeployStaging: {{ Param.environment == "staging" and QualityCheck.allTestsPassed == true and QualityCheck.codeCoverage >= Param.codeCoverageThreshold }}
+    QualityCheck --> SkipDeploy: {{ Param.environment == "staging" and (QualityCheck.allTestsPassed == false or QualityCheck.codeCoverage < Param.codeCoverageThreshold) }}
+    QualityCheck --> ProductionReview: {{ Param.environment == "production" and QualityCheck.allTestsPassed == true and QualityCheck.codeCoverage >= Param.codeCoverageThreshold }}
+    QualityCheck --> RejectProduction: {{ Param.environment == "production" and (QualityCheck.allTestsPassed == false or QualityCheck.codeCoverage < Param.codeCoverageThreshold) }}
+    DeployDev --> [*]
+    DeployStaging --> [*]
+    ProductionReview --> ManualApproval
+    ManualApproval --> DeployProduction
+    DeployProduction --> [*]
+    SkipDeploy --> [*]
+    RejectProduction --> [*]</pre>
 
         <pre><code class="language-yaml">Version: "1.0"
-Name: ci-cd-deployment
+Name: ci-cd-deployment-pipeline
+
+Metadate:
+  type: in-config
+  description: "CI/CD 部署流水线元数据"
+  data:
+    environment: "{{ Param.environment }}"
+    buildVersion: "{{ Param.version }}"
 
 Param:
   environment: "staging"
+  version: "v1.0.0"
+  projectName: "myapp"
   skipTests: false
   codeCoverageThreshold: 80
 
@@ -421,197 +627,511 @@ Executors:
     type: local
     config:
       shell: bash
-
-Graph: |
-  stateDiagram-v2
-    [*] --> Build
-    Build --> Test
-    Test --> QualityCheck
-    QualityCheck --> DeployStaging : {{ QualityCheck.allTestsPassed == true and QualityCheck.codeCoverage >= Param.codeCoverageThreshold }}
-    QualityCheck --> SkipDeploy : {{ QualityCheck.allTestsPassed == false or QualityCheck.codeCoverage < Param.codeCoverageThreshold }}
-    DeployStaging --> [*]
-    SkipDeploy --> [*]
+      workdir: /tmp
 
 Nodes:
-  Build:
+  Checkout:
     executor: local
+    name: "代码检出"
     steps:
-      - name: build
+      - name: checkout
         run: |
-          echo "Building application..."
+          echo "Checking out code for {{ Param.projectName }} version {{ Param.version }}"
           echo '```flowx-yaml'
-          echo "buildStatus: success  # 构建状态"
+          echo 'branch: "main"'
+          echo 'commit: "abc123"'
+          echo 'timestamp: "'$(date -Iseconds)'"'
           echo '```'
     extract:
       type: codec-block
 
-  Test:
+  Build:
     executor: local
+    name: "构建应用"
+    steps:
+      - name: compile
+        run: |
+          echo "Building {{ Param.projectName }} {{ Param.version }}"
+          echo '```flowx-yaml'
+          echo 'buildSuccess: true'
+          echo 'buildSize: "125MB"'
+          echo 'buildTime: 45'
+          echo '```'
+    extract:
+      type: codec-block
+
+  UnitTests:
+    executor: local
+    name: "单元测试"
     steps:
       - name: test
         run: |
-          echo "Running tests..."
+          echo "Running unit tests..."
           echo '```flowx-yaml'
-          echo "allTestsPassed: true  # 测试是否全部通过"
-          echo "codeCoverage: 85  # 代码覆盖率"
+          echo 'testsRun: 50'
+          echo 'testsPassed: 50'
+          echo 'testsFailed: 0'
+          echo 'success: true'
           echo '```'
     extract:
       type: codec-block
 
   QualityCheck:
     executor: local
+    name: "质量检查"
     steps:
-      - name: check
+      - name: lint
         run: |
-          echo "Tests passed: {{ .Metadata.Test.allTestsPassed }}"
-          echo "Coverage: {{ .Metadata.Test.codeCoverage }}%"
+          echo "Running code quality checks..."
+          echo "Linting: No issues found"
+      - name: coverage
+        run: |
+          echo "Calculating code coverage..."
+          allTestsPassed={{ UnitTests.success }}
+          codeCoverage=85
+          echo "Code coverage: ${codeCoverage}%"
           echo '```flowx-yaml'
-          echo "allTestsPassed: {{ .Metadata.Test.allTestsPassed }}  # 质量检查结果"
-          echo "codeCoverage: {{ .Metadata.Test.codeCoverage }}  # 覆盖率"
+          echo 'allTestsPassed: "'$allTestsPassed'"'
+          echo 'codeCoverage: "'$codeCoverage'"'
+          echo 'lintIssues: 0'
+          echo 'securityVulnerabilities: 0'
+          echo '```'
+    extract:
+      type: codec-block
+
+  DeployDev:
+    executor: local
+    name: "部署到开发环境"
+    steps:
+      - name: deploy
+        run: |
+          echo "Deploying {{ Param.projectName }} {{ Param.version }} to DEV environment"
+          echo '```flowx-yaml'
+          echo 'environment: "dev"'
+          echo 'url: "https://dev.example.com"'
+          echo 'deployedAt: "'$(date -Iseconds)'"'
           echo '```'
     extract:
       type: codec-block
 
   DeployStaging:
     executor: local
+    name: "部署到预发布环境"
     steps:
       - name: deploy
-        run: echo "Deploying to {{ Param.environment }}..."
+        run: |
+          echo "Deploying {{ Param.projectName }} {{ Param.version }} to STAGING environment"
+          echo "Coverage check passed: {{ QualityCheck.codeCoverage }}% (required: {{ Param.codeCoverageThreshold }}%)"
+          echo '```flowx-yaml'
+          echo 'environment: "staging"'
+          echo 'url: "https://staging.example.com"'
+          echo 'deployedAt: "'$(date -Iseconds)'"'
+          echo '```'
+    extract:
+      type: codec-block
+
+  ProductionReview:
+    executor: local
+    name: "生产环境审核"
+    steps:
+      - name: prepare
+        run: |
+          echo "Preparing production deployment review..."
+          echo "Version: {{ Param.version }}"
+          echo "All tests: PASSED"
+          echo "Code coverage: {{ QualityCheck.codeCoverage }}%"
+          echo "Ready for manual approval"
+          echo '```flowx-yaml'
+          echo 'version: "{{ Param.version }}"'
+          echo 'ready: true'
+          echo 'reviewUrl: "https://reviews.example.com/{{ Param.version }}"'
+          echo '```'
+
+  ManualApproval:
+    executor: local
+    name: "人工审核"
+    steps:
+      - name: approve
+        run: |
+          echo "Manual approval process..."
+          echo "Reviewer: john.doe@example.com"
+          echo "Approval: APPROVED"
+          echo '```flowx-yaml'
+          echo 'approved: true'
+          echo 'reviewer: "john.doe@example.com"'
+          echo 'approvedAt: "'$(date -Iseconds)'"'
+          echo '```'
+
+  DeployProduction:
+    executor: local
+    name: "部署到生产环境"
+    steps:
+      - name: deploy
+        run: |
+          echo "Deploying {{ Param.projectName }} {{ Param.version }} to PRODUCTION environment"
+          echo "Approved by: {{ ManualApproval.reviewer }}"
+          echo '```flowx-yaml'
+          echo 'environment: "production"'
+          echo 'url: "https://production.example.com"'
+          echo 'deployedAt: "'$(date -Iseconds)'"'
+          echo '```'
+    extract:
+      type: codec-block
 
   SkipDeploy:
     executor: local
+    name: "跳过部署"
     steps:
-      - name: skip
-        run: echo "Quality checks failed, skipping deployment"</code></pre>
+      - name: log
+        run: |
+          echo "Deployment skipped due to quality gate failure"
+          echo '```flowx-yaml'
+          echo 'skipped: true'
+          echo 'reason: "Quality gate failed"'
+          echo '```'
+
+  RejectProduction:
+    executor: local
+    name: "拒绝生产部署"
+    steps:
+      - name: reject
+        run: |
+          echo "Production deployment rejected!"
+          echo "Please fix quality issues before deploying to production"
+          echo '```flowx-yaml'
+          echo 'rejected: true'
+          echo 'reason: "Quality gate failed"'
+          echo '```'</code></pre>
 
         <h2 id="docker-build">Docker 构建工作流</h2>
-        <p>展示如何使用 Docker 执行器运行完整的 CI 流水线。</p>
+        <p>展示如何使用 Docker 执行器运行完整的 CI 流水线，不同节点使用不同的 Docker 镜像。</p>
 
-        <pre><code class="language-yaml">Version: "1.0"
-Name: docker-build-example
-
-Executors:
-  docker-alpine:
-    type: docker
-    config:
-      registry: "docker.io"
-      network: bridge
-      workdir: /app
-      env:
-        CGO_ENABLED: "0"
-
-  docker-golang:
-    type: docker
-    config:
-      registry: "docker.io"
-      network: bridge
-      workdir: /app
-      env:
-        CGO_ENABLED: "0"
-        GOOS: linux
-        GOARCH: amd64
-
-Graph: |
-  stateDiagram-v2
+        <p><strong>流程图</strong>：</p>
+        <pre class="mermaid">stateDiagram-v2
+    direction LR
     [*] --> Checkout
     Checkout --> Build
     Build --> Test
     Test --> Package
     Package --> [*]
 
-Nodes:
-  Checkout:
-    executor: docker-alpine
-    image: alpine:latest
-    steps:
-      - name: checkout
-        run: |
-          echo "Checking out code..."
-          echo '```flowx-yaml'
-          echo "checkoutComplete: true  # 检出完成"
-          echo '```'
-    extract:
-      type: codec-block
+    note right of Checkout
+      使用 docker-alpine 执行器
+      初始化工作目录
+    end note
 
-  Build:
-    executor: docker-golang
-    image: golang:1.21-alpine
-    steps:
-      - name: build
-        run: |
-          go build -o app .
-          echo '```flowx-yaml'
-          echo "binary: app  # 构建产物"
-          echo '```'
-    extract:
-      type: codec-block
+    note right of Build
+      使用 docker-golang 执行器
+      编译 Go 应用
+    end note
 
-  Test:
-    executor: docker-golang
-    image: golang:1.21-alpine
-    steps:
-      - name: test
-        run: go test ./...
+    note right of Test
+      使用 docker-golang 执行器
+      运行单元测试
+    end note
 
-  Package:
-    executor: docker-alpine
-    image: alpine:latest
-    steps:
-      - name: package
-        run: |
-          echo "Packaging {{ .Metadata.Build.binary }}..."
-          echo "Build complete!"</code></pre>
-
-        <h2 id="weather">天气通知工作流</h2>
-        <p>从天气 API 获取信息，通过飞书发送富文本消息通知。</p>
+    note right of Package
+      使用 docker-alpine 执行器
+      打包构建产物
+    end note</pre>
 
         <pre><code class="language-yaml">Version: "1.0"
-Name: weather-feishu-notify
+Name: docker-build-example
+Description: "Docker Executor 示例 - 展示如何使用 Docker 执行器运行完整的 CI 流水线"
+
+Metadate:
+  type: in-config
+  description: "存储构建过程中的元数据"
+  data:
+    projectName: "{{ Param.appName }}"
+    buildVersion: "{{ Param.version }}-{{ Param.buildId }}"
+    buildTime: "{{ now }}"
+
+Param:
+  appName: "myapp"
+  version: "1.0.0"
+  buildId: "build-001"
+  goVersion: "1.21"
+  workDir: "/app"
+  outputDir: "./output"
+  testTimeout: "30s"
+  coverageThreshold: 80
+
+Executors:
+  docker-alpine:
+    type: docker
+    description: "Docker 执行器 - Alpine 镜像"
+    config:
+      registry: "hub.rat.dev"
+      network: bridge
+      workdir: /app
+      env:
+        CGO_ENABLED: "0"
+      tty: false
+
+  docker-golang:
+    type: docker
+    description: "Docker 执行器 - Golang 镜像"
+    config:
+      registry: "proxy.vvvv.ee"
+      network: bridge
+      workdir: /app
+      env:
+        CGO_ENABLED: "0"
+        GOOS: linux
+        GOARCH: amd64
+        GOPROXY: https://goproxy.cn,direct
+      tty: false
+
+Nodes:
+  Checkout:
+    name: "代码检出"
+    executor: docker-alpine
+    extract:
+      type: codec-block
+    steps:
+      - name: init
+        run: |
+          echo "初始化工作目录..."
+          mkdir -p /app/src
+          echo '```flowx-yaml'
+          echo 'status: "initialized"'
+          echo 'workDir: "/app/src"'
+          echo '```'
+      - name: clone
+        run: |
+          echo "正在克隆代码..."
+          echo "项目: {{ Param.appName }}"
+          echo "版本: {{ Param.version }}"
+          cd /app/src
+          echo "代码克隆完成"
+          echo '```flowx-yaml'
+          echo 'commit: "abc123"'
+          echo 'branch: "main"'
+          echo 'files: 42'
+          echo '```'
+
+  Build:
+    name: "编译构建"
+    executor: docker-golang
+    extract:
+      type: codec-block
+    steps:
+      - name: version
+        run: |
+          echo "Go 版本:"
+          go version
+          echo "GOPROXY: $GOPROXY"
+      - name: build
+        run: |
+          echo "开始编译 {{ Param.appName }}..."
+          cd /app/src
+          echo "下载依赖..."
+          echo "编译二进制文件..."
+          echo "构建完成"
+          mkdir -p /output
+          echo '```flowx-yaml'
+          echo 'binary: "{{ Param.appName }}"'
+          echo 'version: "{{ Param.version }}"'
+          echo 'buildId: "{{ Param.buildId }}"'
+          echo 'size: "15MB"'
+          echo 'output: "/output/{{ Param.appName }}"'
+          echo '```'
+      - name: verify
+        run: |
+          echo "验证构建产物..."
+          ls -la /output/ 2>/dev/null || echo "输出目录已准备"
+
+  Test:
+    name: "运行测试"
+    executor: docker-golang
+    extract:
+      type: codec-block
+    steps:
+      - name: unit-test
+        run: |
+          echo "运行单元测试..."
+          cd /app/src
+          echo "测试包: ./..."
+          echo "超时: {{ Param.testTimeout }}"
+          echo "=== 测试结果 ==="
+          echo "PASS: TestMain"
+          echo "PASS: TestHandler"
+          echo "PASS: TestService"
+          echo "PASS: TestUtils"
+          echo '```flowx-yaml'
+          echo 'testsRun: 24'
+          echo 'testsPassed: 24'
+          echo 'testsFailed: 0'
+          echo 'coverage: 87.5'
+          echo 'duration: "12.3s"'
+          echo '```'
+      - name: coverage-check
+        run: |
+          echo "覆盖率检查..."
+          echo "阈值: {{ Param.coverageThreshold }}%"
+          echo "实际: 87.5%"
+          echo "结果: PASS"
+
+  Package:
+    name: "打包产物"
+    executor: docker-alpine
+    extract:
+      type: codec-block
+    steps:
+      - name: prepare
+        run: |
+          echo "准备打包..."
+          echo "应用: {{ Param.appName }}"
+          echo "版本: {{ Param.version }}"
+      - name: package
+        run: |
+          echo "创建发布包..."
+          mkdir -p /output/dist
+          packageName="{{ Param.appName }}-{{ Param.version }}-{{ Param.buildId }}-linux-amd64.tar.gz"
+          echo "包名: $packageName"
+          echo "压缩完成"
+          echo '```flowx-yaml'
+          echo 'packageName: "'$packageName'"'
+          echo 'packagePath: "/output/dist/'$packageName'"'
+          echo 'packageSize: "8.5MB"'
+          echo 'checksum: "sha256:abc123def456"'
+          echo '```'
+      - name: summary
+        run: |
+          echo "========================================"
+          echo "        Docker 构建流水线完成"
+          echo "========================================"
+          echo "项目: {{ Param.appName }}"
+          echo "版本: {{ Param.version }}"
+          echo "构建ID: {{ Param.buildId }}"
+          echo "测试统计: 通过 24/24, 覆盖率 87.5%"
+          echo "========================================"
+
+Status:
+  Checkout: PENDING
+  Build: PENDING
+  Test: PENDING
+  Package: PENDING</code></pre>
+
+        <h2 id="weather">天气通知工作流</h2>
+        <p>从天气 API 获取深圳天气信息，通过 Python 脚本处理并调用飞书 API 发送富文本消息通知。</p>
+
+        <p><strong>流程图</strong>：</p>
+        <pre class="mermaid">stateDiagram-v2
+    [*] --> GetWeather
+    GetWeather --> SendFeishu
+    SendFeishu --> [*]</pre>
+
+        <pre><code class="language-yaml">Version: "1.0"
+Name: shenzhen-weather-notify-pipeline
+
+Metadate:
+  type: in-config
+  description: "深圳天气获取和飞书通知元数据"
+  data:
+    city: "{{ Param.city }}"
+    notifyTime: "{{ Param.notifyTime }}"
 
 Param:
   city: "深圳"
-  notifyTime: "07:30"
+  notifyTime: "08:00"
+  weatherApi: "wttr.in"
   feishuAppId: "cli_xxx"
   feishuAppSecret: "xxx"
   feishuChatId: "oc_xxx"
+  scriptDir: "/workspace/github/flowx/examples/workflows/scripts"
 
 Executors:
   local:
     type: local
     config:
       shell: bash
-
-Graph: |
-  stateDiagram-v2
-    [*] --> FetchWeather
-    FetchWeather --> SendNotification
-    SendNotification --> [*]
+      workdir: /tmp
 
 Nodes:
-  FetchWeather:
+  GetWeather:
     executor: local
+    name: "获取深圳天气"
+    description: "从天气API获取深圳当前和未来天气信息"
     steps:
       - name: fetch
+        description: "获取深圳天气数据"
         run: |
-          echo "Fetching weather for {{ Param.city }}..."
-          echo '```flowx-yaml'
-          echo "temperature: 25  # 当前温度"
-          echo "condition: 晴  # 天气状况"
-          echo "humidity: 60  # 湿度"
-          echo '```'
+          export WEATHER_CITY="{{ Param.city }}"
+          export WEATHER_API="{{ Param.weatherApi }}"
+          python3 {{ Param.scriptDir }}/get_weather.py
     extract:
       type: codec-block
 
-  SendNotification:
+  SendFeishu:
     executor: local
+    name: "发送飞书通知"
+    description: "通过飞书API发送天气通知（Markdown格式）"
     steps:
       - name: send
+        description: "调用飞书API发送富文本消息"
         run: |
-          echo "Sending notification to Feishu..."
-          echo "City: {{ Param.city }}"
-          echo "Temperature: {{ .Metadata.FetchWeather.temperature }}°C"
-          echo "Condition: {{ .Metadata.FetchWeather.condition }}"
-          echo "Notification sent!"</code></pre>
+          export FEISHU_APP_ID="{{ Param.feishuAppId }}"
+          export FEISHU_APP_SECRET="{{ Param.feishuAppSecret }}"
+          export FEISHU_CHAT_ID="{{ Param.feishuChatId }}"
+          export WEATHER_CITY="{{ GetWeather.city }}"
+          export WEATHER_TEMP="{{ GetWeather.temp }}"
+          export WEATHER_FEELS_LIKE="{{ GetWeather.feelsLike }}"
+          export WEATHER_WEATHER="{{ GetWeather.weather }}"
+          export WEATHER_HUMIDITY="{{ GetWeather.humidity }}"
+          export WEATHER_WINDSPEED="{{ GetWeather.windspeed }}"
+          export WEATHER_UPDATE_TIME="{{ GetWeather.updateTime }}"
+          export WEATHER_FORECASTS='{{ GetWeather.forecasts | toJson }}'
+          python3 {{ Param.scriptDir }}/send_feishu.py</code></pre>
+
+        <h2 id="wait-input">交互式输入工作流</h2>
+        <p>展示程序如何通过输出请求用户输入，支持文本输入和确认交互。</p>
+
+        <p><strong>流程图</strong>：</p>
+        <pre class="mermaid">stateDiagram-v2
+    [*] --> InputStep
+    InputStep --> [*]</pre>
+
+        <pre><code class="language-yaml">Version: "1.0"
+Name: wait-input-example
+Description: "交互式输入示例 - 展示程序如何通过输出请求用户输入"
+
+Param:
+  defaultName: "Guest"
+
+Executors:
+  local:
+    type: local
+    config:
+      shell: bash
+      workdir: /tmp
+
+Nodes:
+  InputStep:
+    name: "交互式输入步骤"
+    executor: local
+    steps:
+      - name: ask-name
+        run: |
+          echo "欢迎进入交互式输入演示！"
+          echo '```flowx-input'
+          echo 'prompt: 请输入您的姓名'
+          echo 'type: text'
+          echo '```'
+          read name
+          echo "你好，$name！"
+          echo '```flowx-input'
+          echo 'prompt: 请确认继续 (yes/no)'
+          echo 'type: confirm'
+          echo '```'
+          read confirm
+          if [ "$confirm" = "yes" ]; then
+            echo "继续执行..."
+          else
+            echo "用户取消"
+            exit 1
+          fi</code></pre>
 
         <h2 id="run">运行方式</h2>
 
@@ -682,11 +1202,12 @@ p, err := rt.RunSync(ctx, "hello-001", configYAML, nil)</code></pre>
                 <tr><td>并行执行</td><td>在 Graph 中定义多个并发的边即可实现并行</td></tr>
                 <tr><td>条件边</td><td>使用模板表达式实现条件分支</td></tr>
                 <tr><td>参数化配置</td><td>使用 <code>{{ Param.key }}</code> 在模板中引用参数</td></tr>
+                <tr><td>交互式输入</td><td>输出 <code>flowx-input</code> 代码块请求用户输入</td></tr>
             </tbody>
         </table>
     </article>
 </div>
 
-<script>hljs.highlightAll();</script>
+<script>mermaid.initialize({startOnLoad:true});hljs.highlightAll();</script>
 </body>
 </html>

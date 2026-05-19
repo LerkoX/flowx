@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -121,6 +122,10 @@
             font-size: 13px; color: var(--text-light); margin-bottom: 24px;
         }
         .breadcrumbs a { color: var(--primary); text-decoration: none; }
+        .mermaid {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 24px;
+        }
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .content { padding: 24px; }
@@ -181,6 +186,31 @@
             <li>一个或多个步骤（Step，按顺序执行）</li>
             <li>可选的输出提取配置（将命令输出转为结构化数据）</li>
         </ul>
+
+        <pre class="mermaid">flowchart TD
+    subgraph Node["Node 执行单元"]
+        direction TB
+        N1["执行器引用
+executor: local/docker/k8s"] --> N2["Step 1"]
+        N2 --> N3["Step 2"]
+        N3 --> N4["..."]
+        N4 --> N5["Step N"]
+        N5 --> N6["输出提取
+extract: codec-block/regex"]
+        N6 --> N7[(MetadataStore)]
+    end
+
+    subgraph Step["单个 Step"]
+        direction TB
+        S1["模板渲染 run"] --> S2["执行命令"]
+        S2 --> S3["捕获 stdout/stderr"]
+    end
+
+    N2 --> Step
+
+    style Node fill:#e0f2fe,stroke:#2563eb
+    style Step fill:#fef3c7,stroke:#f59e0b
+    style N7 fill:#f3e8ff,stroke:#9333ea</pre>
 
         <h2 id="node-config">节点配置</h2>
         <pre><code class="language-yaml">Nodes:
@@ -369,6 +399,6 @@ timeout: 30
     </article>
 </div>
 
-<script>hljs.highlightAll();</script>
+<script>mermaid.initialize({startOnLoad:true});hljs.highlightAll();</script>
 </body>
 </html>
