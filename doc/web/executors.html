@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>执行器系统 - FlowX 文档</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0f172a;
+            --accent: #06b6d4;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #1e293b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        nav {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+        .nav-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 60px;
+        }
+        .logo {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a {
+            color: var(--text-light); text-decoration: none;
+            font-size: 14px; font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .layout {
+            display: flex; max-width: 1200px; margin: 0 auto;
+            padding-top: 60px; min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px; flex-shrink: 0;
+            padding: 32px 16px 32px 24px;
+            border-right: 1px solid var(--border);
+            position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            color: var(--text-light); letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .sidebar a {
+            display: block; padding: 8px 12px; border-radius: 8px;
+            color: var(--text-light); text-decoration: none; font-size: 14px;
+            transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active {
+            background: #eff6ff; color: var(--primary);
+        }
+        .sidebar-group { margin-bottom: 24px; }
+        .content {
+            flex: 1; padding: 40px 48px; max-width: 800px;
+        }
+        .content h1 {
+            font-size: 36px; font-weight: 800; margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .content h2 {
+            font-size: 24px; font-weight: 700; margin-top: 48px; margin-bottom: 16px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .content h3 {
+            font-size: 18px; font-weight: 700; margin-top: 32px; margin-bottom: 12px;
+        }
+        .content p { margin-bottom: 16px; color: var(--text-light); }
+        .content ul, .content ol { margin-bottom: 16px; padding-left: 24px; color: var(--text-light); }
+        .content li { margin-bottom: 8px; }
+        .content code {
+            background: #f1f5f9; padding: 2px 8px; border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 13px;
+        }
+        .content pre {
+            background: var(--code-bg); border-radius: 12px; padding: 24px;
+            overflow-x: auto; margin-bottom: 24px; border: 1px solid #334155;
+        }
+        .content pre code {
+            background: transparent; padding: 0; color: #e2e8f0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 14px; line-height: 1.8;
+        }
+        .content blockquote {
+            border-left: 4px solid var(--primary); padding-left: 16px; margin-bottom: 24px;
+            color: var(--text-light); background: #eff6ff; padding: 16px 16px 16px 20px; border-radius: 0 8px 8px 0;
+        }
+        .content table {
+            width: 100%; border-collapse: collapse; background: var(--card);
+            border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px;
+        }
+        .content th, .content td { padding: 12px 16px; text-align: left; font-size: 14px; }
+        .content th { background: var(--bg); font-weight: 600; color: var(--text-light); }
+        .content tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+        .breadcrumbs {
+            font-size: 13px; color: var(--text-light); margin-bottom: 24px;
+        }
+        .breadcrumbs a { color: var(--primary); text-decoration: none; }
+        .executor-tabs {
+            display: flex; gap: 8px; margin-bottom: 24px;
+        }
+        .executor-tab {
+            padding: 10px 24px; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            border: 1px solid var(--border); background: var(--card);
+            transition: all 0.2s;
+        }
+        .executor-tab.active {
+            background: var(--primary); color: white; border-color: var(--primary);
+        }
+        .executor-content { display: none; }
+        .executor-content.active { display: block; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="index.html" class="logo">FlowX</a>
+        <div class="nav-links">
+            <a href="index.html">首页</a>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="executors.html" class="active">执行器</a>
+            <a href="examples.html">示例</a>
+        </div>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-group">
+            <div class="sidebar-title">执行器系统</div>
+            <a href="#overview">概述</a>
+            <a href="#local">Local 执行器</a>
+            <a href="#docker">Docker 执行器</a>
+            <a href="#kubernetes">Kubernetes 执行器</a>
+            <a href="#provider">Provider 工厂</a>
+            <a href="#lifecycle">生命周期</a>
+        </div>
+        <div class="sidebar-group">
+            <div class="sidebar-title">更多文档</div>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="pipeline.html">流水线核心</a>
+            <a href="node.html">节点与步骤</a>
+            <a href="edge.html">条件边与循环</a>
+            <a href="template.html">模板引擎</a>
+            <a href="metadata.html">元数据存储</a>
+            <a href="events.html">事件系统</a>
+            <a href="runtime.html">运行时管理</a>
+            <a href="examples.html">工作流示例</a>
+        </div>
+    </aside>
+
+    <article class="content">
+        <div class="breadcrumbs"><a href="index.html">首页</a> / 执行器系统</div>
+        <h1>执行器系统</h1>
+        <p>FlowX 支持三种执行后端：Local（本地 Shell）、Docker（容器）、Kubernetes（Pod）。三种执行器通过统一的 Executor 接口工作，可在配置中无缝切换。</p>
+
+        <h2 id="overview">概述</h2>
+        <p>执行器系统的核心接口：</p>
+        <pre><code class="language-go">type Executor interface {
+    Prepare(ctx context.Context) error
+    Destruction(ctx context.Context) error
+    Transfer(ctx context.Context, resultChan chan<- any, commandChan <-chan any, inputChan <-chan []byte)
+}</code></pre>
+
+        <p><strong>生命周期</strong>：</p>
+        <pre><code class="language-plaintext">Prepare → Transfer（可多次执行命令）→ Destruction</code></pre>
+
+        <p>Provider 使用注册的执行器配置，通过 Adapter/Bridge 模式创建执行器实例。支持的类型字符串：</p>
+        <table>
+            <thead><tr><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>local</code></td><td>本地 Shell 执行</td></tr>
+                <tr><td><code>docker</code></td><td>Docker 容器执行</td></tr>
+                <tr><td><code>kubernetes</code> / <code>k8s</code></td><td>Kubernetes Pod 执行</td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="local">Local 执行器</h2>
+        <p>在本地 Shell 环境中执行命令。</p>
+
+        <h3>配置项</h3>
+        <table>
+            <thead><tr><th>配置键</th><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>workdir</code></td><td>string</td><td>工作目录，必须存在</td></tr>
+                <tr><td><code>env</code></td><td>map[string]string</td><td>环境变量</td></tr>
+                <tr><td><code>shell</code></td><td>string</td><td>Shell 类型（bash/sh/zsh）</td></tr>
+                <tr><td><code>timeout</code></td><td>string/int</td><td>单命令超时（如 <code>"60"</code> 或 <code>"2m"</code>）</td></tr>
+                <tr><td><code>pty</code></td><td>bool</td><td>是否使用 PTY（交互式程序）</td></tr>
+                <tr><td><code>ptyWidth</code></td><td>int</td><td>PTY 宽度</td></tr>
+                <tr><td><code>ptyHeight</code></td><td>int</td><td>PTY 高度</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Shell 自动检测</h3>
+        <ul>
+            <li>Unix：优先 <code>bash</code>，回退 <code>sh</code></li>
+            <li>Windows：优先 <code>pwsh</code>/<code>powershell</code>，回退 <code>cmd</code></li>
+        </ul>
+
+        <h3>行为特点</h3>
+        <ul>
+            <li><code>Prepare</code>：验证工作目录存在、配置的 Shell 可用</li>
+            <li><code>Transfer</code>：通过 <code>os/exec</code> 执行命令，实时流式输出 stdout 和 stderr</li>
+            <li><strong>交互式输入</strong>：支持通过 <code>inputChan</code> 向进程 stdin 发送数据</li>
+            <li><strong>取消</strong>：先发送 <code>os.Interrupt</code>，不响应则 <code>Process.Kill()</code></li>
+            <li><strong>超时</strong>：支持单命令级别超时</li>
+        </ul>
+
+        <pre><code class="language-yaml">Executors:
+  local:
+    type: local
+    config:
+      shell: bash
+      workdir: /tmp/build
+      env:
+        KEY: value
+      timeout: 60
+      pty: false</code></pre>
+
+        <h2 id="docker">Docker 执行器</h2>
+        <p>在 Docker 容器中执行命令。</p>
+
+        <h3>配置项</h3>
+        <table>
+            <thead><tr><th>配置键</th><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>registry</code></td><td>string</td><td>默认镜像仓库前缀</td></tr>
+                <tr><td><code>network</code></td><td>string</td><td>容器网络模式</td></tr>
+                <tr><td><code>workdir</code></td><td>string</td><td>容器内工作目录</td></tr>
+                <tr><td><code>volumes</code></td><td>[]string</td><td>挂载卷列表，格式 <code>"host:container"</code></td></tr>
+                <tr><td><code>env</code></td><td>map[string]string</td><td>环境变量</td></tr>
+                <tr><td><code>tty</code></td><td>bool</td><td>启用 TTY</td></tr>
+                <tr><td><code>ttyWidth</code></td><td>int</td><td>TTY 宽度</td></tr>
+                <tr><td><code>ttyHeight</code></td><td>int</td><td>TTY 高度</td></tr>
+            </tbody>
+        </table>
+
+        <h3>行为特点</h3>
+        <ul>
+            <li><code>Prepare</code>：创建容器（初始命令 <code>sleep 3600</code>），镜像不存在时自动拉取</li>
+            <li><code>Transfer</code>：通过 Docker <code>exec</code> API 在容器内执行命令，实时流式输出</li>
+            <li><strong>Shell 检测</strong>：Alpine/Busybox 镜像使用 <code>/bin/sh</code>，其他使用 <code>/bin/bash</code></li>
+            <li><strong>隔离性</strong>：每个执行器对应一个独立的容器实例</li>
+            <li><strong>容器复用</strong>：同一个执行器可执行多个命令（容器持续运行）</li>
+        </ul>
+
+        <pre><code class="language-yaml">Executors:
+  docker:
+    type: docker
+    config:
+      registry: myregistry.com
+      network: host
+      workdir: /app
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+        - ${PWD}:/workspace
+      env:
+        GO_VERSION: "1.21"
+      tty: true</code></pre>
+
+        <h2 id="kubernetes">Kubernetes 执行器</h2>
+        <p>在 Kubernetes Pod 中执行命令。</p>
+
+        <h3>配置项</h3>
+        <table>
+            <thead><tr><th>配置键</th><th>类型</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><code>namespace</code></td><td>string</td><td>K8s 命名空间</td></tr>
+                <tr><td><code>workdir</code></td><td>string</td><td>工作目录</td></tr>
+                <tr><td><code>env</code></td><td>map[string]string</td><td>环境变量</td></tr>
+                <tr><td><code>serviceAccount</code></td><td>string</td><td>ServiceAccount 名称</td></tr>
+                <tr><td><code>configMaps</code></td><td>[]map</td><td>ConfigMap 挂载</td></tr>
+                <tr><td><code>secrets</code></td><td>[]map</td><td>Secret 挂载</td></tr>
+                <tr><td><code>volumes</code></td><td>[]map</td><td>PVC 挂载</td></tr>
+                <tr><td><code>emptyDirs</code></td><td>[]map</td><td>EmptyDir 挂载</td></tr>
+                <tr><td><code>podReadyTimeout</code></td><td>int</td><td>Pod 就绪超时秒数（默认 60）</td></tr>
+                <tr><td><code>resources</code></td><td>map</td><td>资源限制（cpu/memory）</td></tr>
+            </tbody>
+        </table>
+
+        <h3>资源配置示例</h3>
+        <pre><code class="language-yaml">config:
+  resources:
+    cpu: "1000m"
+    memory: "2Gi"</code></pre>
+
+        <h3>卷挂载示例</h3>
+        <pre><code class="language-yaml">config:
+  configMaps:
+    - name: my-config
+      mountPath: /etc/config
+  secrets:
+    - name: my-secret
+      mountPath: /etc/secrets
+  volumes:
+    - name: data-volume
+      mountPath: /data
+  emptyDirs:
+    - name: temp-data
+      mountPath: /tmp/data</code></pre>
+
+        <h3>行为特点</h3>
+        <ul>
+            <li><code>Prepare</code>：创建 Pod（初始命令 <code>sleep 3600</code>），等待 Pod 进入 Running 状态（默认超时 60 秒）</li>
+            <li><code>Transfer</code>：通过 Kubernetes <code>exec</code> API（SPDY 协议）在 Pod 内执行命令，实时流式输出</li>
+            <li><code>Destruction</code>：使用独立的 background context（30 秒超时）确保清理，优雅终止期为 10 秒</li>
+            <li><strong>取消</strong>：通过 stdin pipe 发送 <code>Ctrl+C</code>（<code>\x03</code>）终止远程进程</li>
+        </ul>
+
+        <pre><code class="language-yaml">Executors:
+  k8s:
+    type: kubernetes
+    config:
+      namespace: default
+      serviceAccount: pipeline-sa
+      resources:
+        cpu: "1000m"
+        memory: "2Gi"
+      podReadyTimeout: 60
+      configMaps:
+        - name: my-config
+          mountPath: /etc/config</code></pre>
+
+        <h2 id="provider">Provider 工厂</h2>
+        <p>Provider 使用注册的执行器配置，通过 Adapter/Bridge 模式创建执行器实例。</p>
+
+        <pre><code class="language-go">provider := provider.NewProvider()
+
+// 注册执行器
+provider.RegisterExecutor("local", executor.ExecutorConfig{
+    Type:   "local",
+    Config: map[string]any{"shell": "bash"},
+})
+provider.RegisterExecutor("docker", executor.ExecutorConfig{
+    Type:   "docker",
+    Config: map[string]any{"registry": "myregistry.com"},
+})
+
+// 创建并准备执行器
+exec, err := provider.GetExecutor(ctx, "docker")</code></pre>
+
+        <p><strong>创建流程</strong>：</p>
+        <ol>
+            <li><code>RegisterExecutor(name, config)</code></li>
+            <li><code>GetExecutor(ctx, name)</code></li>
+            <li>根据 type 选择 Adapter 和 Bridge</li>
+            <li><code>Adapter.Config()</code> 应用配置</li>
+            <li><code>Bridge.Conn()</code> 创建 Executor</li>
+            <li><code>Executor.Prepare()</code> 初始化环境</li>
+            <li>返回准备好的 Executor</li>
+        </ol>
+
+        <h2 id="lifecycle">执行器生命周期</h2>
+        <p>每个执行器在流水线中的生命周期如下：</p>
+        <pre><code class="language-plaintext">1. Pipeline 启动
+   └── 为每个节点创建/复用执行器
+       └── Executor.Prepare() 初始化环境
+
+2. 节点执行
+   └── Executor.Transfer() 执行命令
+       └── 实时流式输出到日志
+
+3. Pipeline 完成或取消
+   └── Executor.Destruction() 清理环境
+       └── Local: 关闭 Shell 进程
+       └── Docker: 停止并删除容器
+       └── K8s: 删除 Pod</code></pre>
+    </article>
+</div>
+
+<script>hljs.highlightAll();</script>
+</body>
+</html>

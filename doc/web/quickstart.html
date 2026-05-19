@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快速开始 - FlowX 文档</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0f172a;
+            --accent: #06b6d4;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #1e293b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        nav {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+        .nav-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 60px;
+        }
+        .logo {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a {
+            color: var(--text-light); text-decoration: none;
+            font-size: 14px; font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .layout {
+            display: flex; max-width: 1200px; margin: 0 auto;
+            padding-top: 60px; min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px; flex-shrink: 0;
+            padding: 32px 16px 32px 24px;
+            border-right: 1px solid var(--border);
+            position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            color: var(--text-light); letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .sidebar a {
+            display: block; padding: 8px 12px; border-radius: 8px;
+            color: var(--text-light); text-decoration: none; font-size: 14px;
+            transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active {
+            background: #eff6ff; color: var(--primary);
+        }
+        .sidebar-group { margin-bottom: 24px; }
+        .content {
+            flex: 1; padding: 40px 48px; max-width: 800px;
+        }
+        .content h1 {
+            font-size: 36px; font-weight: 800; margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .content h2 {
+            font-size: 24px; font-weight: 700; margin-top: 48px; margin-bottom: 16px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .content h3 {
+            font-size: 18px; font-weight: 700; margin-top: 32px; margin-bottom: 12px;
+        }
+        .content p { margin-bottom: 16px; color: var(--text-light); }
+        .content ul, .content ol { margin-bottom: 16px; padding-left: 24px; color: var(--text-light); }
+        .content li { margin-bottom: 8px; }
+        .content code {
+            background: #f1f5f9; padding: 2px 8px; border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 13px;
+        }
+        .content pre {
+            background: var(--code-bg); border-radius: 12px; padding: 24px;
+            overflow-x: auto; margin-bottom: 24px; border: 1px solid #334155;
+        }
+        .content pre code {
+            background: transparent; padding: 0; color: #e2e8f0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 14px; line-height: 1.8;
+        }
+        .content blockquote {
+            border-left: 4px solid var(--primary); padding-left: 16px; margin-bottom: 24px;
+            color: var(--text-light); background: #eff6ff; padding: 16px 16px 16px 20px; border-radius: 0 8px 8px 0;
+        }
+        .content table {
+            width: 100%; border-collapse: collapse; background: var(--card);
+            border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px;
+        }
+        .content th, .content td { padding: 12px 16px; text-align: left; font-size: 14px; }
+        .content th { background: var(--bg); font-weight: 600; color: var(--text-light); }
+        .content tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+        .step-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--primary); color: white; font-size: 14px; font-weight: 700;
+            margin-right: 12px; flex-shrink: 0;
+        }
+        .step-row { display: flex; align-items: flex-start; margin-bottom: 24px; }
+        .step-content { flex: 1; }
+        .step-content h3 { margin-top: 0; margin-bottom: 8px; }
+        .step-content p { margin-bottom: 12px; }
+        .breadcrumbs {
+            font-size: 13px; color: var(--text-light); margin-bottom: 24px;
+        }
+        .breadcrumbs a { color: var(--primary); text-decoration: none; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="index.html" class="logo">FlowX</a>
+        <div class="nav-links">
+            <a href="index.html">首页</a>
+            <a href="quickstart.html" class="active">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="executors.html">执行器</a>
+            <a href="examples.html">示例</a>
+        </div>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-group">
+            <div class="sidebar-title">快速开始</div>
+            <a href="#install" class="active">安装</a>
+            <a href="#first-pipeline">第一个流水线</a>
+            <a href="#understanding-config">理解配置</a>
+            <a href="#run-it">运行</a>
+            <a href="#next-steps">下一步</a>
+        </div>
+        <div class="sidebar-group">
+            <div class="sidebar-title">更多文档</div>
+            <a href="configuration.html">配置参考</a>
+            <a href="pipeline.html">流水线核心</a>
+            <a href="executors.html">执行器系统</a>
+            <a href="node.html">节点与步骤</a>
+            <a href="edge.html">条件边与循环</a>
+            <a href="template.html">模板引擎</a>
+            <a href="metadata.html">元数据存储</a>
+            <a href="events.html">事件系统</a>
+            <a href="runtime.html">运行时管理</a>
+            <a href="examples.html">工作流示例</a>
+        </div>
+    </aside>
+
+    <article class="content">
+        <div class="breadcrumbs"><a href="index.html">首页</a> / 快速开始</div>
+        <h1>快速开始</h1>
+        <p>本指南将带你从零开始，在 5 分钟内运行你的第一个 FlowX 流水线。</p>
+
+        <!-- Step 1 -->
+        <div class="step-row" id="install">
+            <span class="step-badge">1</span>
+            <div class="step-content">
+                <h3>安装</h3>
+                <p>FlowX 需要 Go 1.23 或更高版本。使用 <code>go get</code> 安装：</p>
+                <pre><code class="language-bash">go get github.com/LerkoX/flowx</code></pre>
+                <p>验证安装：</p>
+                <pre><code class="language-bash">go list -m github.com/LerkoX/flowx</code></pre>
+            </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-row" id="first-pipeline">
+            <span class="step-badge">2</span>
+            <div class="step-content">
+                <h3>创建第一个流水线</h3>
+                <p>创建项目目录并初始化 Go 模块：</p>
+                <pre><code class="language-bash">mkdir my-flowx-project && cd my-flowx-project
+go mod init my-flowx-project</code></pre>
+
+                <p>创建 <code>main.go</code> 文件：</p>
+                <pre><code class="language-go">package main
+
+import (
+    "context"
+    "fmt"
+    "github.com/LerkoX/flowx"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // 1. 创建运行时
+    rt := flowx.NewRuntime(ctx)
+
+    // 2. 准备 YAML 配置
+    configYAML := `
+Version: "1.0"
+Name: hello-pipeline
+
+Executors:
+  local:
+    type: local
+    config:
+      shell: bash
+
+Graph: |
+  stateDiagram-v2
+    [*] --> Hello
+    Hello --> [*]
+
+Nodes:
+  Hello:
+    executor: local
+    steps:
+      - name: greet
+        run: echo "Hello, FlowX!"
+`
+
+    // 3. 同步执行
+    p, err := rt.RunSync(ctx, "hello-001", configYAML, nil)
+    if err != nil {
+        panic(err)
+    }
+
+    // 4. 等待完成并输出状态
+    <-p.Done()
+    fmt.Println("Pipeline status:", p.Status())
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-row" id="understanding-config">
+            <span class="step-badge">3</span>
+            <div class="step-content">
+                <h3>理解配置结构</h3>
+                <p>上面的 YAML 配置包含四个核心部分：</p>
+
+                <table>
+                    <thead>
+                        <tr><th>字段</th><th>作用</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>Executors</code></td><td>定义执行器，这里注册了一个名为 <code>local</code> 的本地 Shell 执行器</td></tr>
+                        <tr><td><code>Graph</code></td><td>使用 Mermaid <code>stateDiagram-v2</code> 定义节点执行顺序</td></tr>
+                        <tr><td><code>Nodes</code></td><td>定义每个节点使用的执行器和执行的步骤</td></tr>
+                        <tr><td><code>Param / Metadate</code></td><td>可选，定义全局参数和元数据存储（本示例未使用）</td></tr>
+                    </tbody>
+                </table>
+
+                <blockquote>
+                    <strong>提示</strong>：Graph 中的 <code>[*]</code> 表示起始和结束节点，FlowX 会自动处理它们。节点名称（如 <code>Hello</code>）必须与 <code>Nodes</code> 下的键名一致。
+                </blockquote>
+            </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="step-row" id="run-it">
+            <span class="step-badge">4</span>
+            <div class="step-content">
+                <h3>运行</h3>
+                <pre><code class="language-bash">go run main.go</code></pre>
+                <p>预期输出：</p>
+                <pre><code class="language-plaintext">Hello, FlowX!
+Pipeline status: SUCCESS</code></pre>
+                <p>恭喜你！你的第一个 FlowX 流水线已经成功运行。</p>
+            </div>
+        </div>
+
+        <h2 id="next-steps">下一步</h2>
+
+        <p>现在你已经掌握了 FlowX 的基本用法，可以深入学习以下主题：</p>
+
+        <ul>
+            <li><strong><a href="configuration.html">配置参考</a></strong> — 了解所有 YAML 配置字段的详细说明</li>
+            <li><strong><a href="pipeline.html">流水线核心</a></strong> — 理解 DAG 图结构、BFS 遍历和并发执行</li>
+            <li><strong><a href="executors.html">执行器系统</a></strong> — 学习 Local、Docker、K8s 三种执行环境</li>
+            <li><strong><a href="node.html">节点与步骤</a></strong> — 掌握多步骤节点和输出提取</li>
+            <li><strong><a href="examples.html">工作流示例</a></strong> — 查看完整的实战示例（CI/CD、ETL、文件处理等）</li>
+        </ul>
+
+        <h2>常见问题</h2>
+
+        <h3>Q: 如何查看执行日志？</h3>
+        <p>FlowX 默认将日志输出到控制台。你也可以设置自定义的 <code>Pusher</code> 将日志推送到外部系统：</p>
+        <pre><code class="language-go">pusher := logger.NewConsolePusher()
+rt.SetPusher(pusher)</code></pre>
+
+        <h3>Q: 异步执行和同步执行有什么区别？</h3>
+        <p></p>
+        <ul>
+            <li><code>RunSync</code>：阻塞当前 goroutine，直到流水线完成</li>
+            <li><code>RunAsync</code>：在后台 goroutine 执行，立即返回 <code>Pipeline</code> 实例，通过 <code><-p.Done()</code> 等待完成</li>
+        </ul>
+
+        <h3>Q: 流水线 ID 可以重复吗？</h3>
+        <p>不可以。同一个 Runtime 中，流水线 ID 必须唯一。如果需要重新运行，先调用 <code>rt.Rm(id)</code> 移除旧记录，或使用新的 ID。</p>
+    </article>
+</div>
+
+<script>hljs.highlightAll();</script>
+</body>
+</html>

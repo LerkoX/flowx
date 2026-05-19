@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流水线核心 - FlowX 文档</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0f172a;
+            --accent: #06b6d4;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #1e293b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        nav {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+        .nav-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 60px;
+        }
+        .logo {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a {
+            color: var(--text-light); text-decoration: none;
+            font-size: 14px; font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .layout {
+            display: flex; max-width: 1200px; margin: 0 auto;
+            padding-top: 60px; min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px; flex-shrink: 0;
+            padding: 32px 16px 32px 24px;
+            border-right: 1px solid var(--border);
+            position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            color: var(--text-light); letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .sidebar a {
+            display: block; padding: 8px 12px; border-radius: 8px;
+            color: var(--text-light); text-decoration: none; font-size: 14px;
+            transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active {
+            background: #eff6ff; color: var(--primary);
+        }
+        .sidebar-group { margin-bottom: 24px; }
+        .content {
+            flex: 1; padding: 40px 48px; max-width: 800px;
+        }
+        .content h1 {
+            font-size: 36px; font-weight: 800; margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .content h2 {
+            font-size: 24px; font-weight: 700; margin-top: 48px; margin-bottom: 16px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .content h3 {
+            font-size: 18px; font-weight: 700; margin-top: 32px; margin-bottom: 12px;
+        }
+        .content p { margin-bottom: 16px; color: var(--text-light); }
+        .content ul, .content ol { margin-bottom: 16px; padding-left: 24px; color: var(--text-light); }
+        .content li { margin-bottom: 8px; }
+        .content code {
+            background: #f1f5f9; padding: 2px 8px; border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 13px;
+        }
+        .content pre {
+            background: var(--code-bg); border-radius: 12px; padding: 24px;
+            overflow-x: auto; margin-bottom: 24px; border: 1px solid #334155;
+        }
+        .content pre code {
+            background: transparent; padding: 0; color: #e2e8f0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 14px; line-height: 1.8;
+        }
+        .content blockquote {
+            border-left: 4px solid var(--primary); padding-left: 16px; margin-bottom: 24px;
+            color: var(--text-light); background: #eff6ff; padding: 16px 16px 16px 20px; border-radius: 0 8px 8px 0;
+        }
+        .content table {
+            width: 100%; border-collapse: collapse; background: var(--card);
+            border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px;
+        }
+        .content th, .content td { padding: 12px 16px; text-align: left; font-size: 14px; }
+        .content th { background: var(--bg); font-weight: 600; color: var(--text-light); }
+        .content tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+        .breadcrumbs {
+            font-size: 13px; color: var(--text-light); margin-bottom: 24px;
+        }
+        .breadcrumbs a { color: var(--primary); text-decoration: none; }
+        .diagram {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 24px; font-family: 'SF Mono', monospace; font-size: 13px; line-height: 1.8;
+            overflow-x: auto; color: var(--text-light);
+        }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="index.html" class="logo">FlowX</a>
+        <div class="nav-links">
+            <a href="index.html">首页</a>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="executors.html">执行器</a>
+            <a href="examples.html">示例</a>
+        </div>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-group">
+            <div class="sidebar-title">流水线核心</div>
+            <a href="#overview">概述</a>
+            <a href="#dag">DAG 图结构</a>
+            <a href="#traversal">BFS 遍历算法</a>
+            <a href="#loop">循环执行</a>
+            <a href="#lifecycle">生命周期</a>
+            <a href="#concurrent">并发执行</a>
+            <a href="#pause-resume">暂停与恢复</a>
+            <a href="#dynamic">动态图修改</a>
+            <a href="#events">事件系统</a>
+        </div>
+        <div class="sidebar-group">
+            <div class="sidebar-title">更多文档</div>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="executors.html">执行器系统</a>
+            <a href="node.html">节点与步骤</a>
+            <a href="edge.html">条件边与循环</a>
+            <a href="template.html">模板引擎</a>
+            <a href="metadata.html">元数据存储</a>
+            <a href="events.html">事件系统</a>
+            <a href="runtime.html">运行时管理</a>
+            <a href="examples.html">工作流示例</a>
+        </div>
+    </aside>
+
+    <article class="content">
+        <div class="breadcrumbs"><a href="index.html">首页</a> / 流水线核心</div>
+        <h1>流水线核心</h1>
+        <p>本文档介绍 FlowX 的核心流水线机制：DAG 图结构、统一遍历算法（支持有环/无环图）、循环执行、暂停恢复、动态图修改和事件系统。</p>
+
+        <h2 id="overview">概述</h2>
+        <p>FlowX 的流水线基于 DAG（有向无环图）结构组织任务。每个节点代表一个执行单元，边代表执行顺序和依赖关系。引擎使用 BFS 层级遍历算法，支持无环图和有环图（通过条件回边实现循环）。</p>
+
+        <div class="diagram">
+流水线执行流程：
+
+Run() 被调用
+  ├── 触发 PipelineStart 事件
+  ├── 创建求值上下文（EvaluationContext）
+  ├── 逐层 BFS 执行（runLevelByLevel）
+  │   ├── 循环开始：
+  │   │   ├── 设置 iteration 到求值上下文
+  │   │   ├── 计算 BFS 层级（使用 forwardGraph）
+  │   │   └── 逐层执行：
+  │   │       ├── 检查暂停信号 → 保存层级，等待恢复
+  │   │       ├── 检查取消信号 → 返回 ctx.Err()
+  │   │       ├── 并发执行当前层级所有节点
+  │   │       └── 重新计算后续层级（条件边可获取最新 metadata）
+  │   └── 循环检测：
+  │       ├── 无回边 → 返回（无环图）
+  │       ├── 评估回边条件 → true → 重置循环节点，继续迭代
+  │       └── 评估回边条件 → false → 循环结束
+  ├── 清理所有执行器
+  ├── 触发 PipelineFinish 事件
+  └── 关闭 doneChan
+        </div>
+
+        <h2 id="dag">DAG 图结构</h2>
+        <p>FlowX 使用 Mermaid <code>stateDiagram-v2</code> 语法定义图结构。引擎解析此语法后，自动创建节点和边。</p>
+
+        <h3>基本图结构</h3>
+        <pre><code class="language-yaml">Graph: |
+  stateDiagram-v2
+    [*] --> Build
+    Build --> Test
+    Test --> Deploy
+    Deploy --> [*]</code></pre>
+
+        <p>上述配置定义了三个节点：<code>Build</code> → <code>Test</code> → <code>Deploy</code>，按顺序执行。</p>
+
+        <h3>并行图结构</h3>
+        <pre><code class="language-yaml">Graph: |
+  stateDiagram-v2
+    [*] --> Task1
+    [*] --> Task2
+    [*] --> Task3
+    Task1 --> Merge
+    Task2 --> Merge
+    Task3 --> Merge
+    Merge --> [*]</code></pre>
+
+        <p>上述配置中，<code>Task1</code>、<code>Task2</code>、<code>Task3</code> 没有相互依赖，会<strong>并行执行</strong>。当三个任务都完成后，<code>Merge</code> 才会执行。</p>
+
+        <h2 id="traversal">统一 BFS 遍历算法</h2>
+        <p>FlowX 的 <code>Traversal</code> 和 <code>TraversalSteps</code> 使用同一套 BFS 层级计算逻辑，有环图和无环图无需区分代码路径。</p>
+
+        <h3>无环图遍历</h3>
+        <ol>
+            <li>构建 forwardGraph（无环图等同于原始图）</li>
+            <li>计算 forwardGraph 中所有节点的入度</li>
+            <li>入度为 0 的节点作为起始节点</li>
+            <li>并发执行所有入度为 0 的节点</li>
+            <li>节点执行完成后，评估其所有出边</li>
+            <li>条件为 true 或无条件的边：将目标节点入度减 1</li>
+            <li>重复步骤 4-6，直到所有节点执行完毕</li>
+        </ol>
+
+        <div class="diagram">
+示例：Build → Test → Deploy
+
+起始节点: [Build]           入度: Build=0, Test=1, Deploy=1
+  ↓ Build 完成
+层级 2:   [Test]            入度: Test=0, Deploy=1
+  ↓ Test 完成
+层级 3:   [Deploy]          入度: Deploy=0
+        </div>
+
+        <h3>有环图遍历</h3>
+        <p>有环图通过 <strong>forwardGraph + 回边评估</strong> 实现循环执行：</p>
+        <ol>
+            <li><strong>forwardGraph</strong>：排除所有回边后的邻接表</li>
+            <li><strong>层级计算</strong>：在 forwardGraph 上执行 BFS，得到拓扑层级</li>
+            <li><strong>逐层执行</strong>：按层级执行所有节点</li>
+            <li><strong>回边评估</strong>：所有层级执行完毕后，评估回边条件
+                <ul>
+                    <li>条件为 true → 重置循环节点的运行时状态，从头开始下一轮迭代</li>
+                    <li>条件为 false → 循环结束</li>
+                </ul>
+            </li>
+            <li><strong>迭代安全</strong>：通过 <code>MaxLoopIterations</code>（默认 100）防止无限循环</li>
+        </ol>
+
+        <div class="diagram">
+图结构: A → B → C → D，回边 C → A（条件: iteration < 3）
+
+迭代 0: A → B → C → D  → 评估回边 C→A: iteration(1) < 3 → true
+迭代 1: A → B → C → D  → 评估回边 C→A: iteration(2) < 3 → true
+迭代 2: A → B → C → D  → 评估回边 C→A: iteration(3) < 3 → false → 结束
+        </div>
+
+        <blockquote>
+            <strong>注意</strong>：评估回边时使用的是 <code>iteration + 1</code>（预判下一次迭代），因此 <code>iteration < 3</code> 实际执行 3 轮（iteration 0、1、2）。
+        </blockquote>
+
+        <h2 id="loop">循环执行</h2>
+        <p>通过条件回边实现可控循环，使用内置 <code>iteration</code> 变量控制迭代次数。</p>
+
+        <pre><code class="language-yaml">MaxLoopIterations: 5
+
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> A: {{ iteration < 3 }}
+    C --> D
+    D --> [*]</code></pre>
+
+        <table>
+            <thead><tr><th>迭代轮次</th><th>执行的节点</th><th>评估 C→A 时 iteration 值</th><th>结果</th></tr></thead>
+            <tbody>
+                <tr><td>0</td><td>A→B→C→D</td><td>1</td><td><code>true</code>，继续循环</td></tr>
+                <tr><td>1</td><td>A→B→C→D</td><td>2</td><td><code>true</code>，继续循环</td></tr>
+                <tr><td>2</td><td>A→B→C→D</td><td>3</td><td><code>false</code>，循环结束</td></tr>
+            </tbody>
+        </table>
+
+        <h2 id="lifecycle">流水线生命周期</h2>
+
+        <h3>状态流转</h3>
+        <div class="diagram">
+Init → Running → Success
+                → Failed
+                → Cancelled
+                → Paused → Running (恢复)
+                → Stopped → Running (恢复)
+        </div>
+
+        <h3>节点跳过机制</h3>
+        <p>节点和步骤在以下终端状态下会被跳过：</p>
+        <ul>
+            <li><code>SUCCESS</code> - 已成功完成</li>
+            <li><code>FAILED</code> - 已失败</li>
+            <li><code>CANCELLED</code> - 已取消</li>
+        </ul>
+        <p>这使得快照恢复成为可能：导出当前状态后重新加载配置，已完成的节点不会重复执行。</p>
+
+        <h3>取消机制</h3>
+        <p>调用 <code>Cancel()</code> 会取消流水线的 <code>context</code>，进而：</p>
+        <ol>
+            <li>所有正在运行的执行器收到取消信号</li>
+            <li>执行器终止当前进程</li>
+            <li>节点状态更新为 <code>CANCELLED</code></li>
+            <li>流水线状态更新为 <code>CANCELLED</code></li>
+        </ol>
+
+        <h2 id="concurrent">并发执行</h2>
+        <p>同一层级内的节点通过 goroutine 并行执行，层级之间串行执行。这是 FlowX 实现高效流水线的基础。</p>
+
+        <pre><code class="language-yaml">Graph: |
+  stateDiagram-v2
+    [*] --> FetchUsers
+    [*] --> FetchOrders
+    [*] --> FetchProducts
+    FetchUsers --> Merge
+    FetchOrders --> Merge
+    FetchProducts --> Merge
+    Merge --> [*]</code></pre>
+
+        <p>在这个例子中：</p>
+        <ul>
+            <li><strong>层级 1</strong>：<code>FetchUsers</code>、<code>FetchOrders</code>、<code>FetchProducts</code> <strong>并行执行</strong></li>
+            <li><strong>层级 2</strong>：三个任务都完成后，<code>Merge</code> 执行</li>
+        </ul>
+
+        <h2 id="pause-resume">暂停与恢复</h2>
+
+        <h3>暂停流水线</h3>
+        <p>调用 <code>Pause()</code> 后，流水线会在当前层级的所有节点执行完成后暂停：</p>
+        <pre><code class="language-go">pipeline, _ := rt.RunAsync(ctx, "pipeline-001", config, nil)
+
+// 暂停（等待当前层执行完毕）
+err := pipeline.Pause()</code></pre>
+
+        <h3>恢复流水线</h3>
+        <pre><code class="language-go">err := pipeline.Resume(ctx)</code></pre>
+
+        <p>恢复后会重新计算 BFS 层级（图可能已被修改），从暂停时的层级继续执行。</p>
+
+        <h2 id="dynamic">动态图修改</h2>
+        <p>在流水线处于 <code>PAUSED</code>、<code>STOPPED</code>、<code>FAILED</code>、<code>CANCELLED</code> 或 <code>SUCCESS</code> 状态时，可以通过 <code>Runtime.ModifyGraph</code> 修改图结构。</p>
+
+        <pre><code class="language-go">mods := flowx.GraphModifications{
+    RemoveNodes: []string{"OldNode"},
+    AddNodes: []flowx.NodeConfig{
+        {
+            Name:     "NewNode",
+            Executor: "local",
+            Steps: []flowx.Step{
+                {Name: "step1", Run: "echo hello"},
+            },
+        },
+    },
+    AddEdges: []flowx.EdgeModification{
+        {Source: "NewNode", Target: "ExistingNode"},
+    },
+}
+
+err := rt.ModifyGraph(ctx, "pipeline-001", mods)</code></pre>
+
+        <p>修改操作是<strong>原子</strong>的：如果任何一步失败，会自动回滚到修改前的状态。</p>
+
+        <h3>修改操作顺序</h3>
+        <ol>
+            <li>删除边</li>
+            <li>删除节点（自动删除关联边）</li>
+            <li>添加新节点</li>
+            <li>添加新边</li>
+            <li>解析 Mermaid 图片段（如果有）</li>
+            <li>校验图结构（允许条件回边，拒绝无条件环）</li>
+            <li>更新存储的配置</li>
+            <li>触发 <code>PipelineGraphModified</code> 事件</li>
+        </ol>
+
+        <h2 id="events">事件系统</h2>
+        <p>FlowX 提供完整的生命周期事件系统，支持自定义监听器。</p>
+
+        <table>
+            <thead><tr><th>事件常量</th><th>值</th><th>触发时机</th></tr></thead>
+            <tbody>
+                <tr><td><code>EventPipelineInit</code></td><td><code>PipelineInit</code></td><td>流水线初始化</td></tr>
+                <tr><td><code>EventPipelineStart</code></td><td><code>PipelineStart</code></td><td>流水线开始执行</td></tr>
+                <tr><td><code>EventPipelineFinish</code></td><td><code>PipelineFinish</code></td><td>流水线执行完成</td></tr>
+                <tr><td><code>EventPipelineNodeStart</code></td><td><code>PipelineNodeStart</code></td><td>节点开始执行</td></tr>
+                <tr><td><code>EventPipelineNodeFinish</code></td><td><code>PipelineNodeFinish</code></td><td>节点执行完成</td></tr>
+                <tr><td><code>EventPipelinePaused</code></td><td><code>PipelinePaused</code></td><td>流水线暂停</td></tr>
+                <tr><td><code>EventPipelineResumed</code></td><td><code>PipelineResumed</code></td><td>流水线恢复</td></tr>
+                <tr><td><code>EventPipelineCancelled</code></td><td><code>PipelineCancelled</code></td><td>流水线被取消</td></tr>
+                <tr><td><code>EventPipelineStatusUpdate</code></td><td><code>PipelineStatusUpdate</code></td><td>流水线状态更新</td></tr>
+                <tr><td><code>EventPipelineGraphModified</code></td><td><code>PipelineGraphModified</code></td><td>图被动态修改</td></tr>
+            </tbody>
+        </table>
+
+        <p>更多事件相关内容参见 <a href="events.html">事件系统</a> 文档。</p>
+    </article>
+</div>
+
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>架构概览 - FlowX 文档</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0f172a;
+            --accent: #06b6d4;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --code-bg: #1e293b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        nav {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+        .nav-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 60px;
+        }
+        .logo {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a {
+            color: var(--text-light); text-decoration: none;
+            font-size: 14px; font-weight: 500; transition: color 0.2s;
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .layout {
+            display: flex; max-width: 1200px; margin: 0 auto;
+            padding-top: 60px; min-height: 100vh;
+        }
+        .sidebar {
+            width: 260px; flex-shrink: 0;
+            padding: 32px 16px 32px 24px;
+            border-right: 1px solid var(--border);
+            position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+        }
+        .sidebar-title {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            color: var(--text-light); letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .sidebar a {
+            display: block; padding: 8px 12px; border-radius: 8px;
+            color: var(--text-light); text-decoration: none; font-size: 14px;
+            transition: all 0.15s;
+        }
+        .sidebar a:hover, .sidebar a.active {
+            background: #eff6ff; color: var(--primary);
+        }
+        .sidebar-group { margin-bottom: 24px; }
+        .content {
+            flex: 1; padding: 40px 48px; max-width: 800px;
+        }
+        .content h1 {
+            font-size: 36px; font-weight: 800; margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .content h2 {
+            font-size: 24px; font-weight: 700; margin-top: 48px; margin-bottom: 16px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .content h3 {
+            font-size: 18px; font-weight: 700; margin-top: 32px; margin-bottom: 12px;
+        }
+        .content p { margin-bottom: 16px; color: var(--text-light); }
+        .content ul, .content ol { margin-bottom: 16px; padding-left: 24px; color: var(--text-light); }
+        .content li { margin-bottom: 8px; }
+        .content code {
+            background: #f1f5f9; padding: 2px 8px; border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 13px;
+        }
+        .content pre {
+            background: var(--code-bg); border-radius: 12px; padding: 24px;
+            overflow-x: auto; margin-bottom: 24px; border: 1px solid #334155;
+        }
+        .content pre code {
+            background: transparent; padding: 0; color: #e2e8f0;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 14px; line-height: 1.8;
+        }
+        .content blockquote {
+            border-left: 4px solid var(--primary); padding-left: 16px; margin-bottom: 24px;
+            color: var(--text-light); background: #eff6ff; padding: 16px 16px 16px 20px; border-radius: 0 8px 8px 0;
+        }
+        .content table {
+            width: 100%; border-collapse: collapse; background: var(--card);
+            border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px;
+        }
+        .content th, .content td { padding: 12px 16px; text-align: left; font-size: 14px; }
+        .content th { background: var(--bg); font-weight: 600; color: var(--text-light); }
+        .content tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+        .breadcrumbs {
+            font-size: 13px; color: var(--text-light); margin-bottom: 24px;
+        }
+        .breadcrumbs a { color: var(--primary); text-decoration: none; }
+        .diagram {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; margin-bottom: 24px; font-family: 'SF Mono', monospace; font-size: 13px; line-height: 1.8;
+            overflow-x: auto; color: var(--text-light);
+        }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="index.html" class="logo">FlowX</a>
+        <div class="nav-links">
+            <a href="index.html">首页</a>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="executors.html">执行器</a>
+            <a href="examples.html">示例</a>
+        </div>
+    </div>
+</nav>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-group">
+            <div class="sidebar-title">架构概览</div>
+            <a href="#overview">架构总览</a>
+            <a href="#structure">目录结构</a>
+            <a href="#interfaces">核心接口</a>
+            <a href="#dataflow">数据流</a>
+        </div>
+        <div class="sidebar-group">
+            <div class="sidebar-title">更多文档</div>
+            <a href="quickstart.html">快速开始</a>
+            <a href="configuration.html">配置参考</a>
+            <a href="pipeline.html">流水线核心</a>
+            <a href="executors.html">执行器系统</a>
+            <a href="node.html">节点与步骤</a>
+            <a href="edge.html">条件边与循环</a>
+            <a href="template.html">模板引擎</a>
+            <a href="metadata.html">元数据存储</a>
+            <a href="events.html">事件系统</a>
+            <a href="runtime.html">运行时管理</a>
+            <a href="examples.html">工作流示例</a>
+        </div>
+    </aside>
+
+    <article class="content">
+        <div class="breadcrumbs"><a href="index.html">首页</a> / 架构概览</div>
+        <h1>架构概览</h1>
+        <p>本文档介绍 FlowX 的项目架构、模块划分和核心接口关系。</p>
+
+        <h2 id="overview">架构总览</h2>
+
+        <div class="diagram">
+┌─────────────────────────────────────────────────────────┐
+│                      Runtime（运行时）                     │
+│  - 同步/异步执行                                          │
+│  - 流水线生命周期管理                                      │
+│  - 快照与恢复                                             │
+├─────────────────────────────────────────────────────────┤
+│                   Pipeline（流水线）                       │
+│  - DAG 图遍历（BFS，统一支持有环/无环）                      │
+│  - 循环执行（条件回边 + iteration 计数器）                    │
+│  - 暂停/恢复                                              │
+│  - 并发节点执行                                           │
+│  - 事件通知                                               │
+│  - 模板渲染                                               │
+├───────────────┬───────────────┬─────────────────────────┤
+│     Node      │     Edge      │    MetadataStore        │
+│  节点与步骤    │  条件边        │    元数据存储             │
+│  状态管理      │  表达式求值     │    in-config/redis/http │
+│  输出提取      │               │                         │
+├───────────────┴───────────────┴─────────────────────────┤
+│                  Executor（执行器）                        │
+│  ┌──────────┐  ┌──────────┐  ┌────────────────────┐    │
+│  │  Local   │  │  Docker  │  │    Kubernetes       │    │
+│  │ 本地Shell │  │ 容器执行  │  │    Pod 执行         │    │
+│  └──────────┘  └──────────┘  └────────────────────┘    │
+├─────────────────────────────────────────────────────────┤
+│              Template Engine（模板引擎）                    │
+│              基于 pongo2，支持条件、循环、过滤器              │
+├─────────────────────────────────────────────────────────┤
+│                 Logger（日志系统）                          │
+│           日志推送接口，支持自定义 Pusher                    │
+└─────────────────────────────────────────────────────────┘
+        </div>
+
+        <h2 id="structure">目录结构</h2>
+
+        <pre><code class="language-plaintext">flowx/
+├── core/                 # 核心类型定义
+│   ├── config.go         # 配置结构体定义
+│   ├── const.go          # 常量（状态、事件）
+│   ├── field.go          # FieldItem 定义
+│   └── uuid.go           # UUID 工具函数
+├── dag/                  # DAG 流水线核心
+│   ├── pipeline.go       # Pipeline 接口定义
+│   ├── pipeline_impl.go  # Pipeline + DAG 图实现
+│   ├── node.go           # Node 接口定义
+│   ├── node_impl.go      # Node 实现
+│   ├── edge.go           # Edge 接口定义
+│   ├── edge_impl.go      # Edge 实现（条件边）
+│   ├── eval_context.go   # 表达式求值上下文
+│   ├── extractor.go      # 输出提取器
+│   └── snapshot.go       # 快照与恢复
+├── executor/             # 执行器系统
+│   ├── interfaces.go     # Executor/Adapter/Bridge 接口
+│   ├── provider/
+│   │   └── provider.go   # Executor 提供者（工厂模式）
+│   ├── docker/           # Docker 执行器
+│   ├── local/            # Local 执行器
+│   └── kubernetes/       # Kubernetes 执行器
+├── template/             # 模板引擎
+│   ├── template.go       # 模板引擎接口
+│   └── template_impl.go  # pongo2 模板引擎实现
+├── metadata/             # 元数据存储
+│   ├── metadata.go       # MetadataStore 接口
+│   └── metadata_impl.go  # 三种存储实现
+├── logger/               # 日志系统
+│   ├── logger.go         # 日志接口与类型
+│   └── console_pusher.go # 控制台日志推送
+├── doc/                  # 文档目录
+│   └── web/              # HTML 文档站点
+├── test/                 # 测试
+└── config.example.yaml   # 示例配置文件</code></pre>
+
+        <h2 id="interfaces">核心接口</h2>
+
+        <h3>Runtime 接口</h3>
+        <pre><code class="language-go">type Runtime interface {
+    Get(id string) (Pipeline, error)
+    Cancel(ctx context.Context, id string) error
+    RunAsync(ctx, id, configYAML string, listener Listener) (Pipeline, error)
+    RunSync(ctx, id, configYAML string, listener Listener) (Pipeline, error)
+    Rm(id string)
+    Done() chan struct{}
+    Notify(data any) error
+    Ctx() context.Context
+    StopBackground()
+    StartBackground()
+    SetPusher(pusher logger.Pusher)
+    SetTemplateEngine(engine TemplateEngine)
+    GetTemplateEngine() TemplateEngine
+    ExportConfig(id string) (string, error)
+    Pause(ctx context.Context, id string) error
+    Resume(ctx context.Context, id string) error
+    UpdateConfig(ctx context.Context, id string, newConfigYAML string) error
+    ModifyGraph(ctx context.Context, id string, modifications GraphModifications) error
+}</code></pre>
+
+        <h3>Pipeline 接口</h3>
+        <pre><code class="language-go">type Pipeline interface {
+    Id() string
+    GetGraph() Graph
+    SetGraph(graph Graph)
+    Status() string
+    SetMetadata(store MetadataStore)
+    Metadata() Metadata
+    Listening(listener Listener)
+    Done() <-chan struct{}
+    Run(ctx context.Context) error
+    Notify()
+    Cancel()
+    SetExecutorProvider(provider ExecutorProvider)
+    SetTemplateEngine(engine TemplateEngine)
+    GetTemplateEngine() TemplateEngine
+    SetPusher(pusher logger.Pusher)
+    Pause() error
+    Resume(ctx context.Context) error
+    IsModifiable() bool
+}</code></pre>
+
+        <h3>Executor 接口</h3>
+        <pre><code class="language-go">type Executor interface {
+    Prepare(ctx context.Context) error
+    Destruction(ctx context.Context) error
+    Transfer(ctx context.Context, resultChan chan<- any, commandChan <-chan any, inputChan <-chan []byte)
+}</code></pre>
+
+        <h2 id="dataflow">执行数据流</h2>
+
+        <div class="diagram">
+1. Runtime.RunSync/RunAsync
+   ├── 解析 YAML 配置 → PipelineConfig
+   ├── 渲染 Param（自引用，最多 10 次迭代）
+   ├── 渲染 Metadata.data（引用 Param）
+   ├── 构建 DAG 图（解析 Mermaid stateDiagram-v2）
+   ├── 初始化元数据存储（MetadataStoreFactory）
+   ├── 创建执行器提供者（Provider）
+   ├── 创建 Pipeline 实例
+   └── 执行 Pipeline.Run()
+
+2. Pipeline.Run
+   ├── 触发 PipelineStart 事件
+   ├── 逐层 BFS 执行
+   │   ├── 并发执行当前层级所有节点
+   │   ├── 每个节点：Prepare → 执行 Steps → Destruction
+   │   ├── 步骤执行：模板渲染 → 命令执行 → 输出提取
+   │   └── 评估出边条件，决定下一层级
+   ├── 触发 PipelineFinish 事件
+   └── 关闭 doneChan
+
+3. 节点执行
+   ├── 模板引擎渲染 run 命令
+   ├── Executor.Transfer 执行命令
+   ├── 实时流式输出到日志
+   └── 输出提取器提取结构化数据 → MetadataStore
+        </div>
+    </article>
+</div>
+
+<script>hljs.highlightAll();</script>
+</body>
+</html>
