@@ -424,6 +424,43 @@ Nodes:
     </p>
 </footer>
 
-<script>mermaid.initialize({startOnLoad:true, theme:'base', themeVariables:{bg:'#ffffff', primaryColor:'#e0f2fe', primaryTextColor:'#1e293b', primaryBorderColor:'#2563eb', secondaryColor:'#f1f5f9', secondaryTextColor:'#475569', secondaryBorderColor:'#06b6d4', tertiaryColor:'#ffffff', tertiaryTextColor:'#64748b', tertiaryBorderColor:'#cbd5e1', lineColor:'#334155', mainBkg:'#e0f2fe', secondBkg:'#f1f5f9', nodeBorder:'#2563eb', nodeTextColor:'#1e293b', clusterBkg:'#f8fafc', clusterBorder:'#e2e8f0', titleColor:'#1e293b', edgeLabelBackground:'#ffffff', edgeLabelColor:'#1e293b', stateBorder:'#2563eb', stateLabelColor:'#1e293b', transitionColor:'#334155', transitionLabelColor:'#475569', stateBkg:'#e0f2fe', altBackground:'#f8fafc', gridColor:'#e2e8f0', section0:'#e0f2fe', section1:'#fef3c7', section2:'#dcfce7', section3:'#f3e8ff'}});hljs.highlightAll();</script>
+<script>mermaid.initialize({startOnLoad:true, theme:'base', themeVariables:{bg:'#ffffff', primaryColor:'#e0f2fe', primaryTextColor:'#1e293b', primaryBorderColor:'#2563eb', secondaryColor:'#f1f5f9', secondaryTextColor:'#475569', secondaryBorderColor:'#06b6d4', tertiaryColor:'#ffffff', tertiaryTextColor:'#64748b', tertiaryBorderColor:'#cbd5e1', lineColor:'#334155', mainBkg:'#e0f2fe', secondBkg:'#f1f5f9', nodeBorder:'#2563eb', nodeTextColor:'#1e293b', clusterBkg:'#f8fafc', clusterBorder:'#e2e8f0', titleColor:'#1e293b', edgeLabelBackground:'#ffffff', edgeLabelColor:'#1e293b', stateBorder:'#2563eb', stateLabelColor:'#1e293b', transitionColor:'#334155', transitionLabelColor:'#475569', stateBkg:'#e0f2fe', altBackground:'#f8fafc', gridColor:'#e2e8f0', section0:'#e0f2fe', section1:'#fef3c7', section2:'#dcfce7', section3:'#f3e8ff'}});hljs.highlightAll();
+
+// Mermaid click to zoom
+function openMermaidZoom(el) {
+    var svg = el.querySelector('svg');
+    if (!svg) return;
+    var content = document.getElementById('mermaidZoomContent');
+    content.innerHTML = '';
+    content.appendChild(svg.cloneNode(true));
+    document.getElementById('mermaidZoomOverlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+function closeMermaidZoom(e) {
+    if (!e) {
+        document.getElementById('mermaidZoomOverlay').classList.remove('active');
+        document.body.style.overflow = '';
+        return;
+    }
+    var isOverlay = e.target.id === 'mermaidZoomOverlay';
+    var isCloseBtn = e.target.closest('.mermaid-zoom-close');
+    if (isOverlay || isCloseBtn) {
+        document.getElementById('mermaidZoomOverlay').classList.remove('active');
+        document.body.style.overflow = '';
+    }
+}
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeMermaidZoom();
+});
+document.querySelectorAll('pre.mermaid').forEach(function(el) {
+    el.addEventListener('click', function() { openMermaidZoom(el); });
+});
+</script>
+<div id="mermaidZoomOverlay" class="mermaid-zoom-overlay" onclick="closeMermaidZoom(event)">
+    <div class="mermaid-zoom-modal">
+        <button class="mermaid-zoom-close" onclick="closeMermaidZoom(event)">&times;</button>
+        <div id="mermaidZoomContent"></div>
+    </div>
+</div>
 </body>
 </html>
