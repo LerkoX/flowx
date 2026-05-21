@@ -1,20 +1,50 @@
 # 2. 系统架构设计
 
-## 2.1 整体架构
+## 2.1 项目组织
+
+本项目（FlowX Studio）是一个**独立仓库**，通过 Go Module 引入 FlowX 核心引擎库。
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     独立仓库                                  │
+├─────────────────────────────────────────────────────────────┤
+│  github.com/LerkoX/flowx-studio                              │
+│  ├── cmd/flowx-studio/     # CLI 入口                       │
+│  ├── internal/             # 业务逻辑                       │
+│  │   ├── server/           # HTTP 服务层                    │
+│  │   ├── service/          # 业务服务层                    │
+│  │   ├── ai/               # AI 服务层                     │
+│  │   ├── db/               # SQLite 数据层                 │
+│  │   └── runtime/          # FlowX 运行时适配              │
+│  ├── web/                  # React 前端                     │
+│  └── go.mod                # require github.com/LerkoX/flowx │
+├─────────────────────────────────────────────────────────────┤
+│  外部依赖（Go Module）                                        │
+│  github.com/LerkoX/flowx v1.x.x                             │
+│  ├── dag/                  # DAG 引擎                       │
+│  ├── executor/             # 执行器（local/docker/k8s）     │
+│  ├── template/             # 模板引擎                      │
+│  ├── metadata/             # 元数据存储                    │
+│  ├── logger/               # 日志系统                      │
+│  └── core/                 # 核心模型                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 2.2 整体架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        用户层                                    │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
 │  │   浏览器     │  │   浏览器     │  │      CLI 终端        │  │
-│  │  (Web UI)    │  │  (移动端)    │  │   (flowx run ...)    │  │
+│  │  (Web UI)    │  │  (移动端)    │  │   (flowx-studio)     │  │
 │  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘  │
 └─────────┼─────────────────┼─────────────────────┼──────────────┘
           │                 │                     │
           └─────────────────┴─────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────────┐
-│                      HTTP 服务层                                 │
+│                      HTTP 服务层 (flowx-studio)                  │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │              Go HTTP Server (net/http)                  │   │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │   │
@@ -37,7 +67,7 @@
 └─────────┬─────────┘ └───────────┘
           │
 ┌─────────▼───────────────────────────────────────────────────────┐
-│                    核心引擎层 (现有 FlowX)                       │
+│              FlowX 核心引擎层 (外部依赖)                          │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐│
 │  │ DAG Graph   │  │  Pipeline   │  │   Executor Manager      ││
 │  │   Engine    │  │  Execution  │  │  (local/docker/k8s)     ││
@@ -124,40 +154,49 @@
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                     HTTP Server                          │
-│                   (internal/server)                      │
-└────────────────────────┬─────────────────────────────────┘
-                         │ 依赖
-        ┌────────────────┼────────────────┐
-        │                │                │
-┌───────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐
-│   Service    │ │   AI        │ │   DB        │
-│   Layer      │ │   Service   │ │   Layer     │
-│(internal/   │ │(internal/   │ │(internal/   │
-│  service)    │ │  ai)        │ │  db)        │
-└───────┬──────┘ └──────┬──────┘ └──────┬──────┘
-        │               │               │
-        └───────────────┼───────────────┘
-                        │ 依赖
-               ┌────────▼────────┐
-               │  RuntimeAdapter │
-               │ (internal/      │
-               │  runtime)       │
-               └────────┬────────┘
-                        │ 依赖
-        ┌───────────────┼───────────────┐
-        │               │               │
-┌───────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐
-│   dag        │ │  executor   │ │   template  │
-│   package    │ │   package   │ │   package   │
-│(现有代码)     │ │(现有代码)    │ │(现有代码)    │
-└──────────────┘ └─────────────┘ └─────────────┘
+│                  flowx-studio (本仓库)                    │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │                HTTP Server                         │  │
+│  │              (internal/server)                     │  │
+│  └────────────────────────┬───────────────────────────┘  │
+│                           │ 依赖                          │
+│          ┌────────────────┼────────────────┐             │
+│          │                │                │             │
+│  ┌───────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐      │
+│  │   Service    │ │   AI        │ │   DB        │      │
+│  │   Layer      │ │   Service   │ │   Layer     │      │
+│  └───────┬──────┘ └──────┬──────┘ └──────┬──────┘      │
+│          │               │               │             │
+│          └───────────────┼───────────────┘             │
+│                          │ 依赖                          │
+│                 ┌────────▼────────┐                     │
+│                 │  RuntimeAdapter │                     │
+│                 │ (internal/      │                     │
+│                 │  runtime)       │                     │
+│                 └────────┬────────┘                     │
+│                          │ Go Module                     │
+└──────────────────────────┼───────────────────────────────┘
+                           │ require
+┌──────────────────────────▼───────────────────────────────┐
+│         github.com/LerkoX/flowx (外部依赖)                 │
+│                                                          │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐│
+│  │   dag    │ │ executor │ │ template │ │   logger     ││
+│  │  package │ │ package  │ │ package  │ │  package     ││
+│  └──────────┘ └──────────┘ └──────────┘ └──────────────┘│
+│  ┌──────────┐ ┌──────────┐                               │
+│  │ metadata │ │   core   │                               │
+│  │  package │ │  package │                               │
+│  └──────────┘ └──────────┘                               │
+└──────────────────────────────────────────────────────────┘
 ```
 
 **依赖规则**：
 - 上层可依赖下层，下层不可反向依赖上层
 - 同层模块之间通过接口解耦，避免直接依赖
-- 现有 FlowX 引擎包（dag/executor/template/metadata/logger）保持独立，不引入 Web 层依赖
+- **FlowX 核心库作为外部依赖，不感知 flowx-studio 的存在**
+- flowx-studio 通过 `go.mod` 的 `require` 引入 FlowX 特定版本
 
 ## 2.4 数据流设计
 
@@ -254,52 +293,113 @@
 | 进程管理 | `os/exec` + Docker API | 复用现有执行器能力 |
 | 实时通信 | SSE (Server-Sent Events) | 单向推送足够，比 WebSocket 简单 |
 
-## 2.6 与现有代码的集成策略
+## 2.6 与 FlowX 核心库的集成策略
 
-### 2.6.1 保持现有引擎不变
+### 2.6.1 FlowX 核心库作为外部依赖
 
-现有 `dag/`、`executor/`、`template/`、`metadata/`、`logger/` 等包保持完全不变，不引入任何 Web 层依赖。
+FlowX 核心库（`github.com/LerkoX/flowx`）作为独立 Go Module，通过 `go.mod` 引入：
+
+```go
+// flowx-studio/go.mod
+module github.com/LerkoX/flowx-studio
+
+go 1.25
+
+require (
+    github.com/LerkoX/flowx v1.2.0
+    // ... 其他依赖
+)
+```
+
+**依赖原则**：
+- FlowX 核心库保持完全独立，不引入任何 Web/AI 相关代码
+- flowx-studio 只使用 FlowX 公开的 API（`Runtime`、`Pipeline`、`Listener` 等接口）
+- 通过 Go Module 版本管理，锁定依赖的 FlowX 版本
 
 ### 2.6.2 适配层设计
 
-在 `internal/runtime/` 创建适配层：
+在 `internal/runtime/` 创建适配层，桥接 FlowX 核心库与 flowx-studio 业务层：
 
 ```go
-// RuntimeAdapter 将 Web 层的执行请求适配到 FlowX Runtime
+package runtime
+
+import (
+    "context"
+    
+    "github.com/LerkoX/flowx"
+    "github.com/LerkoX/flowx/dag"
+)
+
+// RuntimeAdapter 将 flowx-studio 的执行请求适配到 FlowX Runtime
 type RuntimeAdapter struct {
     runtime flowx.Runtime
     eventCh chan Event
 }
 
+// NewRuntimeAdapter 创建适配器
+func NewRuntimeAdapter() *RuntimeAdapter {
+    return &RuntimeAdapter{
+        runtime: flowx.NewRuntime(context.Background()),
+    }
+}
+
 // ExecuteWorkflow 执行工作流并实时推送事件
-func (ra *RuntimeAdapter) ExecuteWorkflow(ctx context.Context, workflow *db.Workflow) error {
-    // 1. 将数据库 YAML 转换为 PipelineConfig
-    config := ra.parseConfig(workflow.YAMLConfig)
+func (ra *RuntimeAdapter) ExecuteWorkflow(ctx context.Context, workflowID string, yamlConfig string) error {
+    // 1. 注册 FlowX 事件监听器
+    listener := &studioListener{
+        eventCh: ra.eventCh,
+        pipelineID: workflowID,
+    }
     
-    // 2. 注册事件监听器，将 FlowX 事件转为 SSE 事件
-    ra.runtime.OnNodeStart(func(nodeID string) {
-        ra.eventCh <- Event{Type: "node_start", NodeID: nodeID}
-    })
-    
-    // 3. 调用 FlowX Runtime 执行
-    return ra.runtime.Run(ctx, config)
+    // 2. 调用 FlowX Runtime 异步执行
+    _, err := ra.runtime.RunAsync(ctx, workflowID, yamlConfig, listener)
+    return err
+}
+
+// studioListener 实现 dag.Listener 接口
+type studioListener struct {
+    eventCh    chan Event
+    pipelineID string
+}
+
+func (l *studioListener) Handle(p dag.Pipeline, event dag.Event) {
+    // 将 FlowX 事件转换为 flowx-studio 内部事件
+    l.eventCh <- Event{
+        Type:       string(event),
+        PipelineID: l.pipelineID,
+        Status:     p.Status(),
+    }
+}
+
+func (l *studioListener) Events() []dag.Event {
+    return []dag.Event{
+        dag.PipelineStart,
+        dag.PipelineFinish,
+        dag.PipelineNodeStart,
+        dag.PipelineNodeFinish,
+        dag.PipelinePaused,
+        dag.PipelineResumed,
+    }
 }
 ```
 
-### 2.6.3 命令行保持兼容
+### 2.6.3 命令行入口
 
-现有 `bin/main.go` CLI 功能保持不变，新增 `cmd/flowx/main.go` 作为主入口：
+flowx-studio 的 CLI 入口：
 
 ```go
-// cmd/flowx/main.go
+// cmd/flowx-studio/main.go
 func main() {
     switch os.Args[1] {
-    case "run":
-        // 保持现有功能：执行 YAML 文件
-        runCLI()
-    case "server", "":
-        // 新功能：启动 Web UI
+    case "version":
+        printVersion()
+    case "help":
+        printHelp()
+    default:
+        // 默认启动 Web UI
         runServer()
     }
 }
 ```
+
+**注意**：FlowX 核心库原有的 `flowx run workflow.yaml` CLI 功能保持在核心库中，flowx-studio 不提供此命令。
