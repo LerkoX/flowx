@@ -4,16 +4,17 @@
 
 ### 8.1.1 设计目标
 
-- **单个文件**：`flowx` 一个二进制文件包含所有功能
+- **单个文件**：`flowx-studio` 一个二进制文件包含所有功能
 - **零依赖**：无需安装 Node.js、Python 等运行时
 - **自包含**：前端资源嵌入二进制，无需外部文件
 - **快速启动**：3 秒内完成启动并打开浏览器
+- **外部引擎**：FlowX 核心引擎通过 Go Module 编译进二进制
 
 ### 8.1.2 构建策略
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    flowx binary                              │
+│                 flowx-studio binary                          │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │  Go 编译的 HTTP 服务器 + 业务逻辑                      │  │
 │  │  ┌───────────────────────────────────────────────┐   │  │
@@ -31,7 +32,8 @@
 │  │  └───────────────────────────────────────────────┘   │  │
 │  └───────────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  现有 FlowX 引擎 (dag, executor, template, etc.)       │  │
+│  │  FlowX 核心引擎 (通过 go.mod 编译进二进制)              │  │
+│  │  github.com/LerkoX/flowx v1.x.x                       │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -84,9 +86,9 @@ npm run build
 
 # 2. 构建后端（嵌入前端）
 cd ..
-go build -o flowx cmd/flowx/main.go
+go build -o flowx-studio cmd/flowx-studio/main.go
 
-# 最终产物：单个 flowx 二进制文件
+# 最终产物：单个 flowx-studio 二进制文件
 ```
 
 ## 8.2 命令行接口
@@ -95,21 +97,18 @@ go build -o flowx cmd/flowx/main.go
 
 ```bash
 # 启动 Web UI（默认命令）
-flowx
-flowx server
-
-# 运行 YAML 工作流（保持现有功能）
-flowx run workflow.yaml
-flowx run workflow.yaml --param key=value
+flowx-studio
+flowx-studio server
 
 # 查看版本
-flowx version
+flowx-studio version
 
 # 查看帮助
-flowx help
-flowx help server
-flowx help run
+flowx-studio help
+flowx-studio help server
 ```
+
+**注意**：运行 YAML 工作流的 CLI 功能保留在 FlowX 核心库中（`flowx run workflow.yaml`），不在 flowx-studio 中提供。
 
 ### 8.2.2 启动参数
 
@@ -128,27 +127,27 @@ Flags:
 
 | 变量名 | 说明 | 默认值 |
 |--------|------|--------|
-| `FLOWX_PORT` | HTTP 服务端口 | 8080 |
-| `FLOWX_HOST` | 监听地址 | 0.0.0.0 |
-| `FLOWX_DATA_DIR` | 数据目录 | ~/.flowx |
-| `FLOWX_DB_PATH` | 数据库文件路径 | ~/.flowx/flowx.db |
-| `FLOWX_NO_OPEN` | 不自动打开浏览器 | false |
-| `FLOWX_DEBUG` | 调试模式 | false |
-| `FLOWX_ENCRYPTION_KEY` | API Key 加密密钥 | 自动生成 |
+| `FLOWX_STUDIO_PORT` | HTTP 服务端口 | 8080 |
+| `FLOWX_STUDIO_HOST` | 监听地址 | 0.0.0.0 |
+| `FLOWX_STUDIO_DATA_DIR` | 数据目录 | ~/.flowx-studio |
+| `FLOWX_STUDIO_DB_PATH` | 数据库文件路径 | ~/.flowx-studio/studio.db |
+| `FLOWX_STUDIO_NO_OPEN` | 不自动打开浏览器 | false |
+| `FLOWX_STUDIO_DEBUG` | 调试模式 | false |
+| `FLOWX_STUDIO_ENCRYPTION_KEY` | API Key 加密密钥 | 自动生成 |
 
 ## 8.3 进程管理
 
 ### 8.3.1 启动流程
 
 ```
-用户执行 flowx
+用户执行 flowx-studio
     │
     ▼
-[命令解析] 识别为 server 命令
+[命令解析] 识别为 server 命令（默认）
     │
     ▼
-[初始化] 
-  ├── 创建数据目录 ~/.flowx
+[初始化]
+  ├── 创建数据目录 ~/.flowx-studio
   ├── 初始化数据库（如有必要）
   ├── 加载系统配置
   └── 检查 AI 配置
@@ -204,13 +203,13 @@ func main() {
 
 ```go
 func ensureSingleInstance(dataDir string) (func(), error) {
-    pidFile := filepath.Join(dataDir, "flowx.pid")
+    pidFile := filepath.Join(dataDir, "flowx-studio.pid")
     
     // 检查是否已有实例在运行
     if data, err := os.ReadFile(pidFile); err == nil {
         pid := string(data)
         if isProcessRunning(pid) {
-            return nil, fmt.Errorf("FlowX is already running (PID: %s)", pid)
+            return nil, fmt.Errorf("FlowX Studio is already running (PID: %s)", pid)
         }
     }
     
@@ -229,21 +228,21 @@ func ensureSingleInstance(dataDir string) (func(), error) {
 ## 8.4 数据目录结构
 
 ```
-~/.flowx/
-├── flowx.db              # SQLite 数据库
-├── flowx.db.backup       # 自动备份
-├── flowx.pid             # 进程 ID 文件
+~/.flowx-studio/
+├── studio.db              # SQLite 数据库
+├── studio.db.backup       # 自动备份
+├── studio.pid             # 进程 ID 文件
 ├── logs/
-│   ├── flowx.log         # 应用日志
-│   └── executions/       # 执行日志（可选，大量时分离）
+│   ├── studio.log         # 应用日志
+│   └── executions/        # 执行日志（可选，大量时分离）
 ├── temp/
-│   └── mock-*/           # Mock 测试临时文件
+│   └── mock-*/            # Mock 测试临时文件
 ├── nodes/
-│   └── {node_name}/      # 节点代码缓存
+│   └── {node_name}/       # 节点代码缓存
 │       ├── main.py
 │       ├── requirements.txt
 │       └── Dockerfile
-└── config.yaml           # 可选：外部配置文件
+└── config.yaml            # 可选：外部配置文件
 ```
 
 ## 8.5 自动浏览器打开
@@ -306,86 +305,53 @@ func openBrowser(url string) error {
 - 保留最近 5 个日志文件
 - 使用 lumberjack 库实现
 
-## 8.7 现有引擎改进计划
+## 8.7 版本管理与核心库依赖
 
-### 8.7.1 运行时状态查询接口
+### 8.7.1 Go Module 依赖策略
 
-现有 FlowX 引擎在执行时不暴露内部状态。需要添加查询接口，支持 Web 层实时监控：
-
-```go
-// 在 Runtime 接口中新增
- type Runtime interface {
-     // 现有方法...
-     Run(ctx context.Context, config *core.PipelineConfig) error
-     
-     // 新增：状态查询
-     GetExecutionState() (*ExecutionState, error)
-     GetNodeState(nodeID string) (*NodeState, error)
-     
-     // 新增：事件订阅
-     OnNodeStart(handler NodeStartHandler)
-     OnNodeComplete(handler NodeCompleteHandler)
-     OnLog(handler LogHandler)
- }
-```
-
-### 8.7.2 执行取消支持
-
-增强引擎支持通过 context 取消执行：
+flowx-studio 通过 Go Module 引入 FlowX 核心库：
 
 ```go
-// 检查 context 取消信号
-func (p *PipelineImpl) executeNode(ctx context.Context, node *dag.Node) error {
-    select {
-    case <-ctx.Done():
-        return ctx.Err()
-    default:
-    }
-    
-    // 执行节点...
-}
+// go.mod
+module github.com/LerkoX/flowx-studio
+
+go 1.25
+
+require (
+    github.com/LerkoX/flowx v1.2.0
+    // ... 其他依赖
+)
 ```
 
-### 8.7.3 日志流接口
+**版本锁定原则**：
+- flowx-studio 的 `go.mod` 中明确指定 FlowX 的版本 tag（如 `v1.2.0`）
+- 不依赖 FlowX 的 `main` 分支或 `latest` 标签，确保构建可复现
+- 每次升级 FlowX 版本前，先在开发环境验证兼容性
 
-为执行器添加日志流接口，支持实时捕获节点输出：
+**版本升级流程**：
+1. FlowX 核心库发布新 tag（如 `v1.3.0`）
+2. flowx-studio 在 feature 分支升级依赖版本
+3. 运行集成测试验证
+4. 合并到 main 分支并发布 flowx-studio 新版本
 
-```go
-// executor/interfaces.go
-type LogHandler func(level string, message string)
+### 8.7.2 核心库接口评估结论
 
-type Executor interface {
-    // 现有方法...
-    
-    // 新增：设置日志处理器
-    SetLogHandler(handler LogHandler)
-}
-```
+经过对 FlowX 核心库代码的审阅，现有接口**基本满足** flowx-studio 的需求，但有以下**建议增强**：
 
-### 8.7.4 元数据存储改进
+| 能力 | 现有支持 | 评估结论 |
+|------|---------|---------|
+| 工作流执行 | `Runtime.RunAsync/RunSync` | 满足 |
+| 执行取消 | `Runtime.Cancel` | 满足 |
+| 暂停/恢复 | `Runtime.Pause/Resume` | 满足 |
+| 状态查询 | `Runtime.Get(id)` + `Pipeline.Status()` | 满足 |
+| 节点状态 | `Node.GetRuntimeStatus()` | 满足 |
+| 事件监听 | `dag.Listener` 接口 | 基本满足，但缺少节点上下文 |
+| 日志捕获 | `logger.Pusher` 接口 | 满足，`Entry` 包含 Node 字段 |
+| 执行输出 | 通过 `NodeRuntimeStatus.Steps[].Output` | 满足 |
 
-现有元数据存储支持 in-config、redis、http 三种后端。新增 SQLite 后端，与 Web 层共享数据库：
+**主要不足**：`dag.Listener.Handle(p Pipeline, event Event)` 缺少节点上下文信息。当收到 `PipelineNodeStart`/`PipelineNodeFinish` 事件时，无法直接知道是哪个节点触发的事件。建议 FlowX 核心库在 `Pipeline` 接口中新增 `CurrentNode() Node` 方法，或在事件触发时临时记录当前节点。
 
-```go
-// metadata/sqlite_store.go
-type SQLiteStore struct {
-    db *sql.DB
-}
-
-func (s *SQLiteStore) Get(key string) (string, error) {
-    var value string
-    err := s.db.QueryRow("SELECT value FROM metadata WHERE key = ?", key).Scan(&value)
-    return value, err
-}
-
-func (s *SQLiteStore) Set(key string, value string) error {
-    _, err := s.db.Exec(
-        "INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?",
-        key, value, value,
-    )
-    return err
-}
-```
+详见 [10-core-deps.md](./10-core-deps.md) 完整评估报告。
 
 ## 8.8 配置加载优先级
 
@@ -397,15 +363,15 @@ func (s *SQLiteStore) Set(key string, value string) error {
 4. **默认值**：`8080`
 
 ```yaml
-# ~/.flowx/config.yaml 示例
+# ~/.flowx-studio/config.yaml 示例
 server:
   port: 8080
   host: "0.0.0.0"
   auto_open_browser: true
 
 data:
-  dir: "~/.flowx"
-  db_path: "~/.flowx/flowx.db"
+  dir: "~/.flowx-studio"
+  db_path: "~/.flowx-studio/studio.db"
 
 ai:
   default_provider: "openai"
