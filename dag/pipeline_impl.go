@@ -36,6 +36,7 @@ type PipelineImpl struct {
 	currentLevel     int                    // 记录当前执行到的BFS层级（用于暂停恢复）
 	maxLoopIter      int                    // 循环图最大迭代次数
 	pusher           logger.Pusher           // 日志推送器
+	currentNode      Node                   // 当前正在执行的节点
 }
 
 func NewPipeline(ctx context.Context) Pipeline {
@@ -202,6 +203,13 @@ func (p *PipelineImpl) Resume(ctx context.Context) error {
 	// 发送恢复信号
 	close(p.resumeChan)
 	return nil
+}
+
+// CurrentNode 返回当前正在执行的节点（如有）
+func (p *PipelineImpl) CurrentNode() Node {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.currentNode
 }
 
 // IsModifiable 判断当前是否可修改图

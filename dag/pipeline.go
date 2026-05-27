@@ -19,6 +19,7 @@ var (
 	PipelineExecutorPrepareDone Event = core.EventPipelineExecutorPrepareDone // 流水线执行器准备完毕
 	PipelineNodeStart           Event = core.EventPipelineNodeStart           // 节点开始
 	PipelineNodeFinish          Event = core.EventPipelineNodeFinish          // 节点完成
+	PipelineNodeFailed          Event = core.EventPipelineNodeFailed          // 节点执行失败
 	PipelinePaused              Event = core.EventPipelinePaused              // 流水线暂停
 	PipelineResumed             Event = core.EventPipelineResumed             // 流水线恢复
 	PipelineGraphModified       Event = core.EventPipelineGraphModified       // 图被修改
@@ -114,4 +115,6 @@ type Pipeline interface {
 	Resume(ctx context.Context) error
 	//IsModifiable 判断当前是否可修改图
 	IsModifiable() bool
+	//CurrentNode 返回当前正在执行的节点（如有）
+	CurrentNode() Node
 }
