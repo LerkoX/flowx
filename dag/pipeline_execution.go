@@ -282,6 +282,11 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 		return nil
 	}
 
+	// 设置当前节点
+	p.mu.Lock()
+	p.currentNode = node
+	p.mu.Unlock()
+
 	// 通知节点开始
 	p.NotifyEvent(PipelineNodeStart)
 	fmt.Printf("Executing node: %s\n", node.Id())
@@ -291,6 +296,10 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	if executorName == "" {
 		fmt.Printf("Node %s has no executor configured, skipping\n", node.Id())
 		p.NotifyEvent(PipelineNodeFinish)
+		// 清理当前节点
+		p.mu.Lock()
+		p.currentNode = nil
+		p.mu.Unlock()
 		return nil
 	}
 
@@ -298,17 +307,33 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	exec, err := p.getOrCreateExecutor(ctx, executorName)
 	if err != nil {
 		fmt.Printf("Failed to get executor for node %s: %v\n", node.Id(), err)
+		// 清理当前节点
+		p.mu.Lock()
+		p.currentNode = nil
+		p.mu.Unlock()
 		return fmt.Errorf("failed to get executor for node %s: %w", node.Id(), err)
 	}
 
 	// 执行节点
 	if err := p.executeNode(ctx, node, exec); err != nil {
 		fmt.Printf("Node %s execution failed: %v\n", node.Id(), err)
+		// 节点执行失败时触发 PipelineNodeFailed 事件
+		p.NotifyEvent(PipelineNodeFailed)
+		// 清理当前节点
+		p.mu.Lock()
+		p.currentNode = nil
+		p.mu.Unlock()
 		return err
 	}
 
 	// 通知节点完成
 	p.NotifyEvent(PipelineNodeFinish)
+
+	// 清理当前节点
+	p.mu.Lock()
+	p.currentNode = nil
+	p.mu.Unlock()
+
 	return nil
 }
 

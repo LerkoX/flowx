@@ -19,6 +19,7 @@ const (
 	EventPipelineExecutorPrepareDone = "pipeline-executor-prepare-done"
 	EventPipelineNodeStart           = "pipeline-node-start"
 	EventPipelineNodeFinish          = "pipeline-node-finish"
+	EventPipelineNodeFailed          = "pipeline-node-failed"
 	EventPipelineCancelled           = "pipeline-cancelled"
 	EventPipelineStatusUpdate        = "pipeline-status-update"
 	EventPipelinePaused              = "pipeline-paused"

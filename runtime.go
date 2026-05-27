@@ -49,4 +49,6 @@ type Runtime interface {
 	// 已执行的节点不允许删除或替换，只允许修改尚未运行的节点
 	// 除 Nodes 和 Graph 外的其他配置字段不可更新
 	UpdateConfig(ctx context.Context, id string, newConfigYAML string) error
+	// ListPipelines 列出所有活跃的流水线ID
+	ListPipelines() []string
 }

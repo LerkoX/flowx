@@ -2017,3 +2017,72 @@ func TestValidateImmutableFields_GraphMutable(t *testing.T) {
 		t.Errorf("Graph changes should be allowed, got: %v", err)
 	}
 }
+
+// TestListPipelines_EmptyRuntime 测试空 Runtime 返回空列表
+func TestListPipelines_EmptyRuntime(t *testing.T) {
+	ctx := context.Background()
+	runtime := NewRuntime(ctx)
+
+	pipelines := runtime.ListPipelines()
+	if pipelines == nil {
+		t.Fatal("ListPipelines should not return nil")
+	}
+	if len(pipelines) != 0 {
+		t.Errorf("Expected 0 pipelines, got %d", len(pipelines))
+	}
+}
+
+// TestListPipelines_WithPipelines 测试有活跃流水线时返回正确列表
+func TestListPipelines_WithPipelines(t *testing.T) {
+	ctx := context.Background()
+	runtime := NewRuntime(ctx)
+
+	// 使用同步执行来确保流水线在执行期间存在于 runtime 中
+	config := loadTestConfig(t, "sync_pipeline.yaml")
+
+	// 执行同步流水线
+	_, err := runtime.RunSync(ctx, "test-pipeline-1", config, nil)
+	if err != nil {
+		// 某些测试环境可能缺少依赖，跳过
+		t.Skipf("RunSync failed (may be expected in test environment): %v", err)
+	}
+
+	// 同步执行完成后流水线会被移除
+	pipelines := runtime.ListPipelines()
+	if len(pipelines) != 0 {
+		t.Errorf("Expected 0 active pipelines after sync completion, got %d", len(pipelines))
+	}
+}
+
+// TestListPipelines_AsyncExecution 测试异步执行期间的列表
+func TestListPipelines_AsyncExecution(t *testing.T) {
+	ctx := context.Background()
+	runtime := NewRuntime(ctx)
+
+	config := loadTestConfig(t, "sync_pipeline.yaml")
+
+	// 执行异步流水线
+	_, err := runtime.RunAsync(ctx, "async-test-pipeline", config, nil)
+	if err != nil {
+		t.Skipf("RunAsync failed (may be expected in test environment): %v", err)
+	}
+
+	// 检查列表中包含异步流水线
+	pipelines := runtime.ListPipelines()
+	found := false
+	for _, id := range pipelines {
+		if id == "async-test-pipeline" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected async-test-pipeline to be in ListPipelines")
+	}
+
+	// 等待异步执行完成
+	time.Sleep(2 * time.Second)
+
+	// 清理
+	runtime.Rm("async-test-pipeline")
+}

@@ -581,6 +581,18 @@ func (r *RuntimeImpl) ExportConfig(id string) (string, error) {
 	return yamlStr, nil
 }
 
+// ListPipelines 列出所有活跃的流水线ID
+func (r *RuntimeImpl) ListPipelines() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]string, 0, len(r.pipelines))
+	for id := range r.pipelines {
+		result = append(result, id)
+	}
+	return result
+}
+
 // Pause 暂停运行中的流水线
 func (r *RuntimeImpl) Pause(ctx context.Context, id string) error {
 	r.mu.RLock()
