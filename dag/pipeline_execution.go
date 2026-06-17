@@ -117,11 +117,10 @@ func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, 
 		for levelIdx < len(levels) {
 			// 检查暂停信号
 			p.pauseMu.Lock()
-			for p.paused {
+			for p.status == core.StatusPaused {
 				// 保存当前层级并进入暂停状态
 				p.mu.Lock()
 				p.currentLevel = levelIdx
-				p.status = core.StatusPaused
 				p.mu.Unlock()
 				p.NotifyEvent(PipelinePaused)
 
