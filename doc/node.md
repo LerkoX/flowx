@@ -260,3 +260,121 @@ timeout: 30
 | `text` | 普通文本输入 |
 | `password` | 密码输入 |
 | `confirm` | 确认输入（y/n） |
+
+---
+
+## flowx.json 节点注册（Studio 扩展）
+
+FlowX Studio 支持通过 `flowx.json` 文件注册节点到节点注册中心。每个 `flowx.json` 可以声明一个或多个节点，包含完整的执行元数据。
+
+### flowx.json 结构
+
+```json
+{
+  "name": "image-resizer",
+  "displayName": "图片缩放器",
+  "description": "将图片缩放到指定尺寸",
+  "version": "1.0.0",
+  "author": "flowx-team",
+  "tags": ["image", "resize"],
+  "icon": "🖼️",
+  "executor": {
+    "type": "local",
+    "workdir": "./nodes/image-resizer",
+    "entry": "main.py",
+    "language": "python"
+  },
+  "parameters": [
+    {
+      "name": "input_path",
+      "type": "string",
+      "description": "输入图片路径",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "output_path",
+      "type": "string",
+      "description": "输出图片路径"
+    }
+  ],
+  "paramDelivery": "env"
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | 是 | 节点唯一标识（英文，用于引用） |
+| `displayName` | string | 否 | 节点显示名称 |
+| `description` | string | 否 | 节点功能描述 |
+| `version` | string | 否 | 版本号 |
+| `author` | string | 否 | 作者 |
+| `tags` | []string | 否 | 标签列表 |
+| `icon` | string | 否 | 图标（emoji 或字符） |
+| `executor` | object | 是 | 执行器配置 |
+| `executor.type` | string | 是 | 执行器类型：`local`、`docker`、`kubernetes` |
+| `executor.workdir` | string | 否 | 工作目录（仅 `local`） |
+| `executor.entry` | string | 是 | 执行入口文件或命令 |
+| `executor.language` | string | 条件 | 执行语言（仅 `local` 必填） |
+| `executor.image` | string | 条件 | 容器镜像（`docker`/`kubernetes` 必填） |
+| `parameters` | []object | 否 | 输入参数定义 |
+| `outputs` | []object | 否 | 输出字段定义 |
+| `paramDelivery` | string | 否 | 参数传递方式：`env`（默认）、`args`、`stdin` |
+
+### 多节点声明
+
+一个 `flowx.json` 可以声明多个节点（数组形式）：
+
+```json
+[
+  {
+    "name": "image-resizer",
+    "displayName": "图片缩放器",
+    "executor": { "type": "local", "entry": "main.py", "language": "python" },
+    "parameters": [...],
+    "outputs": [...]
+  },
+  {
+    "name": "data-processor",
+    "displayName": "数据处理器",
+    "executor": { "type": "docker", "image": "myregistry/data-processor:v1", "entry": "python /app/main.py" },
+    "parameters": [...],
+    "outputs": [...]
+  }
+]
+```
+
+### 参数传递方式
+
+`paramDelivery` 决定节点执行时如何接收参数：
+
+| 方式 | 说明 |
+|------|------|
+| `env` | 参数作为环境变量注入（默认） |
+| `args` | 参数作为命令行参数 `--key=value` 传递 |
+| `stdin` | 参数序列化为 JSON 写入标准输入 |
+
+### 与 YAML 配置的关系
+
+`flowx.json` 是节点注册中心的配置格式，用于在 Studio 中注册可复用的节点。注册后的节点可以在 YAML 流水线配置中通过 `executor` 字段引用：
+
+```yaml
+Executors:
+  image-resizer:
+    type: local
+    config:
+      workdir: ./nodes/image-resizer
+      shell: bash
+
+Nodes:
+  Resize:
+    executor: image-resizer
+    steps:
+      - name: resize
+        run: python main.py
+```
+
+> 注：`flowx.json` 中的 `executor` 配置与 YAML 中的 `Executors` 配置是互补的。`flowx.json` 描述节点本身的执行元数据，YAML 中的 `Executors` 描述运行时的执行环境配置。

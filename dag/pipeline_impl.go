@@ -31,8 +31,8 @@ type PipelineImpl struct {
 	templateEngine   template.TemplateEngine         // 模板引擎
 	cleanupOnce      sync.Once              // 保护清理操作只执行一次
 	pauseMu          sync.Mutex             // 保护暂停/恢复操作的序列化
-	pauseChan        chan struct{}           // 暂停信号通道
-	resumeChan       chan struct{}           // 恢复信号通道
+	pauseCond        *sync.Cond             // 暂停/恢复条件变量
+	paused           bool                   // 是否已暂停
 	currentLevel     int                    // 记录当前执行到的BFS层级（用于暂停恢复）
 	maxLoopIter      int                    // 循环图最大迭代次数
 	pusher           logger.Pusher           // 日志推送器
@@ -40,14 +40,14 @@ type PipelineImpl struct {
 }
 
 func NewPipeline(ctx context.Context) Pipeline {
-	return &PipelineImpl{
-		id:           core.NewUUID(),
-		executors:    make(map[string]executor.Executor),
-		doneChan:     make(chan struct{}),
-		pauseChan:    make(chan struct{}),
-		resumeChan:   make(chan struct{}),
-		maxLoopIter:  100, // 默认最大迭代次数
+	p := &PipelineImpl{
+		id:          core.NewUUID(),
+		executors:   make(map[string]executor.Executor),
+		doneChan:    make(chan struct{}),
+		maxLoopIter: 100, // 默认最大迭代次数
 	}
+	p.pauseCond = sync.NewCond(&p.pauseMu)
+	return p
 }
 
 // 预检查PipelineImpl是否实现了Pipeline接口
@@ -182,8 +182,9 @@ func (p *PipelineImpl) Pause() error {
 		return fmt.Errorf("%w: current status is %s, expected RUNNING", core.ErrInvalidState, status)
 	}
 
-	// 发送暂停信号
-	close(p.pauseChan)
+	// 设置暂停标志
+	p.paused = true
+	p.pauseCond.Broadcast()
 	return nil
 }
 
@@ -200,8 +201,9 @@ func (p *PipelineImpl) Resume(ctx context.Context) error {
 		return fmt.Errorf("%w: current status is %s, expected PAUSED or STOPPED", core.ErrInvalidState, status)
 	}
 
-	// 发送恢复信号
-	close(p.resumeChan)
+	// 清除暂停标志，通知等待的 goroutine 继续执行
+	p.paused = false
+	p.pauseCond.Broadcast()
 	return nil
 }
 

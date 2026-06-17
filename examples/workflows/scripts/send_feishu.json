@@ -1,0 +1,120 @@
+{
+  "nodes": [
+    {
+      "name": "send-feishu-weather",
+      "displayName": "发送飞书天气通知",
+      "description": "通过飞书机器人发送天气通知消息到指定群聊",
+      "version": "1.0.0",
+      "author": "flowx-team",
+      "tags": ["feishu", "notification", "webhook"],
+      "icon": "📨",
+      "executor": {
+        "type": "local",
+        "workdir": "./examples/workflows/scripts",
+        "entry": "send_feishu.py",
+        "language": "python"
+      },
+      "parameters": [
+        {
+          "name": "FEISHU_APP_ID",
+          "type": "string",
+          "description": "飞书应用 App ID",
+          "required": true
+        },
+        {
+          "name": "FEISHU_APP_SECRET",
+          "type": "string",
+          "description": "飞书应用 App Secret",
+          "required": true
+        },
+        {
+          "name": "FEISHU_CHAT_ID",
+          "type": "string",
+          "description": "飞书群聊 ID (Open Chat ID)",
+          "required": true
+        },
+        {
+          "name": "WEATHER_CITY",
+          "type": "string",
+          "description": "城市名称",
+          "required": true
+        },
+        {
+          "name": "WEATHER_TEMP",
+          "type": "string",
+          "description": "当前温度",
+          "required": true
+        },
+        {
+          "name": "WEATHER_FEELS_LIKE",
+          "type": "string",
+          "description": "体感温度",
+          "required": true
+        },
+        {
+          "name": "WEATHER_WEATHER",
+          "type": "string",
+          "description": "天气状况",
+          "required": true
+        },
+        {
+          "name": "WEATHER_HUMIDITY",
+          "type": "string",
+          "description": "湿度",
+          "required": true
+        },
+        {
+          "name": "WEATHER_WINDSPEED",
+          "type": "string",
+          "description": "风速",
+          "required": true
+        },
+        {
+          "name": "WEATHER_UPDATE_TIME",
+          "type": "string",
+          "description": "更新时间",
+          "required": true
+        },
+        {
+          "name": "WEATHER_FORECASTS",
+          "type": "string",
+          "description": "未来7天预报JSON",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "messageId",
+          "type": "string",
+          "description": "飞书消息ID"
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "description": "发送状态"
+        }
+      ],
+      "paramDelivery": "env"
+    }
+  ]
+}
+  ],
+  "outputs": [
+    {
+      "name": "send_status",
+      "type": "string",
+      "description": "消息发送状态：success 或 failed"
+    },
+    {
+      "name": "message_title",
+      "type": "string",
+      "description": "发送的消息标题"
+    },
+    {
+      "name": "city",
+      "type": "string",
+      "description": "天气报告对应的城市"
+    }
+  ],
+  "paramDelivery": "env"
+}
