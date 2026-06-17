@@ -67,7 +67,6 @@ func TestPipelineImpl_Pause_Running(t *testing.T) {
 	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
 	pipeline.mu.Lock()
 	pipeline.status = core.StatusRunning
-	pipeline.pauseChan = make(chan struct{})
 	pipeline.mu.Unlock()
 
 	err := pipeline.Pause()
@@ -75,13 +74,44 @@ func TestPipelineImpl_Pause_Running(t *testing.T) {
 		t.Errorf("Pause() error = %v", err)
 	}
 
-	// 验证 pauseChan 已关闭
-	select {
-	case <-pipeline.pauseChan:
-		// 正确：channel 已关闭
-	default:
-		t.Error("pauseChan should be closed after Pause()")
+	// 验证 paused 标志已设置
+	pipeline.pauseMu.Lock()
+	if !pipeline.paused {
+		t.Error("paused should be true after Pause()")
 	}
+	pipeline.pauseMu.Unlock()
+
+	// 再次调用 Pause() 不应 panic（幂等）
+	err2 := pipeline.Pause()
+	if err2 != nil {
+		t.Errorf("Second Pause() error = %v", err2)
+	}
+}
+
+func TestPipelineImpl_Pause_DoublePause(t *testing.T) {
+	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
+	pipeline.mu.Lock()
+	pipeline.status = core.StatusRunning
+	pipeline.mu.Unlock()
+
+	// 第一次暂停
+	err := pipeline.Pause()
+	if err != nil {
+		t.Fatalf("First Pause() error = %v", err)
+	}
+
+	// 第二次暂停不应 panic（幂等）
+	err2 := pipeline.Pause()
+	if err2 != nil {
+		t.Errorf("Second Pause() error = %v", err2)
+	}
+
+	// 验证 paused 标志仍为 true
+	pipeline.pauseMu.Lock()
+	if !pipeline.paused {
+		t.Error("paused should still be true after double Pause()")
+	}
+	pipeline.pauseMu.Unlock()
 }
 
 func TestPipelineImpl_Resume_NotPaused(t *testing.T) {
@@ -97,21 +127,127 @@ func TestPipelineImpl_Resume_Paused(t *testing.T) {
 	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
 	pipeline.mu.Lock()
 	pipeline.status = core.StatusPaused
-	pipeline.resumeChan = make(chan struct{})
 	pipeline.mu.Unlock()
+
+	// 先设置 paused 标志
+	pipeline.pauseMu.Lock()
+	pipeline.paused = true
+	pipeline.pauseMu.Unlock()
 
 	err := pipeline.Resume(context.Background())
 	if err != nil {
 		t.Errorf("Resume() error = %v", err)
 	}
 
-	// 验证 resumeChan 已关闭
-	select {
-	case <-pipeline.resumeChan:
-		// 正确：channel 已关闭
-	default:
-		t.Error("resumeChan should be closed after Resume()")
+	// 验证 paused 标志已清除
+	pipeline.pauseMu.Lock()
+	if pipeline.paused {
+		t.Error("paused should be false after Resume()")
 	}
+	pipeline.pauseMu.Unlock()
+
+	// 再次调用 Resume() 不应 panic（幂等）
+	err2 := pipeline.Resume(context.Background())
+	if err2 != nil {
+		t.Errorf("Second Resume() error = %v", err2)
+	}
+}
+
+func TestPipelineImpl_Resume_DoubleResume(t *testing.T) {
+	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
+	pipeline.mu.Lock()
+	pipeline.status = core.StatusPaused
+	pipeline.mu.Unlock()
+
+	// 先设置 paused 标志
+	pipeline.pauseMu.Lock()
+	pipeline.paused = true
+	pipeline.pauseMu.Unlock()
+
+	// 第一次恢复
+	err := pipeline.Resume(context.Background())
+	if err != nil {
+		t.Fatalf("First Resume() error = %v", err)
+	}
+
+	// 第二次恢复不应 panic（幂等）
+	err2 := pipeline.Resume(context.Background())
+	if err2 != nil {
+		t.Errorf("Second Resume() error = %v", err2)
+	}
+
+	// 验证 paused 标志仍为 false
+	pipeline.pauseMu.Lock()
+	if pipeline.paused {
+		t.Error("paused should still be false after double Resume()")
+	}
+	pipeline.pauseMu.Unlock()
+}
+
+func TestPipelineImpl_PauseResume_Cycle(t *testing.T) {
+	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
+
+	// 第1轮：暂停→恢复
+	pipeline.mu.Lock()
+	pipeline.status = core.StatusRunning
+	pipeline.mu.Unlock()
+
+	err := pipeline.Pause()
+	if err != nil {
+		t.Fatalf("Round 1 Pause() error = %v", err)
+	}
+
+	pipeline.pauseMu.Lock()
+	if !pipeline.paused {
+		t.Error("Round 1: paused should be true")
+	}
+	pipeline.pauseMu.Unlock()
+
+	pipeline.mu.Lock()
+	pipeline.status = core.StatusPaused
+	pipeline.mu.Unlock()
+
+	err = pipeline.Resume(context.Background())
+	if err != nil {
+		t.Fatalf("Round 1 Resume() error = %v", err)
+	}
+
+	pipeline.pauseMu.Lock()
+	if pipeline.paused {
+		t.Error("Round 1: paused should be false after Resume")
+	}
+	pipeline.pauseMu.Unlock()
+
+	// 第2轮：再次暂停→恢复
+	pipeline.mu.Lock()
+	pipeline.status = core.StatusRunning
+	pipeline.mu.Unlock()
+
+	err = pipeline.Pause()
+	if err != nil {
+		t.Fatalf("Round 2 Pause() error = %v", err)
+	}
+
+	pipeline.pauseMu.Lock()
+	if !pipeline.paused {
+		t.Error("Round 2: paused should be true")
+	}
+	pipeline.pauseMu.Unlock()
+
+	pipeline.mu.Lock()
+	pipeline.status = core.StatusPaused
+	pipeline.mu.Unlock()
+
+	err = pipeline.Resume(context.Background())
+	if err != nil {
+		t.Fatalf("Round 2 Resume() error = %v", err)
+	}
+
+	pipeline.pauseMu.Lock()
+	if pipeline.paused {
+		t.Error("Round 2: paused should be false after Resume")
+	}
+	pipeline.pauseMu.Unlock()
 }
 
 func TestPipelineImpl_IsModifiable_Extra(t *testing.T) {

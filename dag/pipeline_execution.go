@@ -116,8 +116,8 @@ func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, 
 
 		for levelIdx < len(levels) {
 			// 检查暂停信号
-			select {
-			case <-p.pauseChan:
+			p.pauseMu.Lock()
+			for p.paused {
 				// 保存当前层级并进入暂停状态
 				p.mu.Lock()
 				p.currentLevel = levelIdx
@@ -126,23 +126,22 @@ func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, 
 				p.NotifyEvent(PipelinePaused)
 
 				// 等待恢复信号
-				<-p.resumeChan
+				p.pauseCond.Wait()
 
 				// 恢复运行
 				p.mu.Lock()
 				p.status = core.StatusRunning
-				p.pauseChan = make(chan struct{})
-				p.resumeChan = make(chan struct{})
 				p.mu.Unlock()
 				p.NotifyEvent(PipelineResumed)
 
 				// 重新计算层级（图可能已被修改）
 				levels = dgaGraph.TraversalSteps(evalCtx)
 				if levelIdx >= len(levels) {
+					p.pauseMu.Unlock()
 					return nil
 				}
-			default:
 			}
+			p.pauseMu.Unlock()
 
 			// 检查 context 是否已取消
 			select {

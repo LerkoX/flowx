@@ -1,0 +1,81 @@
+{
+  "nodes": [
+    {
+      "name": "get-weather",
+      "displayName": "获取天气",
+      "description": "从 OpenMeteo API 获取城市当前和未来7天天气信息，输出 flowx-yaml 格式数据",
+      "version": "1.0.0",
+      "author": "flowx-team",
+      "tags": ["weather", "api", "open-meteo", "data"],
+      "icon": "🌤️",
+      "executor": {
+        "type": "local",
+        "workdir": "./examples/workflows/scripts",
+        "entry": "get_weather.py",
+        "language": "python"
+      },
+      "parameters": [
+        {
+          "name": "WEATHER_CITY",
+          "type": "string",
+          "description": "城市名称（支持中文或拼音，如：深圳、shenzhen、北京、beijing）",
+          "required": true,
+          "default": "深圳"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "city",
+          "type": "string",
+          "description": "城市名称"
+        },
+        {
+          "name": "temp",
+          "type": "string",
+          "description": "当前温度（摄氏度）"
+        },
+        {
+          "name": "feelsLike",
+          "type": "string",
+          "description": "体感温度（摄氏度）"
+        },
+        {
+          "name": "weather",
+          "type": "string",
+          "description": "天气状况描述（如：晴朗、多云、小雨等）"
+        },
+        {
+          "name": "humidity",
+          "type": "string",
+          "description": "相对湿度百分比"
+        },
+        {
+          "name": "windspeed",
+          "type": "string",
+          "description": "风速（km/h）"
+        },
+        {
+          "name": "winddir",
+          "type": "string",
+          "description": "风向"
+        },
+        {
+          "name": "pressure",
+          "type": "string",
+          "description": "气压（hPa）"
+        },
+        {
+          "name": "updateTime",
+          "type": "string",
+          "description": "数据更新时间（HH:MM格式）"
+        },
+        {
+          "name": "forecasts",
+          "type": "string",
+          "description": "未来7天预报JSON数组，包含date、weekday、maxTemp、minTemp、weather、chanceofrain等字段"
+        }
+      ],
+      "paramDelivery": "env"
+    }
+  ]
+}

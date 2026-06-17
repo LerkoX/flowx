@@ -380,15 +380,26 @@ Graph: |
 | `Nodes.{name}.image` | string | 容器镜像（Docker/K8s 执行器使用） |
 | `Nodes.{name}.steps` | []Step | 执行步骤列表 |
 | `Nodes.{name}.extract` | object | 输出提取配置（可选） |
+| `Nodes.{name}.paramDelivery` | string | 参数传递方式：`env`（默认）、`args`、`stdin` |
 
 ### Step 字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `steps[].id` | string | 步骤唯一标识（自动生成，通常无需手动设置） |
+| `steps[].id` | string | 步骤唯一标识（由 EnsureIds() 自动生成） |
 | `steps[].name` | string | 步骤名称 |
 | `steps[].description` | string | 步骤描述 |
 | `steps[].run` | string | 执行的 shell 命令（支持模板渲染） |
+
+### 参数传递
+
+节点执行时可以通过三种方式接收参数：
+
+| 方式 | 说明 | 配置示例 |
+|------|------|----------|
+| `env` | 参数作为环境变量注入（默认） | `paramDelivery: env` |
+| `args` | 参数作为命令行参数 `--key=value` 传递 | `paramDelivery: args` |
+| `stdin` | 参数序列化为 JSON 写入标准输入 | `paramDelivery: stdin` |
 
 ### 节点运行时状态（恢复执行）
 
@@ -420,6 +431,112 @@ Nodes:
 | `extract.maxOutputSize` | int | 1048576 (1MB) | 输出大小限制（字节） |
 
 > 更多详情参见 [节点与步骤](node.md)
+
+---
+
+## 11. flowx.json 节点注册（Studio 扩展）
+
+FlowX Studio 支持通过 `flowx.json` 文件注册节点到节点注册中心。每个 `flowx.json` 可以声明一个或多个节点，包含完整的执行元数据。
+
+### 单节点配置
+
+```json
+{
+  "name": "image-resizer",
+  "displayName": "图片缩放器",
+  "description": "将图片缩放到指定尺寸",
+  "version": "1.0.0",
+  "author": "flowx-team",
+  "tags": ["image", "resize"],
+  "icon": "🖼️",
+  "executor": {
+    "type": "local",
+    "workdir": "./nodes/image-resizer",
+    "entry": "main.py",
+    "language": "python"
+  },
+  "parameters": [
+    {
+      "name": "input_path",
+      "type": "string",
+      "description": "输入图片路径",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "output_path",
+      "type": "string",
+      "description": "输出图片路径"
+    }
+  ],
+  "paramDelivery": "env"
+}
+```
+
+### 多节点配置（数组）
+
+```json
+[
+  {
+    "name": "image-resizer",
+    "displayName": "图片缩放器",
+    "executor": { "type": "local", "entry": "main.py", "language": "python" },
+    "parameters": [...],
+    "outputs": [...]
+  },
+  {
+    "name": "data-processor",
+    "displayName": "数据处理器",
+    "executor": { "type": "docker", "image": "myregistry/data-processor:v1", "entry": "python /app/main.py" },
+    "parameters": [...],
+    "outputs": [...]
+  }
+]
+```
+
+### flowx.json 字段说明
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | 是 | 节点唯一标识（英文，用于引用） |
+| `displayName` | string | 否 | 节点显示名称 |
+| `description` | string | 否 | 节点功能描述 |
+| `version` | string | 否 | 版本号 |
+| `author` | string | 否 | 作者 |
+| `tags` | []string | 否 | 标签列表 |
+| `icon` | string | 否 | 图标（emoji 或字符） |
+| `executor` | object | 是 | 执行器配置 |
+| `executor.type` | string | 是 | 执行器类型：`local`、`docker`、`kubernetes` |
+| `executor.workdir` | string | 否 | 工作目录（仅 `local`） |
+| `executor.entry` | string | 是 | 执行入口文件或命令 |
+| `executor.language` | string | 条件 | 执行语言（仅 `local` 必填） |
+| `executor.image` | string | 条件 | 容器镜像（`docker`/`kubernetes` 必填） |
+| `parameters` | []object | 否 | 输入参数定义 |
+| `outputs` | []object | 否 | 输出字段定义 |
+| `paramDelivery` | string | 否 | 参数传递方式：`env`（默认）、`args`、`stdin` |
+
+### 与 YAML 配置的关系
+
+`flowx.json` 中的 `executor` 配置与 YAML 中的 `Executors` 配置是互补的：
+- `flowx.json` 描述节点本身的执行元数据（入口、镜像、语言等）
+- YAML 中的 `Executors` 描述运行时的执行环境配置（网络、卷挂载、资源限制等）
+
+```yaml
+# flowx.json 注册节点后，在 YAML 中引用
+Executors:
+  image-resizer:
+    type: local
+    config:
+      shell: bash
+
+Nodes:
+  Resize:
+    executor: image-resizer
+    steps:
+      - name: resize
+        run: python main.py
+```
 
 ---
 

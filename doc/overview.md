@@ -4,7 +4,50 @@
 
 FlowX（包名 `github.com/LerkoX/flowx`）是一个基于 Go 语言开发的 CI/CD 流水线执行库。它使用 DAG（有向无环图）结构管理任务依赖关系，支持独立任务的并发执行，并提供可插拔的执行后端（Local、Docker、Kubernetes）。
 
-核心特性：
+## 节点注册中心（Studio 扩展）
+
+FlowX Studio 提供节点注册中心功能，支持通过 `flowx.json` 文件注册可复用的节点：
+
+- **声明式配置**：通过 `flowx.json` 定义节点的执行元数据（执行器、参数、输出等）
+- **多执行后端**：注册的节点可以是 `local`（本地脚本）、`docker`（容器）、`kubernetes`（K8s Pod）
+- **参数传递**：支持 `env`（环境变量）、`args`（命令行参数）、`stdin`（标准输入）三种参数传递方式
+- **批量注册**：一个 `flowx.json` 可以声明多个节点（数组形式）
+- **校验机制**：注册时自动校验字段完整性和类型合法性
+
+### flowx.json 示例
+
+```json
+{
+  "name": "image-resizer",
+  "displayName": "图片缩放器",
+  "description": "将图片缩放到指定尺寸",
+  "version": "1.0.0",
+  "executor": {
+    "type": "local",
+    "workdir": "./nodes/image-resizer",
+    "entry": "main.py",
+    "language": "python"
+  },
+  "parameters": [
+    {
+      "name": "input_path",
+      "type": "string",
+      "description": "输入图片路径",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "output_path",
+      "type": "string",
+      "description": "输出图片路径"
+    }
+  ],
+  "paramDelivery": "env"
+}
+```
+
+## 核心特性：
 
 - **DAG 流水线**：任务以有向无环图形式组织，支持复杂的依赖关系
 - **循环图支持**：条件回边产生可控循环，通过 `iteration` 变量控制迭代次数
@@ -18,6 +61,7 @@ FlowX（包名 `github.com/LerkoX/flowx`）是一个基于 Go 语言开发的 CI
 - **事件驱动**：完整的流水线和节点生命周期事件系统
 - **暂停恢复**：流水线可暂停/恢复，暂停期间支持动态修改图结构
 - **动态图修改**：运行中可安全添加/删除节点和边
+- **节点注册中心**：通过 `flowx.json` 注册可复用的节点，支持参数定义和多种执行后端
 
 ## 架构总览
 
