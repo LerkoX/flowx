@@ -32,7 +32,6 @@ type PipelineImpl struct {
 	cleanupOnce      sync.Once              // 保护清理操作只执行一次
 	pauseMu          sync.Mutex             // 保护暂停/恢复操作的序列化
 	pauseCond        *sync.Cond             // 暂停/恢复条件变量
-	paused           bool                   // 是否已暂停
 	currentLevel     int                    // 记录当前执行到的BFS层级（用于暂停恢复）
 	maxLoopIter      int                    // 循环图最大迭代次数
 	pusher           logger.Pusher           // 日志推送器
@@ -174,16 +173,15 @@ func (p *PipelineImpl) Pause() error {
 	p.pauseMu.Lock()
 	defer p.pauseMu.Unlock()
 
-	p.mu.RLock()
-	status := p.status
-	p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	if status != core.StatusRunning {
-		return fmt.Errorf("%w: current status is %s, expected RUNNING", core.ErrInvalidState, status)
+	if p.status != core.StatusRunning {
+		return fmt.Errorf("%w: current status is %s, expected RUNNING", core.ErrInvalidState, p.status)
 	}
 
-	// 设置暂停标志
-	p.paused = true
+	// 设置状态为 PAUSED，并通知等待的 goroutine
+	p.status = core.StatusPaused
 	p.pauseCond.Broadcast()
 	return nil
 }
@@ -193,16 +191,15 @@ func (p *PipelineImpl) Resume(ctx context.Context) error {
 	p.pauseMu.Lock()
 	defer p.pauseMu.Unlock()
 
-	p.mu.RLock()
-	status := p.status
-	p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	if status != core.StatusPaused && status != core.StatusStopped {
-		return fmt.Errorf("%w: current status is %s, expected PAUSED or STOPPED", core.ErrInvalidState, status)
+	if p.status != core.StatusPaused && p.status != core.StatusStopped {
+		return fmt.Errorf("%w: current status is %s, expected PAUSED or STOPPED", core.ErrInvalidState, p.status)
 	}
 
-	// 清除暂停标志，通知等待的 goroutine 继续执行
-	p.paused = false
+	// 设置状态为 RUNNING，通知等待的 goroutine 继续执行
+	p.status = core.StatusRunning
 	p.pauseCond.Broadcast()
 	return nil
 }
@@ -263,17 +260,18 @@ func (p *PipelineImpl) Notify() {
 	p.mu.RLock()
 	listening := p.listening
 	listener := p.listener
+	snapshot := newPipelineSnapshot(p)
 	p.mu.RUnlock()
 
 	// 如果设置了ListeningFn则调用它
 	if listening != nil {
-		listening(p)
+		listening(snapshot)
 	}
 
 	// 如果设置了事件监听器则处理它
 	if listener != nil {
 		// 通知当前状态
-		p.notifyCurrentStatus(listener)
+		p.notifyCurrentStatus(listener, snapshot)
 	}
 }
 
@@ -282,22 +280,23 @@ func (p *PipelineImpl) NotifyEvent(event Event) {
 	p.mu.RLock()
 	listener := p.listener
 	listening := p.listening
+	snapshot := newPipelineSnapshot(p)
 	p.mu.RUnlock()
 
 	if listener != nil {
-		listener.Handle(p, event)
+		listener.Handle(snapshot, event)
 	}
 
 	if listening != nil {
-		listening(p)
+		listening(snapshot)
 	}
 }
 
 // notifyCurrentStatus 通知监听器当前流水线状态
-func (p *PipelineImpl) notifyCurrentStatus(listener Listener) {
+func (p *PipelineImpl) notifyCurrentStatus(listener Listener, snapshot Pipeline) {
 	// 此方法可用于通知详细的状态变化
 	// 目前，它仅用当前流水线调用监听器
-	listener.Handle(p, core.EventPipelineStatusUpdate)
+	listener.Handle(snapshot, core.EventPipelineStatusUpdate)
 }
 
 // SetExecutorProvider 设置Executor提供者
