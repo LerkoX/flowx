@@ -113,6 +113,7 @@ func TestExecuteCommandStreaming_ResultFormat(t *testing.T) {
 
 	start := time.Now()
 	exec.executeCommandStreaming(ctx, "echo test", "test_step", resultChan, inputChan)
+	close(resultChan)
 	elapsed := time.Since(start)
 
 	var foundResult bool

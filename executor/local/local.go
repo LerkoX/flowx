@@ -87,7 +87,7 @@ func (l *LocalExecutor) Transfer(ctx context.Context, resultChan chan<- any, com
 	execCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// 启动一个 goroutine 监听外部上下文取消和 commandChan 关闭
+	// 启动一个 goroutine 监听外部上下文取消
 	// 当外部上下文被取消时，取消内部上下文并终止当前进程
 	go func() {
 		select {
@@ -95,9 +95,6 @@ func (l *LocalExecutor) Transfer(ctx context.Context, resultChan chan<- any, com
 			// 外部上下文被取消，取消内部上下文并终止当前进程
 			cancel()
 			l.killCurrentProcess()
-		case <-commandChan:
-			// commandChan 已关闭，无需终止进程，只需退出 goroutine
-			return
 		}
 	}()
 
@@ -112,12 +109,16 @@ func (l *LocalExecutor) Transfer(ctx context.Context, resultChan chan<- any, com
 		// 处理 commandWrapper 类型
 		cmdWrapper, ok := data.(executor.CommandWrapper)
 		if !ok {
-			resultChan <- fmt.Errorf("unsupported data type: %T, expected: CommandWrapper", data)
+			safeSend(resultChan, fmt.Errorf("unsupported data type: %T, expected: CommandWrapper", data))
 			continue
 		}
 		// 执行命令（携带步骤名称）
 		l.executeCommandStreaming(execCtx, cmdWrapper.Command, cmdWrapper.StepName, resultChan, inputChan)
 	}
+
+	// commandChan 关闭后，等待剩余结果发送完成并关闭 resultChan
+	// 给外部接收者一个明确的结束信号
+	close(resultChan)
 }
 
 // killCurrentProcess 终止当前正在执行的进程
@@ -204,21 +205,29 @@ func (l *LocalExecutor) executeCommandStreaming(ctx context.Context, command str
 
 // executeCommandWithStreaming 执行命令并实时输出
 func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command string, stepName string, outputCallback func([]byte), inputChan <-chan []byte, onInputRequest func(*executor.InputRequest)) error {
-	l.mu.Lock()
+	// 先复制需要的环境变量和配置，避免持有锁期间调用外部函数
+	l.mu.RLock()
+	workdir := l.workdir
+	envCopy := make(map[string]string, len(l.env))
+	for k, v := range l.env {
+		envCopy[k] = v
+	}
+	l.mu.RUnlock()
 
 	// 创建命令
 	cmd := l.createCommand(ctx, command)
+
+	l.mu.Lock()
 	l.currentCmd = cmd
+	l.mu.Unlock()
 
 	// 设置工作目录
-	if l.workdir != "" {
-		cmd.Dir = l.workdir
+	if workdir != "" {
+		cmd.Dir = workdir
 	}
 
 	// 设置环境变量
-	cmd.Env = l.buildEnvList()
-
-	l.mu.Unlock()
+	cmd.Env = buildEnvList(envCopy)
 
 	// 获取stdout和stderr管道
 	stdout, err := cmd.StdoutPipe()
@@ -429,20 +438,24 @@ func safeSend(ch chan<- any, value any) {
 
 // createCommand 根据操作系统创建命令
 func (l *LocalExecutor) createCommand(ctx context.Context, command string) *exec.Cmd {
-	if l.usePTY {
+	l.mu.RLock()
+	shell := l.shell
+	usePTY := l.usePTY
+	l.mu.RUnlock()
+
+	if usePTY {
 		return l.createCommandWithPTY(ctx, command)
 	}
 
 	switch runtime.GOOS {
 	case "windows":
 		// Windows使用cmd.exe
-		if l.shell == "powershell" || l.shell == "pwsh" {
-			return exec.CommandContext(ctx, l.shell, "-Command", command)
+		if shell == "powershell" || shell == "pwsh" {
+			return exec.CommandContext(ctx, shell, "-Command", command)
 		}
 		return exec.CommandContext(ctx, "cmd", "/C", command)
 	default:
 		// Unix-like系统使用sh或bash
-		shell := l.shell
 		if shell == "" {
 			shell = "/bin/sh"
 		}
@@ -452,16 +465,19 @@ func (l *LocalExecutor) createCommand(ctx context.Context, command string) *exec
 
 // createCommandWithPTY 创建使用伪终端的命令
 func (l *LocalExecutor) createCommandWithPTY(ctx context.Context, command string) *exec.Cmd {
+	l.mu.RLock()
+	shell := l.shell
+	l.mu.RUnlock()
+
 	switch runtime.GOOS {
 	case "windows":
 		// Windows 不支持 PTY，回退到普通命令
-		if l.shell == "powershell" || l.shell == "pwsh" {
-			return exec.CommandContext(ctx, l.shell, "-Command", command)
+		if shell == "powershell" || shell == "pwsh" {
+			return exec.CommandContext(ctx, shell, "-Command", command)
 		}
 		return exec.CommandContext(ctx, "cmd", "/C", command)
 	default:
 		// Unix-like 系统使用 script 命令模拟 PTY
-		shell := l.shell
 		if shell == "" {
 			shell = "/bin/sh"
 		}
@@ -470,8 +486,8 @@ func (l *LocalExecutor) createCommandWithPTY(ctx context.Context, command string
 	}
 }
 
-// buildEnvList 构建环境变量列表
-func (l *LocalExecutor) buildEnvList() []string {
+// buildEnvList 构建环境变量列表（基于传入的自定义环境变量副本）
+func buildEnvList(customEnv map[string]string) []string {
 	// 从当前进程环境变量开始
 	envMap := make(map[string]string)
 	for _, e := range os.Environ() {
@@ -481,7 +497,7 @@ func (l *LocalExecutor) buildEnvList() []string {
 	}
 
 	// 添加自定义环境变量（覆盖现有变量）
-	for k, v := range l.env {
+	for k, v := range customEnv {
 		envMap[k] = v
 	}
 
@@ -492,6 +508,19 @@ func (l *LocalExecutor) buildEnvList() []string {
 	}
 
 	return envList
+}
+
+// buildEnvList 构建环境变量列表（兼容旧调用，使用 executor 内部环境变量）
+func (l *LocalExecutor) buildEnvList() []string {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	envCopy := make(map[string]string, len(l.env))
+	for k, v := range l.env {
+		envCopy[k] = v
+	}
+
+	return buildEnvList(envCopy)
 }
 
 // setWorkdir 设置工作目录
