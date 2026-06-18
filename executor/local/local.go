@@ -27,7 +27,7 @@ type LocalExecutor struct {
 	ptyWidth   int               // 终端宽度
 	ptyHeight  int               // 终端高度
 	mu         sync.RWMutex
-	currentCmd *exec.Cmd         // 当前执行的命令（用于取消）
+	currentCmd *exec.Cmd // 当前执行的命令（用于取消）
 }
 
 // NewLocalExecutor 创建新的本地执行器
@@ -63,8 +63,7 @@ func (l *LocalExecutor) Prepare(ctx context.Context) error {
 	if l.shell != "" {
 		_, err := exec.LookPath(l.shell)
 		if err != nil {
-			// 尝试使用系统默认shell
-			l.shell = detectDefaultShell()
+			return fmt.Errorf("shell not found: %s", l.shell)
 		}
 	}
 
@@ -88,13 +87,18 @@ func (l *LocalExecutor) Transfer(ctx context.Context, resultChan chan<- any, com
 	execCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// 启动一个 goroutine 监听外部上下文取消
+	// 启动一个 goroutine 监听外部上下文取消和 commandChan 关闭
 	// 当外部上下文被取消时，取消内部上下文并终止当前进程
 	go func() {
-		<-ctx.Done()
-		// 外部上下文被取消，取消内部上下文并终止当前进程
-		cancel()
-		l.killCurrentProcess()
+		select {
+		case <-ctx.Done():
+			// 外部上下文被取消，取消内部上下文并终止当前进程
+			cancel()
+			l.killCurrentProcess()
+		case <-commandChan:
+			// commandChan 已关闭，无需终止进程，只需退出 goroutine
+			return
+		}
 	}()
 
 	for data := range commandChan {
@@ -126,6 +130,20 @@ func (l *LocalExecutor) killCurrentProcess() {
 		if err := l.currentCmd.Process.Signal(os.Interrupt); err != nil {
 			// 如果优雅终止失败，强制终止
 			_ = l.currentCmd.Process.Kill()
+		} else {
+			// 发送信号成功，等待进程退出（最多2秒）
+			done := make(chan struct{})
+			go func() {
+				l.currentCmd.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+				// 进程已退出
+			case <-time.After(2 * time.Second):
+				// 超时，强制终止
+				_ = l.currentCmd.Process.Kill()
+			}
 		}
 	}
 }
@@ -159,28 +177,29 @@ func (l *LocalExecutor) executeCommandStreaming(ctx context.Context, command str
 				return
 			case req := <-inputRequestChan:
 				if req != nil {
-					resultChan <- &executor.InputRequestEvent{
+					safeSend(resultChan, &executor.InputRequestEvent{
 						StepName: stepName,
 						Request:  req,
-					}
+					})
 				}
 			}
 		}
 	}()
 
+	// 使用带超时的上下文执行命令
 	err := l.executeCommandWithStreaming(execCtx, command, stepName, func(data []byte) {
-		resultChan <- data
+		safeSend(resultChan, data)
 	}, inputChan, onInputRequest)
 
 	// 发送最终结果
-	resultChan <- &executor.StepResult{
+	safeSend(resultChan, &executor.StepResult{
 		StepName:   stepName,
 		Command:    command,
 		Output:     "",
 		Error:      err,
 		StartTime:  startTime,
 		FinishTime: time.Now(),
-	}
+	})
 }
 
 // executeCommandWithStreaming 执行命令并实时输出
@@ -226,25 +245,27 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 		return fmt.Errorf("failed to start command: %w", err)
 	}
 
-	// 使用 WaitGroup 等待所有 goroutine 完成
-	var wg sync.WaitGroup
-	wg.Add(2)
+	// 命令完成信号通道
+	commandDone := make(chan struct{})
 
-	// 读取stdout
+	// 使用 WaitGroup 等待 stdout/stderr 读取 goroutine 完成
+	var outputWg sync.WaitGroup
+	outputWg.Add(2)
 	go func() {
-		defer wg.Done()
+		defer outputWg.Done()
 		l.streamOutput(stdout, outputCallback, stepName, onInputRequest)
 	}()
-
-	// 读取stderr
 	go func() {
-		defer wg.Done()
+		defer outputWg.Done()
 		l.streamOutput(stderr, outputCallback, stepName, nil) // stderr 不检测输入请求
 	}()
 
 	// 输入处理：从 inputChan 读取并写入 stdin
+	var inputWg sync.WaitGroup
 	if inputChan != nil {
+		inputWg.Add(1)
 		go func() {
+			defer inputWg.Done()
 			for {
 				select {
 				case <-ctx.Done():
@@ -252,9 +273,14 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 						stdin.Close()
 					}
 					return
+				case <-commandDone:
+					// 命令已完成，关闭 stdin 并退出
+					if stdin != nil {
+						stdin.Close()
+					}
+					return
 				case data, ok := <-inputChan:
 					if !ok {
-						// inputChan 关闭，关闭 stdin
 						if stdin != nil {
 							stdin.Close()
 						}
@@ -268,18 +294,43 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 		}()
 	}
 
-	// 等待输出读取完成
-	wg.Wait()
+	// 等待输出读取完成（命令已退出或管道已关闭）
+	outputWg.Wait()
 
-	// 等待命令完成
-	err = cmd.Wait()
+	// 等待命令完成（带超时）
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+		close(commandDone)
+	}()
+
+	select {
+	case err = <-done:
+		// 命令正常退出
+	case <-ctx.Done():
+		// 上下文取消，强制终止
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		// 等待 Wait 返回，避免 goroutine 泄漏
+		<-done
+		// 使用上下文的错误作为超时错误
+		if ctx.Err() == context.DeadlineExceeded {
+			err = fmt.Errorf("command timed out: %w", ctx.Err())
+		} else {
+			err = fmt.Errorf("command cancelled: %w", ctx.Err())
+		}
+	}
+
+	// 等待输入 goroutine 退出
+	inputWg.Wait()
 
 	l.mu.Lock()
 	l.currentCmd = nil
 	l.mu.Unlock()
 
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
+		if ctx.Err() != nil {
 			return fmt.Errorf("command timed out: %w", err)
 		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -331,7 +382,14 @@ func (l *LocalExecutor) streamOutput(reader io.Reader, callback func([]byte), st
 
 		// 普通输出行，传递给回调
 		if callback != nil {
-			callback(append(scanner.Bytes(), '\n'))
+			callback(append([]byte(line), '\n'))
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		// 扫描错误，记录但不中断（可能输出过大）
+		if callback != nil {
+			callback([]byte(fmt.Sprintf("\n[stream error: %v]\n", err)))
 		}
 	}
 }
@@ -359,8 +417,22 @@ func parseInputRequest(content string) *executor.InputRequest {
 	return nil
 }
 
+// safeSend 安全地发送数据到 channel，如果 channel 已关闭则忽略
+func safeSend(ch chan<- any, value any) {
+	defer func() {
+		if r := recover(); r != nil {
+			// channel 已关闭，忽略
+		}
+	}()
+	ch <- value
+}
+
 // createCommand 根据操作系统创建命令
 func (l *LocalExecutor) createCommand(ctx context.Context, command string) *exec.Cmd {
+	if l.usePTY {
+		return l.createCommandWithPTY(ctx, command)
+	}
+
 	switch runtime.GOOS {
 	case "windows":
 		// Windows使用cmd.exe
@@ -378,13 +450,44 @@ func (l *LocalExecutor) createCommand(ctx context.Context, command string) *exec
 	}
 }
 
+// createCommandWithPTY 创建使用伪终端的命令
+func (l *LocalExecutor) createCommandWithPTY(ctx context.Context, command string) *exec.Cmd {
+	switch runtime.GOOS {
+	case "windows":
+		// Windows 不支持 PTY，回退到普通命令
+		if l.shell == "powershell" || l.shell == "pwsh" {
+			return exec.CommandContext(ctx, l.shell, "-Command", command)
+		}
+		return exec.CommandContext(ctx, "cmd", "/C", command)
+	default:
+		// Unix-like 系统使用 script 命令模拟 PTY
+		shell := l.shell
+		if shell == "" {
+			shell = "/bin/sh"
+		}
+		// 使用 script 命令创建伪终端
+		return exec.CommandContext(ctx, "script", "-q", "-c", command, "/dev/null")
+	}
+}
+
 // buildEnvList 构建环境变量列表
 func (l *LocalExecutor) buildEnvList() []string {
 	// 从当前进程环境变量开始
-	envList := os.Environ()
+	envMap := make(map[string]string)
+	for _, e := range os.Environ() {
+		if i := strings.Index(e, "="); i >= 0 {
+			envMap[e[:i]] = e[i+1:]
+		}
+	}
 
 	// 添加自定义环境变量（覆盖现有变量）
 	for k, v := range l.env {
+		envMap[k] = v
+	}
+
+	// 转换为列表
+	envList := make([]string, 0, len(envMap))
+	for k, v := range envMap {
 		envList = append(envList, fmt.Sprintf("%s=%s", k, v))
 	}
 
