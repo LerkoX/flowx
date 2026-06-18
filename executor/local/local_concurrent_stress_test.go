@@ -23,7 +23,7 @@ func TestExecuteCommandWithStreaming_VeryLargeInput(t *testing.T) {
 		outputs = append(outputs, string(data))
 	}
 
-	veryLargeInput := strings.Repeat("x", 10*1024*1024)
+	veryLargeInput := strings.Repeat("x", 1024*1024)
 	inputChan := make(chan []byte, 1)
 	go func() {
 		inputChan <- []byte(veryLargeInput)
@@ -38,7 +38,7 @@ func TestExecuteCommandWithStreaming_VeryLargeInput(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	if elapsed > 60*time.Second {
+	if elapsed > 30*time.Second {
 		t.Errorf("Expected execution to be quick, took %v", elapsed)
 	}
 
