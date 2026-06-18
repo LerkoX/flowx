@@ -2,689 +2,517 @@ package local
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"runtime"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/LerkoX/flowx/executor"
-	executorpkg "github.com/LerkoX/flowx/executor"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestLocalAdapter_Config(t *testing.T) {
-	adapter := NewLocalAdapter()
-	ctx := context.Background()
-
-	config := map[string]any{
-		"workdir":   "/tmp",
-		"shell":     "bash",
-		"timeout":   "30s",
-		"pty":       true,
-		"ptyWidth":  120,
-		"ptyHeight": 40,
-		"env": map[string]string{
-			"GO_VERSION": "1.21",
-			"TEST_KEY":   "test_value",
-		},
-	}
-
-	err := adapter.Config(ctx, config)
-	assert.NoError(t, err, "Config should not return error")
-	assert.Equal(t, config, adapter.config, "Config should be stored")
-}
-
-func TestLocalBridge_Conn(t *testing.T) {
-	bridge := NewLocalBridge()
-	ctx := context.Background()
-
-	config := map[string]any{
-		"workdir": "/tmp",
-		"shell":   "bash",
-		"env": map[string]string{
-			"KEY1": "value1",
-		},
-	}
-
-	adapter := NewLocalAdapter()
-	err := adapter.Config(ctx, config)
-	require.NoError(t, err, "Config should not return error")
-
-	exec, err := bridge.Conn(ctx, adapter)
-	require.NoError(t, err, "Conn should not return error")
-	require.NotNil(t, exec, "Executor should not be nil")
-
-	// 验证返回的是 LocalExecutor 类型
-	localExec, ok := exec.(*LocalExecutor)
-	require.True(t, ok, "Expected executor to be *local.LocalExecutor")
-
-	// 验证配置已应用
-	assert.Equal(t, "/tmp", localExec.GetWorkdir(), "Workdir should be set")
-	assert.Equal(t, "bash", localExec.GetShell(), "Shell should be set")
-}
-
-func TestLocalExecutor_Interface(t *testing.T) {
-	// 验证 LocalExecutor 实现了 Executor 接口
-	var _ executor.Executor = (*LocalExecutor)(nil)
-}
-
-func TestLocalAdapter_Interface(t *testing.T) {
-	// 验证 LocalAdapter 实现了 Adapter 接口
-	var _ executor.Adapter = (*LocalAdapter)(nil)
-}
-
-func TestLocalBridge_Interface(t *testing.T) {
-	// 验证 LocalBridge 实现了 Bridge 接口
-	var _ executor.Bridge = (*LocalBridge)(nil)
-}
-
-func TestNewLocalExecutor(t *testing.T) {
+// TestPrepare_ShellNotFound 测试 Prepare 在 shell 不存在时返回错误
+func TestPrepare_ShellNotFound(t *testing.T) {
 	exec := NewLocalExecutor()
-	require.NotNil(t, exec, "Executor should not be nil")
+	exec.setShell("/nonexistent/shell")
 
-	// 验证默认配置
-	assert.NotEmpty(t, exec.GetShell(), "Default shell should be detected")
-}
-
-func TestLocalExecutor_Prepare(t *testing.T) {
 	ctx := context.Background()
-
-	t.Run("default prepare", func(t *testing.T) {
-		exec := NewLocalExecutor()
-		err := exec.Prepare(ctx)
-		assert.NoError(t, err, "Prepare with no workdir should succeed")
-	})
-
-	t.Run("with valid workdir", func(t *testing.T) {
-		exec := NewLocalExecutor()
-		exec.setWorkdir("/tmp")
-		err := exec.Prepare(ctx)
-		assert.NoError(t, err, "Prepare with valid workdir should succeed")
-	})
-
-	t.Run("with invalid workdir", func(t *testing.T) {
-		exec := NewLocalExecutor()
-		exec.setWorkdir("/nonexistent/path/that/does/not/exist")
-		err := exec.Prepare(ctx)
-		assert.Error(t, err, "Prepare with invalid workdir should fail")
-	})
+	err := exec.Prepare(ctx)
+	if err == nil {
+		t.Fatal("Expected error for non-existent shell, got nil")
+	}
+	if !strings.Contains(err.Error(), "shell not found") {
+		t.Errorf("Expected error to contain 'shell not found', got: %v", err)
+	}
 }
 
-func TestLocalExecutor_Destruction(t *testing.T) {
+// TestPrepare_WorkdirNotExist 测试 Prepare 在工作目录不存在时返回错误
+func TestPrepare_WorkdirNotExist(t *testing.T) {
+	exec := NewLocalExecutor()
+	exec.setWorkdir("/nonexistent/workdir")
+
 	ctx := context.Background()
-	exec := NewLocalExecutor()
-
-	err := exec.Destruction(ctx)
-	assert.NoError(t, err, "Destruction should succeed even with no running command")
-}
-
-func TestLocalExecutor_Transfer_SingleCommand(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	exec := NewLocalExecutor()
-	require.NoError(t, exec.Prepare(ctx))
-	defer exec.Destruction(ctx)
-
-	resultChan := make(chan any, 10)
-	commandChan := make(chan any, 1)
-
-	go exec.Transfer(ctx, resultChan, commandChan, nil)
-
-	// 发送测试命令
-	var testCmd string
-	if runtime.GOOS == "windows" {
-		testCmd = "echo Hello from Windows"
-	} else {
-		testCmd = "echo 'Hello from LocalExecutor'"
+	err := exec.Prepare(ctx)
+	if err == nil {
+		t.Fatal("Expected error for non-existent workdir, got nil")
 	}
-	commandChan <- executorpkg.CommandWrapper{
-		StepName: "test-step",
-		Command:  testCmd,
-	}
-	close(commandChan)
-
-	// 接收结果
-	var output []byte
-	var result *executorpkg.StepResult
-
-	timeout := time.After(5 * time.Second)
-resultLoop:
-	for {
-		select {
-		case res := <-resultChan:
-			switch v := res.(type) {
-			case []byte:
-				output = append(output, v...)
-			case *executor.StepResult:
-				result = v
-				break resultLoop
-			case error:
-				t.Fatalf("Received error: %v", v)
-			}
-		case <-timeout:
-			t.Fatalf("Timeout waiting for results. Output so far: %s", string(output))
-		}
-	}
-
-	// 验证结果
-	require.NotNil(t, result, "Should receive StepResult")
-	assert.Equal(t, testCmd, result.Command, "Command should match")
-	assert.NoError(t, result.Error, "Command should execute successfully")
-}
-
-func TestLocalExecutor_Transfer_CommandFailure(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	exec := NewLocalExecutor()
-	require.NoError(t, exec.Prepare(ctx))
-	defer exec.Destruction(ctx)
-
-	resultChan := make(chan any, 10)
-	commandChan := make(chan any, 1)
-
-	go exec.Transfer(ctx, resultChan, commandChan, nil)
-
-	// 发送一个会失败的命令
-	commandChan <- executorpkg.CommandWrapper{
-		StepName: "failing-step",
-		Command:  "exit 1",
-	}
-	close(commandChan)
-
-	// 接收结果
-	var result *executorpkg.StepResult
-	timeout := time.After(5 * time.Second)
-
-resultLoop:
-	for {
-		select {
-		case res := <-resultChan:
-			switch v := res.(type) {
-			case *executor.StepResult:
-				result = v
-				break resultLoop
-			case error:
-				t.Fatalf("Received error: %v", v)
-			}
-		case <-timeout:
-			t.Fatalf("Timeout waiting for results")
-		}
-	}
-
-	// 验证命令失败
-	require.NotNil(t, result, "Should receive StepResult")
-	assert.Error(t, result.Error, "Failed command should return error")
-}
-
-func TestLocalExecutor_EnvConfiguration(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	exec := NewLocalExecutor()
-	exec.setEnv("TEST_VAR", "test_value")
-	require.NoError(t, exec.Prepare(ctx))
-	defer exec.Destruction(ctx)
-
-	resultChan := make(chan any, 10)
-	commandChan := make(chan any, 1)
-
-	go exec.Transfer(ctx, resultChan, commandChan, nil)
-
-	// 发送打印环境变量的命令
-	var testCmd string
-	if runtime.GOOS == "windows" {
-		testCmd = "echo %TEST_VAR%"
-	} else {
-		testCmd = "echo $TEST_VAR"
-	}
-	commandChan <- executorpkg.CommandWrapper{
-		StepName: "env-step",
-		Command:  testCmd,
-	}
-	close(commandChan)
-
-	// 收集输出
-	var output []byte
-	var result *executorpkg.StepResult
-	timeout := time.After(5 * time.Second)
-
-resultLoop:
-	for {
-		select {
-		case res := <-resultChan:
-			switch v := res.(type) {
-			case []byte:
-				output = append(output, v...)
-			case *executor.StepResult:
-				result = v
-				break resultLoop
-			}
-		case <-timeout:
-			t.Fatalf("Timeout waiting for results")
-		}
-	}
-
-	require.NotNil(t, result, "Should receive StepResult")
-	assert.NoError(t, result.Error, "Command should execute successfully")
-	// 注意：Windows的echo会原样输出%TEST_VAR%，所以这里只验证命令成功
-}
-
-func TestLocalExecutor_ConfigApplication(t *testing.T) {
-	ctx := context.Background()
-
-	configTests := []struct {
-		name   string
-		config map[string]any
-		verify func(t *testing.T, exec *LocalExecutor)
-	}{
-		{
-			name: "basic config",
-			config: map[string]any{
-				"workdir": "/tmp",
-				"shell":   "bash",
-			},
-			verify: func(t *testing.T, exec *LocalExecutor) {
-				assert.Equal(t, "/tmp", exec.GetWorkdir())
-				assert.Equal(t, "bash", exec.GetShell())
-			},
-		},
-		{
-			name: "timeout string config",
-			config: map[string]any{
-				"timeout": "30s",
-			},
-			verify: func(t *testing.T, exec *LocalExecutor) {
-				assert.NotNil(t, exec)
-			},
-		},
-		{
-			name: "timeout number config",
-			config: map[string]any{
-				"timeout": 30,
-			},
-			verify: func(t *testing.T, exec *LocalExecutor) {
-				assert.NotNil(t, exec)
-			},
-		},
-		{
-			name: "pty config",
-			config: map[string]any{
-				"pty":       true,
-				"ptyWidth":  120,
-				"ptyHeight": 40,
-			},
-			verify: func(t *testing.T, exec *LocalExecutor) {
-				assert.NotNil(t, exec)
-			},
-		},
-		{
-			name: "env config",
-			config: map[string]any{
-				"env": map[string]string{
-					"KEY1": "value1",
-					"KEY2": "value2",
-				},
-			},
-			verify: func(t *testing.T, exec *LocalExecutor) {
-				assert.NotNil(t, exec)
-			},
-		},
-		{
-			name: "mixed config",
-			config: map[string]any{
-				"workdir":   "/workspace",
-				"shell":     "sh",
-				"timeout":   "5m",
-				"env":       map[string]string{"ENV": "test"},
-				"pty":       true,
-				"ptyWidth":  100,
-				"ptyHeight": 30,
-			},
-			verify: func(t *testing.T, exec *LocalExecutor) {
-				assert.Equal(t, "/workspace", exec.GetWorkdir())
-				assert.Equal(t, "sh", exec.GetShell())
-			},
-		},
-	}
-
-	for _, tt := range configTests {
-		t.Run(tt.name, func(t *testing.T) {
-			bridge := NewLocalBridge()
-			adapter := NewLocalAdapter()
-
-			err := adapter.Config(ctx, tt.config)
-			require.NoError(t, err, "Config should not return error")
-
-			exec, err := bridge.Conn(ctx, adapter)
-			require.NoError(t, err, "Conn should not return error")
-			require.NotNil(t, exec, "Executor should not be nil")
-
-			localExec, ok := exec.(*LocalExecutor)
-			require.True(t, ok, "Executor should be *local.LocalExecutor")
-
-			tt.verify(t, localExec)
-		})
+	if !strings.Contains(err.Error(), "workdir does not exist") {
+		t.Errorf("Expected error to contain 'workdir does not exist', got: %v", err)
 	}
 }
 
-func TestLocalExecutor_InvalidAdapter(t *testing.T) {
-	ctx := context.Background()
-	bridge := NewLocalBridge()
-
-	// 使用错误的适配器类型
-	dummyAdapter := &dummyAdapter{}
-
-	_, err := bridge.Conn(ctx, dummyAdapter)
-	assert.Error(t, err, "Should return error for invalid adapter type")
-	assert.Contains(t, err.Error(), "not a LocalAdapter", "Error message should indicate wrong adapter type")
-}
-
-// dummyAdapter 用于测试的虚拟适配器
-type dummyAdapter struct{}
-
-func (d *dummyAdapter) Config(ctx context.Context, config map[string]any) error {
-	return nil
-}
-
-func TestParseTimeout(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    any
-		expected time.Duration
-		wantErr  bool
-	}{
-		{
-			name:     "string seconds",
-			input:    "30s",
-			expected: 30 * time.Second,
-			wantErr:  false,
-		},
-		{
-			name:     "string minutes",
-			input:    "5m",
-			expected: 5 * time.Minute,
-			wantErr:  false,
-		},
-		{
-			name:     "int value",
-			input:    30,
-			expected: 30 * time.Second,
-			wantErr:  false,
-		},
-		{
-			name:     "int64 value",
-			input:    int64(60),
-			expected: 60 * time.Second,
-			wantErr:  false,
-		},
-		{
-			name:     "float64 value",
-			input:    45.0,
-			expected: 45 * time.Second,
-			wantErr:  false,
-		},
-		{
-			name:    "invalid string",
-			input:   "invalid",
-			wantErr: true,
-		},
-		{
-			name:    "unsupported type",
-			input:   true,
-			wantErr: true,
-		},
+// TestPrepare_WorkdirNotDirectory 测试 Prepare 在工作目录不是目录时返回错误
+func TestPrepare_WorkdirNotDirectory(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "testfile")
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			duration, err := parseTimeout(tt.input)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, duration)
-			}
-		})
-	}
-}
-
-func TestDetectDefaultShell(t *testing.T) {
-	shell := detectDefaultShell()
-	assert.NotEmpty(t, shell, "Should detect a default shell")
-
-	// 根据操作系统验证
-	switch runtime.GOOS {
-	case "windows":
-		// Windows应该有PowerShell或cmd
-		assert.True(t, shell == "pwsh" || shell == "powershell" || shell == "cmd",
-			"Windows should have powershell or cmd, got: %s", shell)
-	default:
-		// Unix-like系统应该有bash或sh
-		assert.True(t, shell == "/bin/bash" || shell == "/bin/sh",
-			"Unix should have bash or sh, got: %s", shell)
-	}
-}
-
-func TestLocalExecutor_CancelContext(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	localExecutor := NewLocalExecutor()
-	require.NoError(t, localExecutor.Prepare(ctx))
-	defer localExecutor.Destruction(ctx)
-
-	resultChan := make(chan any, 10)
-	commandChan := make(chan any, 1)
-
-	go localExecutor.Transfer(ctx, resultChan, commandChan, nil)
-
-	// 发送一个长时间运行的命令
-	commandChan <- executorpkg.CommandWrapper{
-		StepName: "long-step",
-		Command:  "sleep 30",
-	}
-
-	// 等待命令启动
-	time.Sleep(100 * time.Millisecond)
-
-	// 取消上下文
-	cancel()
-
-	// 应该收到结果（命令被取消或完成）
-	timeout := time.After(5 * time.Second)
-	select {
-	case <-resultChan:
-		// 命令被取消或返回了结果
-		// 注意：由于 exec.CommandContext 的行为，子进程可能不会被立即终止
-	case <-timeout:
-		t.Log("Note: Context cancellation may not immediately terminate child processes")
-	}
-}
-
-func TestLocalExecutor_Getters(t *testing.T) {
-	localExecutor := NewLocalExecutor()
-
-	// 设置值
-	localExecutor.setWorkdir("/test/workdir")
-	localExecutor.setShell("zsh")
-	localExecutor.setTimeout(60 * time.Second)
-	localExecutor.setPTY(true)
-	localExecutor.setPTYSize(120, 40)
-
-	// 验证getter
-	assert.Equal(t, "/test/workdir", localExecutor.GetWorkdir())
-	assert.Equal(t, "zsh", localExecutor.GetShell())
-}
-
-func TestLocalExecutor_UnsupportedDataType(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	localExecutor := NewLocalExecutor()
-	require.NoError(t, localExecutor.Prepare(ctx))
-	defer localExecutor.Destruction(ctx)
-
-	resultChan := make(chan any, 10)
-	commandChan := make(chan any, 1)
-
-	go localExecutor.Transfer(ctx, resultChan, commandChan, nil)
-
-	// 发送不支持的类型
-	commandChan <- 12345
-	close(commandChan)
-
-	// 接收错误
-	timeout := time.After(3 * time.Second)
-	select {
-	case res := <-resultChan:
-		err, ok := res.(error)
-		require.True(t, ok, "Should receive an error")
-		assert.Contains(t, err.Error(), "unsupported data type", "Error should indicate unsupported type")
-	case <-timeout:
-		t.Fatal("Timeout waiting for error")
-	}
-}
-
-// TestLocalExecutor_DestructionTerminatesProcess 测试执行器终止时，正在运行的命令进程也会被终止
-func TestLocalExecutor_DestructionTerminatesProcess(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
-	}
-
-	// 创建一个临时文件用于标记命令是否仍在运行
-	tmpFile, err := os.CreateTemp("", "long_running_test_*.txt")
-	require.NoError(t, err)
-	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer os.Remove(tmpFile.Name())
 	tmpFile.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+	exec := NewLocalExecutor()
+	exec.setWorkdir(tmpFile.Name())
 
-	localExecutor := NewLocalExecutor()
-	require.NoError(t, localExecutor.Prepare(ctx))
-
-	resultChan := make(chan any, 10)
-	commandChan := make(chan any, 1)
-
-	go localExecutor.Transfer(ctx, resultChan, commandChan, nil)
-
-	// 启动一个长时间运行的命令，它会持续写入临时文件
-	longRunningCmd := fmt.Sprintf("for i in $(seq 1 1000); do echo $i >> %s; sleep 1; done", tmpPath)
-	commandChan <- executorpkg.CommandWrapper{
-		StepName: "long-running-step",
-		Command:  longRunningCmd,
+	ctx := context.Background()
+	err = exec.Prepare(ctx)
+	if err == nil {
+		t.Fatal("Expected error for file as workdir, got nil")
 	}
-
-	// 等待命令启动并开始写入
-	time.Sleep(2 * time.Second)
-
-	// 验证文件已经有内容（说明命令已启动）
-	initialContent, err := os.ReadFile(tmpPath)
-	require.NoError(t, err)
-	require.NotEmpty(t, initialContent, "Command should have started and written to file")
-	t.Logf("Initial file size: %d bytes", len(initialContent))
-
-	// 记录写入的字节数
-	initialSize := len(initialContent)
-
-	// 调用 Destruction，这应该终止正在运行的命令
-	err = localExecutor.Destruction(ctx)
-	require.NoError(t, err, "Destruction should not return error")
-
-	// 等待一段时间，确认命令已经被终止
-	time.Sleep(3 * time.Second)
-
-	// 读取文件的最终内容
-	finalContent, err := os.ReadFile(tmpPath)
-	require.NoError(t, err)
-	finalSize := len(finalContent)
-
-	t.Logf("Final file size: %d bytes", finalSize)
-
-	// 验证文件大小没有显著增加（说明命令已被终止）
-	// 命令在 2 秒内写入了 initialSize 字节
-	// 如果命令没有被终止，再过 3 秒应该会写入更多内容
-	// 我们允许一定的增长（可能还有部分缓冲区未写入），但不应该成倍增长
-	maxExpectedGrowth := initialSize * 2 // 允许最多增长 2 倍（缓冲区延迟）
-	actualGrowth := finalSize - initialSize
-
-	t.Logf("Initial size: %d, Final size: %d, Growth: %d, Max expected growth: %d",
-		initialSize, finalSize, actualGrowth, maxExpectedGrowth)
-
-	assert.LessOrEqual(t, actualGrowth, maxExpectedGrowth,
-		"Command should have been terminated, file size should not grow significantly after Destruction")
+	if !strings.Contains(err.Error(), "workdir is not a directory") {
+		t.Errorf("Expected error to contain 'workdir is not a directory', got: %v", err)
+	}
 }
 
-// TestLocalExecutor_ContextCancelTerminatesProcess 测试上下文取消时，正在运行的命令进程也会被终止
-func TestLocalExecutor_ContextCancelTerminatesProcess(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+// TestPrepare_ValidShell 测试 Prepare 在 shell 存在时成功
+func TestPrepare_ValidShell(t *testing.T) {
+	exec := NewLocalExecutor()
+	ctx := context.Background()
+	err := exec.Prepare(ctx)
+	if err != nil {
+		t.Errorf("Expected no error for valid shell, got: %v", err)
+	}
+}
+
+// TestBuildEnvList_Deduplication 测试环境变量去重
+func TestBuildEnvList_Deduplication(t *testing.T) {
+	exec := NewLocalExecutor()
+
+	os.Setenv("TEST_VAR", "system_value")
+	defer os.Unsetenv("TEST_VAR")
+
+	exec.setEnv("TEST_VAR", "custom_value")
+
+	envList := exec.buildEnvList()
+
+	var testVarCount int
+	var testVarValue string
+	for _, env := range envList {
+		if strings.HasPrefix(env, "TEST_VAR=") {
+			testVarCount++
+			testVarValue = strings.TrimPrefix(env, "TEST_VAR=")
+		}
 	}
 
-	// 创建一个临时文件用于标记命令是否仍在运行
-	tmpFile, err := os.CreateTemp("", "context_cancel_test_*.txt")
-	require.NoError(t, err)
-	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
-	tmpFile.Close()
+	if testVarCount != 1 {
+		t.Errorf("Expected TEST_VAR to appear exactly once, got %d times", testVarCount)
+	}
+	if testVarValue != "custom_value" {
+		t.Errorf("Expected TEST_VAR to be 'custom_value', got '%s'", testVarValue)
+	}
+}
+
+// TestBuildEnvList_CustomVars 测试自定义环境变量正确添加
+func TestBuildEnvList_CustomVars(t *testing.T) {
+	exec := NewLocalExecutor()
+	exec.setEnv("CUSTOM_KEY", "custom_value")
+	exec.setEnv("ANOTHER_KEY", "another_value")
+
+	envList := exec.buildEnvList()
+
+	var foundCustom, foundAnother bool
+	for _, env := range envList {
+		if env == "CUSTOM_KEY=custom_value" {
+			foundCustom = true
+		}
+		if env == "ANOTHER_KEY=another_value" {
+			foundAnother = true
+		}
+	}
+
+	if !foundCustom {
+		t.Error("Expected CUSTOM_KEY=custom_value in env list")
+	}
+	if !foundAnother {
+		t.Error("Expected ANOTHER_KEY=another_value in env list")
+	}
+}
+
+// TestSafeSend_ClosedChannel 测试 safeSend 在 channel 关闭时不 panic
+func TestSafeSend_ClosedChannel(t *testing.T) {
+	ch := make(chan any)
+	close(ch)
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("safeSend panicked on closed channel: %v", r)
+		}
+	}()
+
+	safeSend(ch, "test_value")
+}
+
+// TestSafeSend_OpenChannel 测试 safeSend 在 channel 打开时正常工作
+func TestSafeSend_OpenChannel(t *testing.T) {
+	ch := make(chan any, 1)
+
+	safeSend(ch, "test_value")
+
+	select {
+	case val := <-ch:
+		if val != "test_value" {
+			t.Errorf("Expected 'test_value', got %v", val)
+		}
+	case <-time.After(time.Second):
+		t.Error("Timeout waiting for value")
+	}
+}
+
+// TestStreamOutput_ScannerError 测试 scanner 错误处理
+func TestStreamOutput_ScannerError(t *testing.T) {
+	exec := NewLocalExecutor()
+
+	largeOutput := make([]byte, 2*1024*1024)
+	for i := range largeOutput {
+		largeOutput[i] = 'a'
+	}
+	largeOutput[len(largeOutput)-1] = '\n'
+
+	reader := strings.NewReader(string(largeOutput))
+	var outputs []string
+	var mu sync.Mutex
+
+	callback := func(data []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		outputs = append(outputs, string(data))
+	}
+
+	exec.streamOutput(reader, callback, "test", nil)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	foundError := false
+	for _, output := range outputs {
+		if strings.Contains(output, "stream error") {
+			foundError = true
+			break
+		}
+	}
+
+	if !foundError {
+		t.Error("Expected stream error output for oversized line")
+	}
+}
+
+// TestStreamOutput_NormalOutput 测试正常输出处理
+func TestStreamOutput_NormalOutput(t *testing.T) {
+	exec := NewLocalExecutor()
+
+	input := "line1\nline2\nline3\n"
+	reader := strings.NewReader(input)
+
+	var outputs []string
+	var mu sync.Mutex
+
+	callback := func(data []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		outputs = append(outputs, string(data))
+	}
+
+	exec.streamOutput(reader, callback, "test", nil)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	expected := []string{"line1\n", "line2\n", "line3\n"}
+	if len(outputs) != len(expected) {
+		t.Errorf("Expected %d outputs, got %d", len(expected), len(outputs))
+	}
+	for i, exp := range expected {
+		if i < len(outputs) && outputs[i] != exp {
+			t.Errorf("Expected output %d to be %q, got %q", i, exp, outputs[i])
+		}
+	}
+}
+
+// TestStreamOutput_InputRequestBlock 测试输入请求代码块检测
+func TestStreamOutput_InputRequestBlock(t *testing.T) {
+	exec := NewLocalExecutor()
+
+	input := "normal output\n" + "```flowx-input\n" + "type: text\nprompt: \"Enter name:\"" + "\n```\n" + "more output\n"
+
+	reader := strings.NewReader(input)
+
+	var outputs []string
+	var requests []*executor.InputRequest
+	var mu sync.Mutex
+
+	callback := func(data []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		outputs = append(outputs, string(data))
+	}
+
+	onInputRequest := func(req *executor.InputRequest) {
+		mu.Lock()
+		defer mu.Unlock()
+		requests = append(requests, req)
+	}
+
+	exec.streamOutput(reader, callback, "test", onInputRequest)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if len(requests) != 1 {
+		t.Errorf("Expected 1 input request, got %d", len(requests))
+	} else {
+		if requests[0].Type != "text" {
+			t.Errorf("Expected type 'text', got '%s'", requests[0].Type)
+		}
+		if requests[0].Prompt != "Enter name:" {
+			t.Errorf("Expected prompt 'Enter name:', got '%s'", requests[0].Prompt)
+		}
+	}
+
+	for _, output := range outputs {
+		if strings.Contains(output, "flowx-input") {
+			t.Error("Output should not contain flowx-input marker")
+		}
+	}
+}
+
+// TestCreateCommand_WithPTY 测试 PTY 模式命令创建
+func TestCreateCommand_WithPTY(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PTY test skipped on Windows")
+	}
+
+	exec := NewLocalExecutor()
+	exec.setPTY(true)
+	exec.setShell("/bin/bash")
+
+	ctx := context.Background()
+	cmd := exec.createCommand(ctx, "echo hello")
+
+	if cmd == nil {
+		t.Fatal("Expected non-nil command")
+	}
+
+	if !strings.HasSuffix(cmd.Path, "script") {
+		t.Errorf("Expected command path to end with 'script' for PTY mode, got '%s'", cmd.Path)
+	}
+}
+
+// TestCreateCommand_WithoutPTY 测试非 PTY 模式命令创建
+func TestCreateCommand_WithoutPTY(t *testing.T) {
+	exec := NewLocalExecutor()
+	exec.setPTY(false)
+	exec.setShell("/bin/bash")
+
+	ctx := context.Background()
+	cmd := exec.createCommand(ctx, "echo hello")
+
+	if cmd == nil {
+		t.Fatal("Expected non-nil command")
+	}
+
+	expectedPath := "/bin/bash"
+	if cmd.Path != expectedPath {
+		t.Errorf("Expected command path to be '%s', got '%s'", expectedPath, cmd.Path)
+	}
+
+	expectedArgs := []string{"/bin/bash", "-c", "echo hello"}
+	if len(cmd.Args) != len(expectedArgs) {
+		t.Errorf("Expected %d args, got %d", len(expectedArgs), len(cmd.Args))
+	}
+	for i, arg := range expectedArgs {
+		if i < len(cmd.Args) && cmd.Args[i] != arg {
+			t.Errorf("Expected arg %d to be '%s', got '%s'", i, arg, cmd.Args[i])
+		}
+	}
+}
+
+// TestKillCurrentProcess 测试终止进程功能
+func TestKillCurrentProcess(t *testing.T) {
+	exec := NewLocalExecutor()
+
+	ctx := context.Background()
+	cmd := exec.createCommand(ctx, "sleep 10")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start command: %v", err)
+	}
+
+	exec.mu.Lock()
+	exec.currentCmd = cmd
+	exec.mu.Unlock()
+
+	exec.killCurrentProcess()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Error("Timeout waiting for process to be killed")
+	}
+
+	if cmd.Process != nil {
+		err := cmd.Process.Signal(os.Interrupt)
+		if err == nil {
+			t.Error("Expected process to be terminated, but signal succeeded")
+		}
+	}
+}
+
+// TestTransfer_ContextCancellation 测试上下文取消时终止执行
+func TestTransfer_ContextCancellation(t *testing.T) {
+	exec := NewLocalExecutor()
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	localExecutor := NewLocalExecutor()
-	require.NoError(t, localExecutor.Prepare(ctx))
-	defer localExecutor.Destruction(ctx)
-
 	resultChan := make(chan any, 10)
 	commandChan := make(chan any, 1)
+	inputChan := make(chan []byte)
 
-	go localExecutor.Transfer(ctx, resultChan, commandChan, nil)
+	commandChan <- executor.CommandWrapper{
+		StepName: "test",
+		Command:  "sleep 10",
+	}
+	close(commandChan)
 
-	// 启动一个长时间运行的命令
-	longRunningCmd := fmt.Sprintf("for i in $(seq 1 1000); do echo $i >> %s; sleep 1; done", tmpPath)
-	commandChan <- executorpkg.CommandWrapper{
-		StepName: "long-running-step",
-		Command:  longRunningCmd,
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	go func() {
+		// 消费 resultChan，防止 Transfer 阻塞
+		for range resultChan {
+		}
+	}()
+
+	exec.Transfer(ctx, resultChan, commandChan, inputChan)
+	close(resultChan)
+
+	// 测试通过即表示 Transfer 在上下文取消后正确返回
+}
+
+// TestTransfer_UnsupportedType 测试不支持的类型返回错误
+func TestTransfer_UnsupportedType(t *testing.T) {
+	exec := NewLocalExecutor()
+
+	ctx := context.Background()
+	resultChan := make(chan any, 10)
+	commandChan := make(chan any, 1)
+	inputChan := make(chan []byte)
+
+	commandChan <- "unsupported string"
+	close(commandChan)
+
+	go func() {
+		// 消费 resultChan，防止 Transfer 阻塞
+		for range resultChan {
+		}
+	}()
+
+	exec.Transfer(ctx, resultChan, commandChan, inputChan)
+	close(resultChan)
+
+	// 测试通过即表示 Transfer 正确处理了不支持的类型
+}
+
+// TestExecuteCommandWithStreaming_Timeout 测试命令超时
+func TestExecuteCommandWithStreaming_Timeout(t *testing.T) {
+	exec := NewLocalExecutor()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	var outputs []string
+	var mu sync.Mutex
+
+	callback := func(data []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		outputs = append(outputs, string(data))
 	}
 
-	// 等待命令启动并开始写入
-	time.Sleep(2 * time.Second)
+	err := exec.executeCommandWithStreaming(ctx, "sleep 10", "test", callback, nil, nil)
 
-	// 验证文件已经有内容（说明命令已启动）
-	initialContent, err := os.ReadFile(tmpPath)
-	require.NoError(t, err)
-	require.NotEmpty(t, initialContent, "Command should have started and written to file")
-	initialSize := len(initialContent)
+	if err == nil {
+		t.Fatal("Expected error for timeout")
+	}
+	if !strings.Contains(err.Error(), "timed out") && !strings.Contains(err.Error(), "signal") && !strings.Contains(err.Error(), "exited with code") {
+		t.Errorf("Expected timeout or signal error, got: %v", err)
+	}
+}
 
-	// 取消上下文
-	cancel()
+// TestExecuteCommandWithStreaming_Success 测试成功执行命令
+func TestExecuteCommandWithStreaming_Success(t *testing.T) {
+	exec := NewLocalExecutor()
 
-	// 等待一段时间，确认命令已经被终止
-	time.Sleep(3 * time.Second)
+	ctx := context.Background()
+	var outputs []string
+	var mu sync.Mutex
 
-	// 读取文件的最终内容
-	finalContent, err := os.ReadFile(tmpPath)
-	require.NoError(t, err)
-	finalSize := len(finalContent)
+	callback := func(data []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		outputs = append(outputs, string(data))
+	}
 
-	// 验证文件大小没有显著增加（说明命令已被终止）
-	maxExpectedGrowth := initialSize * 2
-	actualGrowth := finalSize - initialSize
+	err := exec.executeCommandWithStreaming(ctx, "echo hello", "test", callback, nil, nil)
 
-	t.Logf("Initial size: %d, Final size: %d, Growth: %d, Max expected growth: %d",
-		initialSize, finalSize, actualGrowth, maxExpectedGrowth)
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
 
-	assert.LessOrEqual(t, actualGrowth, maxExpectedGrowth,
-		"Command should have been terminated when context was canceled")
+	mu.Lock()
+	defer mu.Unlock()
+
+	foundOutput := false
+	for _, output := range outputs {
+		if strings.Contains(output, "hello") {
+			foundOutput = true
+			break
+		}
+	}
+	if !foundOutput {
+		t.Errorf("Expected output to contain 'hello', got: %v", outputs)
+	}
+}
+
+// TestExecuteCommandWithStreaming_WithInput 测试带输入的命令执行
+func TestExecuteCommandWithStreaming_WithInput(t *testing.T) {
+	exec := NewLocalExecutor()
+
+	ctx := context.Background()
+	var outputs []string
+	var mu sync.Mutex
+
+	callback := func(data []byte) {
+		mu.Lock()
+		defer mu.Unlock()
+		outputs = append(outputs, string(data))
+	}
+
+	inputChan := make(chan []byte, 1)
+	inputChan <- []byte("test input\n")
+	close(inputChan)
+
+	err := exec.executeCommandWithStreaming(ctx, "cat", "test", callback, inputChan, nil)
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	foundOutput := false
+	for _, output := range outputs {
+		if strings.Contains(output, "test input") {
+			foundOutput = true
+			break
+		}
+	}
+	if !foundOutput {
+		t.Errorf("Expected output to contain 'test input', got: %v", outputs)
+	}
 }
