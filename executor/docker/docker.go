@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -34,48 +33,6 @@ type DockerExecutor struct {
 	ttyWidth          uint               // TTY 终端宽度
 	currentExecCancel context.CancelFunc // 用于取消当前执行的命令
 	mu                sync.RWMutex
-}
-
-// callbackWriter 自定义 Writer 用于实时回调输出
-type callbackWriter struct {
-	callback func([]byte)
-}
-
-// stdinConn 包装 io.PipeWriter 以实现 net.Conn 接口
-type stdinConn struct {
-	pipeWriter *io.PipeWriter
-}
-
-func (c *stdinConn) Read(b []byte) (n int, err error) {
-	return 0, io.EOF
-}
-
-func (c *stdinConn) Write(p []byte) (n int, err error) {
-	return c.pipeWriter.Write(p)
-}
-
-func (c *stdinConn) Close() error {
-	return c.pipeWriter.Close()
-}
-
-func (c *stdinConn) LocalAddr() net.Addr {
-	return nil
-}
-
-func (c *stdinConn) RemoteAddr() net.Addr {
-	return nil
-}
-
-func (c *stdinConn) SetDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *stdinConn) SetReadDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *stdinConn) SetWriteDeadline(t time.Time) error {
-	return nil
 }
 
 // parseInputRequest 解析输入请求代码块内容
@@ -143,6 +100,7 @@ func (d *DockerExecutor) Prepare(ctx context.Context) error {
 	}
 
 	// 构建容器配置
+	// 当启用 TTY 时，容器本身也需要开启 TTY，以保证 exec attach 的 TTY 模式能正常工作
 	containerConfig := &container.Config{
 		Image:        fullImage,
 		Cmd:          []string{"sleep", "3600"},
@@ -150,7 +108,8 @@ func (d *DockerExecutor) Prepare(ctx context.Context) error {
 		Env:          d.buildEnvList(),
 		AttachStdout: true,
 		AttachStderr: true,
-		Tty:          false,
+		Tty:          d.tty,
+		OpenStdin:    d.tty,
 	}
 
 	// 构建主机配置
@@ -222,31 +181,42 @@ func (d *DockerExecutor) Transfer(ctx context.Context, resultChan chan<- any, co
 	execCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// 启动一个 goroutine 监听外部上下文取消
-	// 当外部上下文被取消时，取消内部上下文
-	// 上下文取消会触发 executeCommandInContainerStreaming 中的连接关闭
-	// 从而使容器内进程收到 SIGHUP 信号而终止
+	// 监听 commandChan 关闭，确保监听 goroutine 能正确退出
+	commandChanDone := make(chan struct{})
 	go func() {
-		<-ctx.Done()
+		for range commandChan {
+		}
+		close(commandChanDone)
+	}()
+
+	// 启动一个 goroutine 监听外部上下文取消和 commandChan 关闭
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-commandChanDone:
+		}
 		cancel()
 	}()
 
-	for data := range commandChan {
+	for {
 		// 检查上下文是否已取消
 		select {
 		case <-execCtx.Done():
 			return
-		default:
-		}
+		case data, ok := <-commandChan:
+			if !ok {
+				return
+			}
 
-		// 处理 commandWrapper 类型
-		cmdWrapper, ok := data.(executor.CommandWrapper)
-		if !ok {
-			resultChan <- fmt.Errorf("unsupported data type: %T, expected CommandWrapper", data)
-			continue
+			// 处理 commandWrapper 类型
+			cmdWrapper, ok := data.(executor.CommandWrapper)
+			if !ok {
+				safeSend(resultChan, fmt.Errorf("unsupported data type: %T, expected CommandWrapper", data))
+				continue
+			}
+			// 执行命令（携带步骤名称）
+			d.executeCommandStreaming(execCtx, cmdWrapper.Command, cmdWrapper.StepName, resultChan, inputChan)
 		}
-		// 执行命令（携带步骤名称）
-		d.executeCommandStreaming(execCtx, cmdWrapper.Command, cmdWrapper.StepName, resultChan, inputChan)
 	}
 }
 
@@ -269,28 +239,28 @@ func (d *DockerExecutor) executeCommandStreaming(ctx context.Context, command st
 				return
 			case req := <-inputRequestChan:
 				if req != nil {
-					resultChan <- &executor.InputRequestEvent{
+					safeSend(resultChan, &executor.InputRequestEvent{
 						StepName: stepName,
 						Request:  req,
-					}
+					})
 				}
 			}
 		}
 	}()
 
 	err := d.executeCommandInContainerStreaming(ctx, command, func(data []byte) {
-		resultChan <- data
+		safeSend(resultChan, data)
 	}, inputChan, onInputRequest)
 
 	// 发送最终结果
-	resultChan <- &executor.StepResult{
+	safeSend(resultChan, &executor.StepResult{
 		StepName:   stepName,
 		Command:    command,
 		Output:     "",
 		Error:      err,
 		StartTime:  startTime,
 		FinishTime: time.Now(),
-	}
+	})
 }
 
 // executeCommandInContainerStreaming 在容器中执行命令并实时流式输出
@@ -326,23 +296,38 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 	}
 	defer attachResp.Close()
 
+	// 如果启用 TTY，应用终端尺寸
+	if d.tty && (d.ttyWidth > 0 || d.ttyHeight > 0) {
+		_ = d.client.ContainerExecResize(ctx, execResp.ID, container.ResizeOptions{
+			Width:  d.ttyWidth,
+			Height: d.ttyHeight,
+		})
+	}
+
 	var wg sync.WaitGroup
 	done := make(chan struct{})
 
 	execCtx, execCancel := context.WithCancel(ctx)
 	defer execCancel()
 
-	var stdinWriter *io.PipeWriter
-
+	// 使用 sync.Once 保证取消逻辑只执行一次，避免重复关闭连接或重复取消
+	var cancelOnce sync.Once
 	d.mu.Lock()
 	d.currentExecCancel = func() {
-		if stdinWriter != nil {
-			stdinWriter.Write([]byte{0x03})
-			stdinWriter.Close()
-		}
-		execCancel()
+		cancelOnce.Do(func() {
+			if attachResp.Conn != nil {
+				_, _ = attachResp.Conn.Write([]byte{0x03})
+			}
+			execCancel()
+		})
 	}
 	d.mu.Unlock()
+
+	defer func() {
+		d.mu.Lock()
+		d.currentExecCancel = nil
+		d.mu.Unlock()
+	}()
 
 	go func() {
 		<-ctx.Done()
@@ -355,13 +340,9 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 	}()
 
 	if inputChan != nil {
-		stdinReader, sw := io.Pipe()
-		stdinWriter = sw
-
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			defer sw.Close()
 			for {
 				select {
 				case <-execCtx.Done():
@@ -372,16 +353,11 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 					if !ok {
 						return
 					}
-					if len(data) > 0 {
-						sw.Write(data)
+					if len(data) > 0 && attachResp.Conn != nil {
+						_, _ = attachResp.Conn.Write(data)
 					}
 				}
 			}
-		}()
-
-		stdinConn := &stdinConn{pipeWriter: stdinWriter}
-		go func() {
-			_, _ = io.Copy(stdinConn, stdinReader)
 		}()
 	}
 
@@ -415,13 +391,16 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 		}
 
 		if outputCallback != nil {
-			outputCallback(append(scanner.Bytes(), '\n'))
+			outputCallback(append([]byte(line), '\n'))
 		}
 	}
 
 	if err := scanner.Err(); err != nil && err != io.EOF {
 		close(done)
 		wg.Wait()
+		if outputCallback != nil {
+			outputCallback([]byte(fmt.Sprintf("\n[stream error: %v]\n", err)))
+		}
 		return fmt.Errorf("failed to read output: %w", err)
 	}
 
@@ -444,19 +423,7 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	d.mu.Lock()
-	d.currentExecCancel = nil
-	d.mu.Unlock()
-
 	return nil
-}
-
-// 为 callbackWriter 实现 Write 方法
-func (w *callbackWriter) Write(p []byte) (n int, err error) {
-	if w.callback != nil {
-		w.callback(p)
-	}
-	return len(p), nil
 }
 
 // detectShell 检测容器中的shell
@@ -502,11 +469,7 @@ func (d *DockerExecutor) waitForContainer(ctx context.Context) error {
 			return nil
 		}
 
-		if containerJSON.State.ExitCode != 0 {
-			return fmt.Errorf("container exited with code %d", containerJSON.State.ExitCode)
-		}
-
-		time.Sleep(100 * time.Millisecond)
+		return fmt.Errorf("container exited with code %d", containerJSON.State.ExitCode)
 	}
 
 	return fmt.Errorf("timeout waiting for container to start")
@@ -629,6 +592,16 @@ func (d *DockerExecutor) GetInstanceId() string {
 // GetType 获取executor类型
 func (d *DockerExecutor) GetType() string {
 	return "docker"
+}
+
+// safeSend 安全地发送数据到 channel，如果 channel 已关闭则忽略
+func safeSend(ch chan<- any, value any) {
+	defer func() {
+		if r := recover(); r != nil {
+			// channel 已关闭，忽略
+		}
+	}()
+	ch <- value
 }
 
 // 确保DockerExecutor实现了Executor接口和ExecutorInfoProvider接口

@@ -26,3 +26,5 @@ _debug_bin*
 examples/workflows/runner
 node_modules/
 .playwright-mcp
+.opencode/
+.codegraph/
