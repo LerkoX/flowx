@@ -42,6 +42,7 @@ package main
 import (
     "context"
     "fmt"
+
     "github.com/LerkoX/flowx"
 )
 
@@ -57,7 +58,7 @@ Version: "1.0"
 Name: example-pipeline
 
 Executors:
-  local
+  local:
     type: local
     config:
       shell: bash
@@ -222,7 +223,7 @@ Executors:
     config:
       registry: docker.io   # 镜像仓库
       network: host         # 网络模式
-      work: /app          # 容器内工作目录
+      workdir: /app         # 容器内工作目录
       tty: true             # 启用 TTY
       ttyWidth: 120         # TTY 宽度
       ttyHeight: 40         # TTY 高度
@@ -244,6 +245,8 @@ Executors:
       serviceAccount: pipeline-sa
       podReadyTimeout: "60s"  # Pod 就绪等待超时
 ```
+
+> **注意：** `ssh` 执行器类型目前预留但未实现。当前仅支持 `local`、`docker` 和 `k8s`/`kubernetes`。
 
 ## 条件边
 
@@ -348,40 +351,66 @@ Nodes:
 
 ## 事件监控
 
-通过事件监听器监控流水线执行：
+通过实现 `dag.Listener` 接口并使用 `core` 包中的事件常量来监控流水线执行：
 
 ```go
-listener := flowx.NewListener()
-listener.Handle(func(p flowx.Pipeline, event flowx.Event) {
+import (
+    "github.com/LerkoX/flowx/core"
+    "github.com/LerkoX/flowx/dag"
+)
+
+type MyListener struct{}
+
+func (l *MyListener) Events() []dag.Event {
+    return []dag.Event{
+        core.EventPipelineInit,
+        core.EventPipelineStart,
+        core.EventPipelineFinish,
+        core.EventPipelineExecutorPrepare,
+        core.EventPipelineExecutorPrepareDone,
+        core.EventPipelineNodeStart,
+        core.EventPipelineNodeFinish,
+        core.EventPipelineNodeFailed,
+        core.EventPipelineCancelled,
+        core.EventPipelineStatusUpdate,
+        core.EventPipelinePaused,
+        core.EventPipelineResumed,
+        core.EventPipelineGraphModified,
+    }
+}
+
+func (l *MyListener) Handle(p dag.Pipeline, event dag.Event) {
     switch event {
-    case flowx.PipelineInit:
+    case core.EventPipelineInit:
         fmt.Println("流水线初始化")
-    case flowx.PipelineStart:
+    case core.EventPipelineStart:
         fmt.Println("流水线开始")
-    case flowx.PipelineFinish:
+    case core.EventPipelineFinish:
         fmt.Println("流水线完成")
-    case flowx.PipelineExecutorPrepare:
+    case core.EventPipelineExecutorPrepare:
         fmt.Println("执行器准备中")
-    case flowx.PipelineExecutorPrepareDone:
+    case core.EventPipelineExecutorPrepareDone:
         fmt.Println("执行器准备完成")
-    case flowx.PipelineNodeStart:
+    case core.EventPipelineNodeStart:
         fmt.Println("节点开始执行")
-    case flowx.PipelineNodeFinish:
+    case core.EventPipelineNodeFinish:
         fmt.Println("节点执行完成")
-    case flowx.PipelineCancelled:
+    case core.EventPipelineNodeFailed:
+        fmt.Println("节点执行失败")
+    case core.EventPipelineCancelled:
         fmt.Println("流水线已取消")
-    case flowx.PipelineStatusUpdate:
+    case core.EventPipelineStatusUpdate:
         fmt.Println("流水线状态更新")
-    case flowx.PipelinePaused:
+    case core.EventPipelinePaused:
         fmt.Println("流水线已暂停")
-    case flowx.PipelineResumed:
+    case core.EventPipelineResumed:
         fmt.Println("流水线已恢复")
-    case flowx.PipelineGraphModified:
+    case core.EventPipelineGraphModified:
         fmt.Println("流水线图已修改")
     }
-})
+}
 
-pipeline, err := runtime.RunSync(ctx, "id", config, listener)
+pipeline, err := runtime.RunSync(ctx, "id", config, &MyListener{})
 ```
 
 **可用事件：**
@@ -395,6 +424,7 @@ pipeline, err := runtime.RunSync(ctx, "id", config, listener)
 | `PipelineExecutorPrepareDone` | 节点执行器准备完成 |
 | `PipelineNodeStart` | 节点开始执行 |
 | `PipelineNodeFinish` | 节点执行完成 |
+| `PipelineNodeFailed` | 节点执行失败 |
 | `PipelineCancelled` | 流水线被取消 |
 | `PipelineStatusUpdate` | 流水线状态变更 |
 | `PipelinePaused` | 流水线暂停 |
@@ -408,21 +438,26 @@ FlowX 支持在运行时动态修改流水线图。在流水线暂停期间，�
 ### 使用 ModifyGraph（细粒度控制）
 
 ```go
-err := runtime.ModifyGraph(ctx, "pipeline-id", flowx.GraphModifications{
-    AddNodes: []flowx.NodeConfig{
+import (
+    "github.com/LerkoX/flowx/core"
+    "github.com/LerkoX/flowx/dag"
+)
+
+err := runtime.ModifyGraph(ctx, "pipeline-id", dag.GraphModifications{
+    AddNodes: []core.NodeConfig{
         {
             Name: "NewNode",
             Executor: "local",
-            Steps: []flowx.Step{
+            Steps: []core.Step{
                 {Name: "step1", Run: "echo 'New step'"},
             },
         },
     },
-    AddEdges: []flowx.EdgeModification{
+    AddEdges: []dag.EdgeModification{
         {Source: "ExistingNode", Target: "NewNode", Expression: ""},
     },
     RemoveNodes: []string{"UnusedNode"},
-    RemoveEdges: []flowx.EdgeID{{Source: "A", Target: "B"}},
+    RemoveEdges: []dag.EdgeRemoval{{Source: "A", Target: "B"}},
 })
 ```
 
@@ -502,7 +537,6 @@ graph TB
         K8S[K8s Executor]
         DOCKER[Docker Executor]
         LOCAL[Local Executor]
-        SSH[SSH Executor]
     end
 
     subgraph "Utilities"
@@ -523,11 +557,9 @@ graph TB
     ADP --> K8S
     ADP --> DOCKER
     ADP --> LOCAL
-    ADP --> SSH
     BRG --> K8S
     BRG --> DOCKER
     BRG --> LOCAL
-    BRG --> SSH
     RTI --> CFG
     RTI --> MD
     PLI --> MD
@@ -550,24 +582,31 @@ graph TB
 
 ## API 参考
 
+`Pipeline`、`Listener`、`Event`、`GraphModifications`、`EdgeModification`、`EdgeRemoval` 等类型定义在 `dag` 包（`github.com/LerkoX/flowx/dag`）中。`NodeConfig` 和 `Step` 定义在 `core` 包（`github.com/LerkoX/flowx/core`）中。事件常量（如 `core.EventPipelineStart`）也位于 `core` 包。
+
 ### Runtime
 
 ```go
 type Runtime interface {
-    Get(id string) (Pipeline, error)                          // 根据 ID 获取流水线
-    Cancel(ctx context.Context, id string) error              // 取消运行中的流水线
-    RunAsync(ctx context.Context, id string, config string, listener Listener) (Pipeline, error)  // 异步执行
-    RunSync(ctx context.Context, id string, config string, listener Listener) (Pipeline, error)   // 同步执行
-    Rm(id string)                                             // 移除流水线记录
-    Done() chan struct{}                                      // 运行时完成信号
-    Notify(data interface{}) error                            // 通知运行时
-    Ctx() context.Context                                     // 获取运行时上下文
-    StopBackground()                                          // 停止后台处理
-    StartBackground()                                         // 启动后台处理
-    SetPusher(pusher Pusher)                                  // 设置日志推送器
-    SetTemplateEngine(engine TemplateEngine)                  // 设置模板引擎
-    GetTemplateEngine() TemplateEngine                        // 获取模板引擎
-    ExportConfig(id string) (string, error)                   // 导出流水线配置
+    Get(id string) (dag.Pipeline, error)                          // 根据 ID 获取流水线
+    Cancel(ctx context.Context, id string) error                  // 取消运行中的流水线
+    RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)  // 异步执行
+    RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)   // 同步执行
+    Rm(id string)                                                 // 移除流水线记录
+    Done() chan struct{}                                          // 运行时完成信号
+    Notify(data interface{}) error                                // 通知运行时
+    Ctx() context.Context                                         // 获取运行时上下文
+    StopBackground()                                              // 停止后台处理
+    StartBackground()                                             // 启动后台处理
+    SetPusher(pusher logger.Pusher)                               // 设置日志推送器
+    SetTemplateEngine(engine template.TemplateEngine)             // 设置模板引擎
+    GetTemplateEngine() template.TemplateEngine                   // 获取模板引擎
+    ExportConfig(id string) (string, error)                       // 导出流水线配置
+    Pause(ctx context.Context, id string) error                   // 暂停运行中的流水线
+    Resume(ctx context.Context, id string) error                  // 恢复暂停或停止的流水线
+    ModifyGraph(ctx context.Context, id string, modifications dag.GraphModifications) error // 原子化修改图
+    UpdateConfig(ctx context.Context, id string, newConfigYAML string) error // 通过 YAML 差异更新流水线
+    ListPipelines() []string                                      // 列出所有活跃的流水线ID
 }
 ```
 
@@ -576,23 +615,24 @@ type Runtime interface {
 ```go
 type Pipeline interface {
     Id() string                                               // 获取流水线 ID
-    GetGraph() Graph                                          // 获取 DAG 图
-    SetGraph(graph Graph)                                     // 设置 DAG 图
+    GetGraph() dag.Graph                                      // 获取 DAG 图
+    SetGraph(graph dag.Graph)                                 // 设置 DAG 图
     Status() string                                           // 获取流水线状态
-    SetMetadata(store MetadataStore)                          // 设置元数据存储
-    Metadata() Metadata                                       // 获取流水线元数据
-    Listening(listener Listener)                              // 设置事件监听器
+    SetMetadata(store metadata.MetadataStore)                 // 设置元数据存储
+    Metadata() dag.Metadata                                   // 获取流水线元数据
+    Listening(listener dag.Listener)                          // 设置事件监听器
     Done() <-chan struct{}                                    // 流水线完成信号
     Run(ctx context.Context) error                            // 运行流水线
-    Notify()                                                  // 步骤通知流水线
+    Notify()                                                  // 执行的步骤通知流水线
     Cancel()                                                  // 取消流水线
-    SetExecutorProvider(provider ExecutorProvider)           // 设置执行器提供者
-    SetTemplateEngine(engine TemplateEngine)                   // 设置模板引擎
-    GetTemplateEngine() TemplateEngine                        // 获取模板引擎
-    SetPusher(pusher Pusher)                                  // 设置日志推送器
+    SetExecutorProvider(provider dag.ExecutorProvider)        // 设置执行器提供者
+    SetTemplateEngine(engine template.TemplateEngine)          // 设置模板引擎
+    GetTemplateEngine() template.TemplateEngine               // 获取模板引擎
+    SetPusher(pusher logger.Pusher)                           // 设置日志推送器
     Pause() error                                             // 暂停流水线（等待当前层完成）
-    Resume(ctx context.Context) error                          // 恢复暂停的流水线
+    Resume(ctx context.Context) error                         // 恢复暂停的流水线
     IsModifiable() bool                                       // 当前是否可修改图
+    CurrentNode() dag.Node                                    // 返回当前正在执行的节点（如有）
 }
 ```
 
