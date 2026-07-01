@@ -42,6 +42,7 @@ package main
 import (
     "context"
     "fmt"
+
     "github.com/LerkoX/flowx"
 )
 
@@ -208,7 +209,7 @@ Executors:
       workdir: /tmp        # Working directory
       env:                 # Environment variables
         KEY: value
-      ptimeout: "30s"      # Command timeout
+      timeout: "30s"       # Command timeout
       pty: true            # Enable PTY for interactive programs
 ```
 
@@ -244,6 +245,8 @@ Executors:
       serviceAccount: pipeline-sa
       podReadyTimeout: "60s"  # Pod ready timeout
 ```
+
+> **Note:** The `ssh` executor type is reserved but not yet implemented. Only `local`, `docker`, and `k8s`/`kubernetes` are currently supported.
 
 ## Conditional Edges
 
@@ -297,21 +300,26 @@ FlowX supports modifying the pipeline graph at runtime. You can add/remove nodes
 ### Using ModifyGraph (Fine-grained Control)
 
 ```go
-err := runtime.ModifyGraph(ctx, "pipeline-id", flowx.GraphModifications{
-    AddNodes: []flowx.NodeConfig{
+import (
+    "github.com/LerkoX/flowx/core"
+    "github.com/LerkoX/flowx/dag"
+)
+
+err := runtime.ModifyGraph(ctx, "pipeline-id", dag.GraphModifications{
+    AddNodes: []core.NodeConfig{
         {
             Name: "NewNode",
             Executor: "local",
-            Steps: []flowx.Step{
+            Steps: []core.Step{
                 {Name: "step1", Run: "echo 'New step'"},
             },
         },
     },
-    AddEdges: []flowx.EdgeModification{
+    AddEdges: []dag.EdgeModification{
         {Source: "ExistingNode", Target: "NewNode", Expression: ""},
     },
     RemoveNodes: []string{"UnusedNode"},
-    RemoveEdges: []flowx.EdgeID{{Source: "A", Target: "B"}},
+    RemoveEdges: []dag.EdgeRemoval{{Source: "A", Target: "B"}},
 })
 ```
 
@@ -411,40 +419,66 @@ Nodes:
 
 ## Event Monitoring
 
-Monitor pipeline execution through event listeners:
+Monitor pipeline execution through event listeners. Implement the `dag.Listener` interface and use event constants from the `core` package:
 
 ```go
-listener := flowx.NewListener()
-listener.Handle(func(p flowx.Pipeline, event flowx.Event) {
+import (
+    "github.com/LerkoX/flowx/core"
+    "github.com/LerkoX/flowx/dag"
+)
+
+type MyListener struct{}
+
+func (l *MyListener) Events() []dag.Event {
+    return []dag.Event{
+        core.EventPipelineInit,
+        core.EventPipelineStart,
+        core.EventPipelineFinish,
+        core.EventPipelineExecutorPrepare,
+        core.EventPipelineExecutorPrepareDone,
+        core.EventPipelineNodeStart,
+        core.EventPipelineNodeFinish,
+        core.EventPipelineNodeFailed,
+        core.EventPipelineCancelled,
+        core.EventPipelineStatusUpdate,
+        core.EventPipelinePaused,
+        core.EventPipelineResumed,
+        core.EventPipelineGraphModified,
+    }
+}
+
+func (l *MyListener) Handle(p dag.Pipeline, event dag.Event) {
     switch event {
-    case flowx.PipelineInit:
+    case core.EventPipelineInit:
         fmt.Println("Pipeline initialized")
-    case flowx.PipelineStart:
+    case core.EventPipelineStart:
         fmt.Println("Pipeline started")
-    case flowx.PipelineFinish:
+    case core.EventPipelineFinish:
         fmt.Println("Pipeline finished")
-    case flowx.PipelineExecutorPrepare:
+    case core.EventPipelineExecutorPrepare:
         fmt.Println("Executor preparing")
-    case flowx.PipelineExecutorPrepareDone:
+    case core.EventPipelineExecutorPrepareDone:
         fmt.Println("Executor prepared")
-    case flowx.PipelineNodeStart:
+    case core.EventPipelineNodeStart:
         fmt.Println("Node started")
-    case flowx.PipelineNodeFinish:
+    case core.EventPipelineNodeFinish:
         fmt.Println("Node completed")
-    case flowx.PipelineCancelled:
+    case core.EventPipelineNodeFailed:
+        fmt.Println("Node failed")
+    case core.EventPipelineCancelled:
         fmt.Println("Pipeline cancelled")
-    case flowx.PipelineStatusUpdate:
+    case core.EventPipelineStatusUpdate:
         fmt.Println("Pipeline status updated")
-    case flowx.PipelinePaused:
+    case core.EventPipelinePaused:
         fmt.Println("Pipeline paused")
-    case flowx.PipelineResumed:
+    case core.EventPipelineResumed:
         fmt.Println("Pipeline resumed")
-    case flowx.PipelineGraphModified:
+    case core.EventPipelineGraphModified:
         fmt.Println("Pipeline graph modified")
     }
-})
+}
 
-pipeline, err := runtime.RunSync(ctx, "id", config, listener)
+pipeline, err := runtime.RunSync(ctx, "id", config, &MyListener{})
 ```
 
 **Available Events:**
@@ -458,6 +492,7 @@ pipeline, err := runtime.RunSync(ctx, "id", config, listener)
 | `PipelineExecutorPrepareDone` | Node executor preparation completed |
 | `PipelineNodeStart` | Node execution started |
 | `PipelineNodeFinish` | Node execution finished |
+| `PipelineNodeFailed` | Node execution failed |
 | `PipelineCancelled` | Pipeline cancelled |
 | `PipelineStatusUpdate` | Pipeline status changed |
 | `PipelinePaused` | Pipeline paused |
@@ -502,7 +537,6 @@ graph TB
         K8S[K8s Executor]
         DOCKER[Docker Executor]
         LOCAL[Local Executor]
-        SSH[SSH Executor]
     end
 
     subgraph "Utilities"
@@ -523,11 +557,9 @@ graph TB
     ADP --> K8S
     ADP --> DOCKER
     ADP --> LOCAL
-    ADP --> SSH
     BRG --> K8S
     BRG --> DOCKER
     BRG --> LOCAL
-    BRG --> SSH
     RTI --> CFG
     RTI --> MD
     PLI --> MD
@@ -548,24 +580,31 @@ See [examples/workflows/README.md](./examples/workflows/README.md) for detailed 
 
 ## API Reference
 
+Types `Pipeline`, `Listener`, `Event`, `GraphModifications`, `EdgeModification`, and `EdgeRemoval` are defined in the `dag` package (`github.com/LerkoX/flowx/dag`). `NodeConfig` and `Step` are defined in the `core` package (`github.com/LerkoX/flowx/core`). Event constants (e.g., `core.EventPipelineStart`) are also in the `core` package.
+
 ### Runtime
 
 ```go
 type Runtime interface {
-    Get(id string) (Pipeline, error)                          // Get pipeline by ID
-    Cancel(ctx context.Context, id string) error              // Cancel running pipeline
-    RunAsync(ctx context.Context, id string, config string, listener Listener) (Pipeline, error)  // Async execution
-    RunSync(ctx context.Context, id string, config string, listener Listener) (Pipeline, error)   // Sync execution
-    Rm(id string)                                             // Remove pipeline record
-    Done() chan struct{}                                      // Runtime completion signal
-    Notify(data interface{}) error                            // Notify runtime
-    Ctx() context.Context                                     // Get runtime context
-    StopBackground()                                          // Stop background processing
-    StartBackground()                                         // Start background processing
-    SetPusher(pusher Pusher)                                  // Set log pusher
-    SetTemplateEngine(engine TemplateEngine)                  // Set template engine
-    GetTemplateEngine() TemplateEngine                        // Get template engine
-    ExportConfig(id string) (string, error)                   // Export pipeline config
+    Get(id string) (dag.Pipeline, error)                          // Get pipeline by ID
+    Cancel(ctx context.Context, id string) error                  // Cancel running pipeline
+    RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)  // Async execution
+    RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)   // Sync execution
+    Rm(id string)                                                 // Remove pipeline record
+    Done() chan struct{}                                          // Runtime completion signal
+    Notify(data interface{}) error                                // Notify runtime
+    Ctx() context.Context                                         // Get runtime context
+    StopBackground()                                              // Stop background processing
+    StartBackground()                                             // Start background processing
+    SetPusher(pusher logger.Pusher)                               // Set log pusher
+    SetTemplateEngine(engine template.TemplateEngine)             // Set template engine
+    GetTemplateEngine() template.TemplateEngine                   // Get template engine
+    ExportConfig(id string) (string, error)                       // Export pipeline config
+    Pause(ctx context.Context, id string) error                   // Pause running pipeline
+    Resume(ctx context.Context, id string) error                  // Resume paused/stopped pipeline
+    ModifyGraph(ctx context.Context, id string, modifications dag.GraphModifications) error // Modify graph atomically
+    UpdateConfig(ctx context.Context, id string, newConfigYAML string) error // Update pipeline via YAML diff
+    ListPipelines() []string                                      // List active pipeline IDs
 }
 ```
 
@@ -574,23 +613,24 @@ type Runtime interface {
 ```go
 type Pipeline interface {
     Id() string                                               // Get pipeline ID
-    GetGraph() Graph                                          // Get DAG graph
-    SetGraph(graph Graph)                                     // Set DAG graph
+    GetGraph() dag.Graph                                      // Get DAG graph
+    SetGraph(graph dag.Graph)                                 // Set DAG graph
     Status() string                                           // Get pipeline status
-    SetMetadata(store MetadataStore)                          // Set metadata store
-    Metadata() Metadata                                       // Get pipeline metadata
-    Listening(listener Listener)                              // Set event listener
+    SetMetadata(store metadata.MetadataStore)                 // Set metadata store
+    Metadata() dag.Metadata                                   // Get pipeline metadata
+    Listening(listener dag.Listener)                          // Set event listener
     Done() <-chan struct{}                                    // Pipeline completion signal
     Run(ctx context.Context) error                            // Run pipeline
     Notify()                                                  // Step notifies pipeline
     Cancel()                                                  // Cancel pipeline
-    SetExecutorProvider(provider ExecutorProvider)           // Set executor provider
-    SetTemplateEngine(engine TemplateEngine)                   // Set template engine
-    GetTemplateEngine() TemplateEngine                        // Get template engine
-    SetPusher(pusher Pusher)                                  // Set log pusher
+    SetExecutorProvider(provider dag.ExecutorProvider)        // Set executor provider
+    SetTemplateEngine(engine template.TemplateEngine)          // Set template engine
+    GetTemplateEngine() template.TemplateEngine               // Get template engine
+    SetPusher(pusher logger.Pusher)                           // Set log pusher
     Pause() error                                             // Pause pipeline (waits for current level)
-    Resume(ctx context.Context) error                          // Resume paused pipeline
+    Resume(ctx context.Context) error                         // Resume paused pipeline
     IsModifiable() bool                                       // Check if graph can be modified
+    CurrentNode() dag.Node                                    // Return currently executing node (if any)
 }
 ```
 
