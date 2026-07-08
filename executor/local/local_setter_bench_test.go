@@ -161,7 +161,7 @@ func TestStreamOutput_EmptyInput(t *testing.T) {
 		outputs = append(outputs, string(data))
 	}
 
-	exec.streamOutput(reader, callback, "test", nil)
+	exec.streamOutput(context.Background(), reader, callback, "test", nil)
 
 	if len(outputs) != 0 {
 		t.Errorf("Expected no output for empty input, got %d items", len(outputs))
@@ -182,7 +182,7 @@ func TestStreamOutput_OnlyInputRequest(t *testing.T) {
 		requests = append(requests, req)
 	}
 
-	exec.streamOutput(reader, callback, "test", onInputRequest)
+	exec.streamOutput(context.Background(), reader, callback, "test", onInputRequest)
 
 	if len(requests) != 1 {
 		t.Errorf("Expected 1 input request, got %d", len(requests))
@@ -215,7 +215,7 @@ func TestStreamOutput_MultipleInputRequests(t *testing.T) {
 		requests = append(requests, req)
 	}
 
-	exec.streamOutput(reader, callback, "test", onInputRequest)
+	exec.streamOutput(context.Background(), reader, callback, "test", onInputRequest)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -363,6 +363,6 @@ func BenchmarkStreamOutput(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		reader := strings.NewReader(input)
-		exec.streamOutput(reader, func(data []byte) {}, "test", nil)
+		exec.streamOutput(context.Background(), reader, func(data []byte) {}, "test", nil)
 	}
 }

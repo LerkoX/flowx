@@ -16,6 +16,15 @@ import (
 // Run 执行流水线
 func (p *PipelineImpl) Run(ctx context.Context) error {
 	p.mu.Lock()
+	if p.status == core.StatusRunning {
+		p.mu.Unlock()
+		return fmt.Errorf("%w: pipeline is already running", core.ErrInvalidState)
+	}
+	// 重新创建 doneChan，支持多次 Run
+	if p.doneChan == nil {
+		p.doneChan = make(chan struct{})
+	}
+	p.cleanupOnce = sync.Once{}
 	ctx, cancel := context.WithCancel(ctx)
 	p.cancelFunc = cancel
 	p.status = core.StatusRunning
@@ -23,8 +32,6 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 
 	defer func() {
 		p.cleanupOnce.Do(func() {
-			close(p.doneChan)
-
 			p.mu.Lock()
 			if p.cancelFunc != nil {
 				p.cancelFunc()
@@ -34,6 +41,11 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 
 			// 清理所有executor
 			p.cleanupExecutors(ctx)
+
+			p.mu.Lock()
+			close(p.doneChan)
+			p.doneChan = nil
+			p.mu.Unlock()
 		})
 	}()
 
@@ -382,7 +394,19 @@ func (p *PipelineImpl) executeNode(ctx context.Context, node Node, exec executor
 		node.SetRuntimeStatus(runtimeStatus)
 	}
 
-	// 7. 关闭 inputChan
+	// 7. 等待 executor Transfer 完全退出后再关闭 inputChan
+	//    Transfer 会在 commandChan 关闭后退出，sendCommands 负责关闭 commandChan。
+	//    这里 drain resultChan 直到关闭，以确认 Transfer 已结束。
+	go func() {
+		for range resultChan {
+		}
+	}()
+	select {
+	case <-resultChan:
+	case <-time.After(5 * time.Second):
+		// 超时，强制继续
+	}
+
 	close(inputChan)
 
 	return lastErr
@@ -423,7 +447,17 @@ func (p *PipelineImpl) setupExecutorChannels(ctx context.Context, exec executor.
 	inputChan := make(chan []byte, 100) // 输入通道，缓冲100条消息
 
 	// 启动 executor 的 Transfer goroutine
-	go exec.Transfer(ctx, resultChan, commandChan, inputChan)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				select {
+				case resultChan <- fmt.Errorf("executor panic: %v", r):
+				default:
+				}
+			}
+		}()
+		exec.Transfer(ctx, resultChan, commandChan, inputChan)
+	}()
 
 	return commandChan, resultChan, inputChan
 }

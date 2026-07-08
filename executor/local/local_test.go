@@ -178,7 +178,7 @@ func TestStreamOutput_ScannerError(t *testing.T) {
 		outputs = append(outputs, string(data))
 	}
 
-	exec.streamOutput(reader, callback, "test", nil)
+	exec.streamOutput(context.Background(), reader, callback, "test", nil)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -212,7 +212,7 @@ func TestStreamOutput_NormalOutput(t *testing.T) {
 		outputs = append(outputs, string(data))
 	}
 
-	exec.streamOutput(reader, callback, "test", nil)
+	exec.streamOutput(context.Background(), reader, callback, "test", nil)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -252,7 +252,7 @@ func TestStreamOutput_InputRequestBlock(t *testing.T) {
 		requests = append(requests, req)
 	}
 
-	exec.streamOutput(reader, callback, "test", onInputRequest)
+	exec.streamOutput(context.Background(), reader, callback, "test", onInputRequest)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -336,19 +336,27 @@ func TestKillCurrentProcess(t *testing.T) {
 		t.Fatalf("Failed to start command: %v", err)
 	}
 
-	exec.mu.Lock()
-	exec.currentCmd = cmd
-	exec.mu.Unlock()
+	started := make(chan struct{})
+	close(started)
+	done := make(chan struct{})
+	exec.cmdMu.Lock()
+	exec.currentCmd = &activeCmd{
+		cmd:     cmd,
+		started: started,
+		done:    done,
+		pid:     cmd.Process.Pid,
+	}
+	exec.cmdMu.Unlock()
 
 	exec.killCurrentProcess()
 
-	done := make(chan error, 1)
+	waitDone := make(chan error, 1)
 	go func() {
-		done <- cmd.Wait()
+		waitDone <- cmd.Wait()
 	}()
 
 	select {
-	case <-done:
+	case <-waitDone:
 	case <-time.After(3 * time.Second):
 		t.Error("Timeout waiting for process to be killed")
 	}
@@ -388,7 +396,7 @@ func TestTransfer_ContextCancellation(t *testing.T) {
 	}()
 
 	exec.Transfer(ctx, resultChan, commandChan, inputChan)
-	close(resultChan)
+	// Transfer 已经关闭 resultChan，无需再次关闭
 
 	// 测试通过即表示 Transfer 在上下文取消后正确返回
 }
@@ -412,7 +420,7 @@ func TestTransfer_UnsupportedType(t *testing.T) {
 	}()
 
 	exec.Transfer(ctx, resultChan, commandChan, inputChan)
-	close(resultChan)
+	// Transfer 已经关闭 resultChan，无需再次关闭
 
 	// 测试通过即表示 Transfer 正确处理了不支持的类型
 }

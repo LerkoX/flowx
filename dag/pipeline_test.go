@@ -28,11 +28,14 @@ func TestDGA_BFS(t *testing.T) {
 		}
 	}
 	// Collect visited nodes to verify traversal order
+	var visitedMu sync.Mutex
 	visited := []string{}
 	evalCtx := NewEvaluationContext()
 	if err := dgaGraph.Traversal(context.Background(), evalCtx, func(ctx context.Context, node Node) error {
 		t.Log("Visiting node:", node.Id())
+		visitedMu.Lock()
 		visited = append(visited, node.Id())
+		visitedMu.Unlock()
 		return nil
 	}); err != nil {
 		t.Error(err)
