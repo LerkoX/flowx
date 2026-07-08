@@ -271,13 +271,14 @@ func TestExecuteCommandWithStreaming_TimeoutStressTest(t *testing.T) {
 	exec := NewLocalExecutor()
 	exec.setTimeout(50 * time.Millisecond)
 
-	ctx := context.Background()
 	callback := func(data []byte) {}
 
 	for i := 0; i < 100; i++ {
+		ctx := context.Background()
 		err := exec.executeCommandWithStreaming(ctx, "sleep 10", "test", callback, nil, nil)
 		if err == nil {
 			t.Errorf("Command %d: Expected timeout error", i)
+			continue
 		}
 		if !strings.Contains(err.Error(), "timed out") {
 			t.Errorf("Command %d: Expected timeout error, got: %v", i, err)

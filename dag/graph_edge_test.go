@@ -2,6 +2,7 @@ package dag
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/LerkoX/flowx/core"
@@ -108,10 +109,13 @@ func TestDGAGraph_AddEdge_MultipleEdges(t *testing.T) {
 
 	// 验证遍历
 	evalCtx := NewEvaluationContext()
+	var visitedMu sync.Mutex
 	visited := []string{}
 
 	if err := graph.Traversal(context.Background(), evalCtx, func(ctx context.Context, node Node) error {
+		visitedMu.Lock()
 		visited = append(visited, node.Id())
+		visitedMu.Unlock()
 		return nil
 	}); err != nil {
 		t.Errorf("Traversal failed: %v", err)

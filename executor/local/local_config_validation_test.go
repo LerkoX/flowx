@@ -128,7 +128,7 @@ func TestStreamOutput_NilCallback(t *testing.T) {
 	input := "some output\n"
 	reader := strings.NewReader(input)
 
-	exec.streamOutput(reader, nil, "test", nil)
+	exec.streamOutput(context.Background(), reader, nil, "test", nil)
 }
 
 // TestStreamOutput_NilOnInputRequest 测试 nil onInputRequest
@@ -143,7 +143,7 @@ func TestStreamOutput_NilOnInputRequest(t *testing.T) {
 		outputs = append(outputs, string(data))
 	}
 
-	exec.streamOutput(reader, callback, "test", nil)
+	exec.streamOutput(context.Background(), reader, callback, "test", nil)
 
 	if len(outputs) != 0 {
 		t.Errorf("Expected no output when onInputRequest is nil, got %d items", len(outputs))
