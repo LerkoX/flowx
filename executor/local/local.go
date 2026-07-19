@@ -690,17 +690,20 @@ func detectDefaultShell() string {
 	switch runtime.GOOS {
 	case "windows":
 		// Windows优先使用PowerShell，回退到cmd
-		if _, err := exec.LookPath("pwsh"); err == nil {
-			return "pwsh"
+		if path, err := exec.LookPath("pwsh"); err == nil {
+			return path
 		}
-		if _, err := exec.LookPath("powershell"); err == nil {
-			return "powershell"
+		if path, err := exec.LookPath("powershell"); err == nil {
+			return path
 		}
 		return "cmd"
 	default:
-		// Unix-like系统优先使用bash，回退到sh
-		if _, err := exec.LookPath("bash"); err == nil {
-			return "/bin/bash"
+		// Unix-like系统优先使用bash，回退到sh，均通过PATH查找真实路径
+		if path, err := exec.LookPath("bash"); err == nil {
+			return path
+		}
+		if path, err := exec.LookPath("sh"); err == nil {
+			return path
 		}
 		return "/bin/sh"
 	}

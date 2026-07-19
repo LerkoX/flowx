@@ -109,6 +109,10 @@ type Pipeline interface {
 	GetTemplateEngine() template.TemplateEngine
 	//SetPusher 设置日志推送器
 	SetPusher(pusher logger.Pusher)
+	//SetParam 设置参数
+	SetParam(param map[string]interface{})
+	//GetParam 获取参数
+	GetParam() Metadata
 	//Pause 暂停流水线，等待当前层执行完成后暂停
 	Pause() error
 	//Resume 恢复暂停的流水线

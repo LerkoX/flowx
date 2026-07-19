@@ -160,6 +160,15 @@ func (s *pipelineSnapshot) SetParam(param map[string]interface{}) {
 	panic(errReadOnly)
 }
 
+// GetParam 获取 param 值（只读）
+func (s *pipelineSnapshot) GetParam() Metadata {
+	result := make(Metadata, len(s.param))
+	for k, v := range s.param {
+		result[k] = v
+	}
+	return result
+}
+
 // SetMaxLoopIterations 设置循环图最大迭代次数（只读，panic）
 func (s *pipelineSnapshot) SetMaxLoopIterations(max int) {
 	panic(errReadOnly)
