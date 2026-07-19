@@ -611,8 +611,11 @@ func (p *PipelineImpl) handleResult(ctx context.Context, node Node, _ executor.E
 		output := string(v)
 		if p.pusher != nil {
 			p.pusher.Push(ctx, logger.Entry{
-				Level:   logger.LevelInfo,
-				Message: output,
+				Pipeline: p.Id(),
+				Node:     node.Id(),
+				Level:    logger.LevelInfo,
+				Message:  output,
+				Output:   output,
 			})
 		}
 

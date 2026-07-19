@@ -64,6 +64,17 @@ func (p *PipelineImpl) SetParam(param map[string]interface{}) {
 	}
 }
 
+// GetParam 获取渲染后的 param 值
+func (p *PipelineImpl) GetParam() Metadata {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	result := make(Metadata, len(p.param))
+	for k, v := range p.param {
+		result[k] = v
+	}
+	return result
+}
+
 // SetMaxLoopIterations 设置循环图最大迭代次数
 func (p *PipelineImpl) SetMaxLoopIterations(max int) {
 	p.mu.Lock()
