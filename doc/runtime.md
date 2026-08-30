@@ -22,6 +22,8 @@ type Runtime interface {
     ExportConfig(id string) (string, error)                                   // 导出运行时配置
     Pause(ctx context.Context, id string) error                               // 暂停流水线
     Resume(ctx context.Context, id string) error                              // 恢复流水线
+    RunAsyncRetained(ctx, id, config, listener) (dag.Pipeline, error)                  // 异步执行并保留实例（可后续改图再 Rerun）
+    Rerun(ctx context.Context, id string) error                                         // 重新运行保留的流水线（已完成节点跳过）
     UpdateConfig(ctx context.Context, id string, newConfigYAML string) error              // 通过新配置更新流水线
     ModifyGraph(ctx context.Context, id string, modifications GraphModifications) error // 动态修改图
 }
@@ -312,6 +314,28 @@ mods := flowx.GraphModifications{
 
 err := rt.ModifyGraph(ctx, "pipeline-001", mods)
 ```
+
+### 运行结束后追加节点并继续执行（RunAsyncRetained + Rerun）
+
+`RunAsync` 在流水线运行结束时会将实例从 Runtime 中删除，之后无法再 `Get`/`ModifyGraph`。
+若需要在流水线运行结束后修改图并继续执行，使用 `RunAsyncRetained` 启动：
+
+```go
+pipeline, _ := rt.RunAsyncRetained(ctx, "pipeline-001", config, listener)
+// ... 等待首次运行结束（pipeline.Status() == SUCCESS / FAILED ...）
+
+// 修改图（例如追加节点）
+_ = rt.ModifyGraph(ctx, "pipeline-001", mods)
+
+// 继续运行：已终结状态的节点自动跳过，仅执行新增节点
+_ = rt.Rerun(ctx, "pipeline-001")
+
+// 不再需要时显式释放，避免内存泄漏
+rt.Rm("pipeline-001")
+```
+
+`Rerun` 要求流水线仍处于 Runtime 中（由 `RunAsyncRetained` 保留）且处于可修改状态；
+节点按运行时状态跳过（SUCCESS/FAILED/CANCELLED），即增量执行而非全量重跑。
 
 ### GraphModifications 结构
 

@@ -1,5 +1,11 @@
 # 更新日志
 
+## [Unreleased]
+
+- 新增 `RunAsyncRetained`：异步执行流水线并在完成后保留实例（`RunAsync` 会在完成时删除实例），保留的实例可通过 `ModifyGraph`/`UpdateConfig` 修改图结构后用 `Rerun` 继续运行；不再使用时调用 `Rm(id)` 释放
+- 新增 `Rerun`：重新运行已保留且处于可修改状态的流水线，已终结状态（SUCCESS/FAILED/CANCELLED）的节点自动跳过，仅执行新增/未运行节点，实现“运行结束后追加节点继续执行”
+- Docker executor 支持远程 daemon：`host`（tcp://… 或 ssh://user@host，未设置时回退 DOCKER_HOST）、`tlsVerify`、`certPath` 配置
+
 ## [Unreleased] - 2026-04-07
 
 - 新增程序主动请求输入功能：通过输出 `{"flowx":"wait-input",...}` JSON 标记请求用户输入

@@ -273,6 +273,18 @@ func (r *RuntimeImpl) Cancel(ctx context.Context, id string) error {
 
 // RunAsync 执行异步流水线
 func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
+	return r.runAsync(ctx, id, config, listener, false)
+}
+
+// RunAsyncRetained 执行异步流水线并在完成后保留实例。
+// 保留的实例处于可修改状态（SUCCESS/FAILED/CANCELLED 等）时，
+// 可通过 ModifyGraph/UpdateConfig 修改图结构，再用 Rerun 继续运行新增节点。
+// 不再使用时调用 Rm(id) 释放，避免内存泄漏。
+func (r *RuntimeImpl) RunAsyncRetained(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
+	return r.runAsync(ctx, id, config, listener, true)
+}
+
+func (r *RuntimeImpl) runAsync(ctx context.Context, id string, config string, listener dag.Listener, retain bool) (dag.Pipeline, error) {
 	// 提前获取 templateEngine，避免在持有写锁时调用 GetTemplateEngine 导致死锁
 	templateEngine := r.GetTemplateEngine()
 
@@ -342,11 +354,13 @@ func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, li
 
 	// 异步执行流水线
 	go func() {
-		defer func() {
-			r.mu.Lock()
-			delete(r.pipelines, id)
-			r.mu.Unlock()
-		}()
+		if !retain {
+			defer func() {
+				r.mu.Lock()
+				delete(r.pipelines, id)
+				r.mu.Unlock()
+			}()
+		}
 
 		if err := pipeline.Run(ctx); err != nil {
 			fmt.Printf("dag.Pipeline %s execution failed: %v\n", id, err)
@@ -354,6 +368,29 @@ func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, li
 	}()
 
 	return pipeline, nil
+}
+
+// Rerun 重新运行已完成且被保留的流水线（配合 RunAsyncRetained 使用）。
+// 已终结状态（SUCCESS/FAILED/CANCELLED）的节点按运行时状态跳过，
+// 仅执行新增或尚未运行的节点；通常先通过 ModifyGraph/UpdateConfig 修改图。
+func (r *RuntimeImpl) Rerun(ctx context.Context, id string) error {
+	r.mu.RLock()
+	pipeline, exists := r.pipelines[id]
+	r.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("pipeline with id %s not found (not retained or already removed)", id)
+	}
+	if !pipeline.IsModifiable() {
+		return core.ErrPipelineRunning
+	}
+
+	go func() {
+		if err := pipeline.Run(ctx); err != nil {
+			fmt.Printf("dag.Pipeline %s re-run failed: %v\n", id, err)
+		}
+	}()
+	return nil
 }
 
 // RunSync 执行同步流水线
