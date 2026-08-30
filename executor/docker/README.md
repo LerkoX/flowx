@@ -32,19 +32,28 @@ Executors:
   docker:
     type: docker
     config:
+      host: tcp://192.168.1.10:2375  # 可选：远程 daemon 地址（tcp://… / ssh://user@host）；
+                                     # 未设置时读取 DOCKER_HOST 环境变量，默认本机 unix socket
+      tlsVerify: true                # 可选：对 daemon 连接启用 TLS 校验（配合 host 使用）
+      certPath: /etc/docker/certs    # 可选：TLS 证书目录（含 ca.pem/cert.pem/key.pem，默认 ~/.docker）
       registry: myregistry.com      # 可选：镜像仓库地址
       network: host                  # 可选：网络模式 (bridge/host/none/自定义)
       workdir: /app                  # 可选：工作目录
       tty: true                      # 可选：启用 TTY 模式（支持颜色输出和交互式程序）
       ttyWidth: 120                  # 可选：TTY 终端宽度（默认 80）
       ttyHeight: 40                  # 可选：TTY 终端高度（默认 24）
-      volumes:                       # 可选：卷挂载列表
+      volumes:                       # 可选：卷挂载列表（远程 daemon 时为远端机器路径）
         - /var/run/docker.sock:/var/run/docker.sock
         - /host/data:/container/data
       env:                           # 可选：环境变量
         GO_VERSION: "1.21"
         NODE_ENV: production
 ```
+
+> **远程 daemon**：配置 `host` 后每个执行器实例可连接不同的 Docker daemon（如
+> `tcp://192.168.1.10:2375` 或 `ssh://deploy@build-server`）。client 在 Prepare 阶段
+> 惰性创建，配置变更不会残留旧连接。注意 `volumes` 的宿主机侧路径是 **daemon 所在机器**
+> 上的路径；TLS 建议优先用 `ssh://`（无需在远端暴露 2375 端口）。
 
 ### 节点配置
 
