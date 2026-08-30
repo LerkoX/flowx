@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -28,9 +30,12 @@ type DockerExecutor struct {
 	volumes           map[string]string
 	network           string
 	registry          string
-	tty               bool               // 是否启用 TTY 模式
-	ttyHeight         uint               // TTY 终端高度
-	ttyWidth          uint               // TTY 终端宽度
+	host              string // daemon 地址（tcp://… / ssh://… / unix://…），空表示从环境变量读取（DOCKER_HOST 等）
+	tlsVerify         bool   // 是否启用 TLS 校验
+	certPath          string // TLS 证书目录（含 ca.pem/cert.pem/key.pem），默认为 ~/.docker
+	tty               bool   // 是否启用 TTY 模式
+	ttyHeight         uint   // TTY 终端高度
+	ttyWidth          uint   // TTY 终端宽度
 	currentExecCancel context.CancelFunc // 用于取消当前执行的命令
 	mu                sync.RWMutex
 }
@@ -57,17 +62,54 @@ func parseInputRequest(content string) *executor.InputRequest {
 }
 
 // NewDockerExecutor 创建新的Docker执行器
+//
+// client 不在此处创建，而是在 Prepare 时惰性创建（ensureClient）：
+// 此时 adapter 配置（host/tlsVerify/certPath 等）已应用完毕，
+// 才能决定连接哪个 daemon。未配置 host 时回退到环境变量（FromEnv），
+// 与历史行为一致。
 func NewDockerExecutor() (*DockerExecutor, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create docker client: %w", err)
-	}
-
 	return &DockerExecutor{
-		client:  cli,
 		env:     make(map[string]string),
 		volumes: make(map[string]string),
 	}, nil
+}
+
+// ensureClient 惰性创建 Docker client（调用方须持有 d.mu）。
+// 配置了 host 时按 host/tlsVerify/certPath 构造；否则读取进程环境变量
+// （DOCKER_HOST / DOCKER_TLS_VERIFY / DOCKER_CERT_PATH / DOCKER_API_VERSION）。
+func (d *DockerExecutor) ensureClient() error {
+	if d.client != nil {
+		return nil
+	}
+
+	opts := []client.Opt{client.WithAPIVersionNegotiation()}
+	if d.host != "" {
+		opts = append(opts, client.WithHost(d.host))
+		if d.tlsVerify || d.certPath != "" {
+			certDir := d.certPath
+			if certDir == "" {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return fmt.Errorf("tlsVerify requires certPath (failed to locate home dir): %w", err)
+				}
+				certDir = filepath.Join(home, ".docker")
+			}
+			opts = append(opts, client.WithTLSClientConfig(
+				filepath.Join(certDir, "ca.pem"),
+				filepath.Join(certDir, "cert.pem"),
+				filepath.Join(certDir, "key.pem"),
+			))
+		}
+	} else {
+		opts = append([]client.Opt{client.FromEnv}, opts...)
+	}
+
+	cli, err := client.NewClientWithOpts(opts...)
+	if err != nil {
+		return fmt.Errorf("failed to create docker client (host=%q): %w", d.host, err)
+	}
+	d.client = cli
+	return nil
 }
 
 // NewDockerExecutorWithClient 使用指定的Docker客户端创建执行器
@@ -85,6 +127,11 @@ func NewDockerExecutorWithClient(cli *client.Client) *DockerExecutor {
 func (d *DockerExecutor) Prepare(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
+	// 惰性创建 client（此时 host/tlsVerify/certPath 等配置已应用）
+	if err := d.ensureClient(); err != nil {
+		return err
+	}
 
 	// 如果没有指定镜像，使用默认镜像
 	if d.image == "" {
@@ -545,6 +592,28 @@ func (d *DockerExecutor) setRegistry(registry string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.registry = registry
+}
+
+// setHost 设置 Docker daemon 地址（如 tcp://192.168.1.10:2375、ssh://user@host）。
+// 空字符串表示从环境变量读取（DOCKER_HOST 等）。
+func (d *DockerExecutor) setHost(host string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.host = host
+}
+
+// setTLSVerify 设置是否对 daemon 连接启用 TLS 校验
+func (d *DockerExecutor) setTLSVerify(verify bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.tlsVerify = verify
+}
+
+// setCertPath 设置 TLS 证书目录（目录内需含 ca.pem / cert.pem / key.pem）
+func (d *DockerExecutor) setCertPath(certPath string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.certPath = certPath
 }
 
 // setTTY 设置是否启用 TTY 模式

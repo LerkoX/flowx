@@ -22,9 +22,13 @@ func NewDockerAdapter() *DockerAdapter {
 
 // Config 配置适配器
 // 支持的配置项：
+//   - host: Docker daemon 地址 string（如 "tcp://192.168.1.10:2375"、"ssh://user@host"；
+//     未设置时读取环境变量 DOCKER_HOST，默认本机 unix socket）
+//   - tlsVerify: 是否对 daemon 连接启用 TLS 校验 bool（配合 host 使用）
+//   - certPath: TLS 证书目录 string（含 ca.pem/cert.pem/key.pem，默认 "~/.docker"）
 //   - registry: 镜像仓库地址
 //   - network: Docker网络模式
-//   - volumes: 卷挂载列表 []string{"/host:/container"}
+//   - volumes: 卷挂载列表 []string{"/host:/container"}（注意：远程 daemon 时为远端机器路径）
 //   - workdir: 工作目录
 //   - env: 环境变量 map[string]string
 //   - tty: 是否启用 TTY 模式 bool

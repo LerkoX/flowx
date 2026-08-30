@@ -46,6 +46,24 @@ var _ executor.Bridge = (*DockerBridge)(nil)
 
 // applyConfigToExecutor 将配置应用到执行器
 func applyConfigToExecutor(config map[string]any, executor *DockerExecutor) error {
+	// 应用host配置（远程 daemon 地址，如 tcp://192.168.1.10:2375 / ssh://user@host；
+	// 未设置时回退到环境变量 DOCKER_HOST）
+	if host, ok := getString(config, "host"); ok {
+		executor.setHost(host)
+	}
+
+	// 应用tlsVerify配置（配合 host 使用）
+	if tlsVerify, ok := config["tlsVerify"]; ok {
+		if b, ok := tlsVerify.(bool); ok {
+			executor.setTLSVerify(b)
+		}
+	}
+
+	// 应用certPath配置（TLS 证书目录，默认 ~/.docker）
+	if certPath, ok := getString(config, "certPath"); ok {
+		executor.setCertPath(certPath)
+	}
+
 	// 应用registry配置
 	if registry, ok := getString(config, "registry"); ok {
 		executor.setRegistry(registry)
