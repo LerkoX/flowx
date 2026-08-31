@@ -271,20 +271,47 @@ func (r *RuntimeImpl) Cancel(ctx context.Context, id string) error {
 	return nil
 }
 
-// RunAsync 执行异步流水线
+// RunAsync 执行异步流水线（完成后实例即从 Runtime 删除）
 func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
-	return r.runAsync(ctx, id, config, listener, false)
+	pipeline, err := r.preparePipeline(ctx, id, config, listener)
+	if err != nil {
+		return nil, err
+	}
+
+	// 异步执行流水线
+	go func() {
+		defer func() {
+			r.mu.Lock()
+			delete(r.pipelines, id)
+			r.mu.Unlock()
+		}()
+
+		if err := pipeline.Run(ctx); err != nil {
+			fmt.Printf("dag.Pipeline %s execution failed: %v\n", id, err)
+		}
+	}()
+
+	return pipeline, nil
 }
 
-// RunAsyncRetained 执行异步流水线并在完成后保留实例。
-// 保留的实例处于可修改状态（SUCCESS/FAILED/CANCELLED 等）时，
-// 可通过 ModifyGraph/UpdateConfig 修改图结构，再用 Rerun 继续运行新增节点。
-// 不再使用时调用 Rm(id) 释放，避免内存泄漏。
-func (r *RuntimeImpl) RunAsyncRetained(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
-	return r.runAsync(ctx, id, config, listener, true)
+// LoadPipeline 加载流水线配置但不运行。
+// 配置中携带的节点运行时状态（ExportConfig 导出的快照 YAML）会被恢复，
+// 并据节点状态推导流水线状态（FAILED > STOPPED > SUCCESS），使实例处于可修改状态；
+// 之后可通过 ModifyGraph/UpdateConfig 修改图，用 Rerun 继续运行（已终结节点跳过）。
+// 不再使用时调用 Rm(id) 释放。
+func (r *RuntimeImpl) LoadPipeline(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
+	pipeline, err := r.preparePipeline(ctx, id, config, listener)
+	if err != nil {
+		return nil, err
+	}
+	if impl, ok := pipeline.(*dag.PipelineImpl); ok {
+		impl.DeriveStatusFromNodes()
+	}
+	return pipeline, nil
 }
 
-func (r *RuntimeImpl) runAsync(ctx context.Context, id string, config string, listener dag.Listener, retain bool) (dag.Pipeline, error) {
+// preparePipeline 解析配置、构建图（含运行时状态恢复）、注册实例，但不启动执行
+func (r *RuntimeImpl) preparePipeline(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
 	// 提前获取 templateEngine，避免在持有写锁时调用 GetTemplateEngine 导致死锁
 	templateEngine := r.GetTemplateEngine()
 
@@ -351,21 +378,6 @@ func (r *RuntimeImpl) runAsync(ctx context.Context, id string, config string, li
 	r.pipelines[id] = pipeline
 	r.pipelineIds[id] = true
 	r.pipelineConfigs[id] = pipelineConfig
-
-	// 异步执行流水线
-	go func() {
-		if !retain {
-			defer func() {
-				r.mu.Lock()
-				delete(r.pipelines, id)
-				r.mu.Unlock()
-			}()
-		}
-
-		if err := pipeline.Run(ctx); err != nil {
-			fmt.Printf("dag.Pipeline %s execution failed: %v\n", id, err)
-		}
-	}()
 
 	return pipeline, nil
 }
@@ -481,6 +493,7 @@ func (r *RuntimeImpl) Rm(id string) {
 
 	delete(r.pipelines, id)
 	delete(r.pipelineConfigs, id)
+	delete(r.pipelineIds, id)
 }
 
 // Done runtime已经执行完成

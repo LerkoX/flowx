@@ -179,6 +179,44 @@ func (p *PipelineImpl) shouldSkipNode(node Node) bool {
 	}
 }
 
+// DeriveStatusFromNodes 根据节点运行时状态推导流水线状态。
+// 用于加载携带运行时状态的快照配置（LoadPipeline）后恢复可修改状态：
+// 有 FAILED 节点 → FAILED；有未终结节点 → STOPPED；全部成功 → SUCCESS。
+func (p *PipelineImpl) DeriveStatusFromNodes() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.status == core.StatusRunning || p.graph == nil {
+		return
+	}
+
+	hasFailed, hasIncomplete, hasSuccess := false, false, false
+	for _, node := range p.graph.Nodes() {
+		rs := node.GetRuntimeStatus()
+		switch {
+		case rs == nil:
+			hasIncomplete = true
+		case rs.Status == core.StatusFailed || rs.Status == core.StatusCancelled:
+			hasFailed = true
+		case rs.Status == core.StatusSuccess:
+			hasSuccess = true
+		default:
+			hasIncomplete = true
+		}
+	}
+
+	switch {
+	case hasFailed:
+		p.status = core.StatusFailed
+	case hasIncomplete:
+		p.status = core.StatusStopped
+	case hasSuccess:
+		p.status = core.StatusSuccess
+	default:
+		p.status = core.StatusStopped
+	}
+}
+
 // Pause 暂停流水线，等待当前层执行完成后暂停
 func (p *PipelineImpl) Pause() error {
 	p.pauseMu.Lock()
