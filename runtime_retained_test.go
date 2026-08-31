@@ -47,19 +47,34 @@ Nodes:
 		t.Fatalf("retained pipeline should still be registered: %v", err)
 	}
 
-	// 修改图：追加节点 B
-	mods := dag.GraphModifications{
-		AddNodes: []core.NodeConfig{
-			{
-				Name:     "B",
-				Executor: "local",
-				Steps:    []core.Step{{Name: "step1", Run: "echo B"}},
-			},
-		},
-		AddGraph: "stateDiagram-v2\n  [*] --> A\n  A --> B\n  B --> [*]",
-	}
-	if err := rt.ModifyGraph(ctx, "retained-rerun", mods); err != nil {
-		t.Fatalf("ModifyGraph failed: %v", err)
+	// 修改图：追加节点 B（走 UpdateConfig 全流程，覆盖步骤 ID 回填导致的误判回归）
+	newConfig := `
+Version: "1.0"
+Name: retained-rerun-test
+Executors:
+  local:
+    type: local
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> [*]
+Nodes:
+  A:
+    name: A
+    executor: local
+    steps:
+      - name: step1
+        run: echo A
+  B:
+    name: B
+    executor: local
+    steps:
+      - name: step1
+        run: echo B
+`
+	if err := rt.UpdateConfig(ctx, "retained-rerun", newConfig); err != nil {
+		t.Fatalf("UpdateConfig failed: %v", err)
 	}
 
 	// 继续运行：已完成的 A 应跳过，仅执行 B
