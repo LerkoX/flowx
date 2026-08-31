@@ -20,6 +20,13 @@ func (r *RuntimeImpl) buildGraph(config *core.PipelineConfig) dag.Graph {
 	// 创建节点
 	nodeMap := make(map[string]dag.Node)
 	for nodeName, nodeConfig := range config.Nodes {
+		// nodeConfig 是结构体副本，但 Steps 切片与 config.Nodes 共享底层数组，
+		// 先深拷贝再分配 ID，避免污染存储的配置（否则 UpdateConfig 比对时
+		// 旧配置步骤已带运行时 ID，与新解析的配置不相等，误判为节点被修改）
+		stepsCopy := make([]core.Step, len(nodeConfig.Steps))
+		copy(stepsCopy, nodeConfig.Steps)
+		nodeConfig.Steps = stepsCopy
+
 		// 初始状态：如果有 runtime 则用 runtime 的 status，否则用 core.StatusUnknown
 		initialStatus := core.StatusUnknown
 		if nodeConfig.Runtime != nil && nodeConfig.Runtime.Status != "" {
@@ -420,10 +427,12 @@ func validateImmutableFields(old, new *core.PipelineConfig) error {
 	if old.MaxLoopIterations != new.MaxLoopIterations {
 		return fmt.Errorf("%w: MaxLoopIterations cannot be updated", core.ErrImmutableField)
 	}
-	if !reflect.DeepEqual(old.Param, new.Param) {
+	// nil 与空 map 视为相等：首次运行经 renderConfig 后 Param 被归一化为非 nil
+	// 空 map，而新配置仅解析时为 nil，直接 DeepEqual 会误判
+	if !reflect.DeepEqual(emptyMapToNil(old.Param), emptyMapToNil(new.Param)) {
 		return fmt.Errorf("%w: Param cannot be updated", core.ErrImmutableField)
 	}
-	if !reflect.DeepEqual(old.Executors, new.Executors) {
+	if !reflect.DeepEqual(normalizeExecutors(old.Executors), normalizeExecutors(new.Executors)) {
 		return fmt.Errorf("%w: Executors cannot be updated", core.ErrImmutableField)
 	}
 	if !reflect.DeepEqual(old.Logging, new.Logging) {
@@ -432,10 +441,34 @@ func validateImmutableFields(old, new *core.PipelineConfig) error {
 	if !reflect.DeepEqual(old.AI, new.AI) {
 		return fmt.Errorf("%w: AI cannot be updated", core.ErrImmutableField)
 	}
-	if !reflect.DeepEqual(old.Metadate, new.Metadate) {
+	oldMeta, newMeta := old.Metadate, new.Metadate
+	oldMeta.Data = emptyMapToNil(oldMeta.Data)
+	newMeta.Data = emptyMapToNil(newMeta.Data)
+	if !reflect.DeepEqual(oldMeta, newMeta) {
 		return fmt.Errorf("%w: Metadate cannot be updated", core.ErrImmutableField)
 	}
 	return nil
+}
+
+// emptyMapToNil 将空 map 归一化为 nil（用于不可变字段的稳定比较）
+func emptyMapToNil(m map[string]interface{}) map[string]interface{} {
+	if len(m) == 0 {
+		return nil
+	}
+	return m
+}
+
+// normalizeExecutors 归一化 Executors 配置：空 map 为 nil、各 entry 的 Config 空 map 为 nil
+func normalizeExecutors(m map[string]core.ExecutorConfig) map[string]core.ExecutorConfig {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]core.ExecutorConfig, len(m))
+	for k, v := range m {
+		v.Config = emptyMapToNil(v.Config)
+		out[k] = v
+	}
+	return out
 }
 
 // computeNodeModifications 比对新旧节点配置，计算差异
@@ -505,7 +538,23 @@ func nodeConfigEqual(a, b core.NodeConfig) bool {
 	bCopy.Id = ""
 	aCopy.Name = ""
 	bCopy.Name = ""
+	// 忽略步骤 ID（运行时分配，非用户配置；buildGraph/ModifyGraph 会回填）
+	aCopy.Steps = stripStepIDs(aCopy.Steps)
+	bCopy.Steps = stripStepIDs(bCopy.Steps)
 	return reflect.DeepEqual(aCopy, bCopy)
+}
+
+// stripStepIDs 返回清空 Id 的步骤副本；空切片归一化为 nil 保证 DeepEqual 稳定
+func stripStepIDs(steps []core.Step) []core.Step {
+	if len(steps) == 0 {
+		return nil
+	}
+	out := make([]core.Step, len(steps))
+	copy(out, steps)
+	for i := range out {
+		out[i].Id = ""
+	}
+	return out
 }
 
 // isNodeExecuted 判断节点是否已经执行过
