@@ -2,8 +2,11 @@
 
 ## [Unreleased]
 
-- 新增 `RunAsyncRetained`：异步执行流水线并在完成后保留实例（`RunAsync` 会在完成时删除实例），保留的实例可通过 `ModifyGraph`/`UpdateConfig` 修改图结构后用 `Rerun` 继续运行；不再使用时调用 `Rm(id)` 释放
-- 新增 `Rerun`：重新运行已保留且处于可修改状态的流水线，已终结状态（SUCCESS/FAILED/CANCELLED）的节点自动跳过，仅执行新增/未运行节点，实现“运行结束后追加节点继续执行”
+- 新增 `LoadPipeline`：加载流水线配置（含 `ExportConfig` 快照中的节点运行时状态）但不运行，按节点状态推导流水线状态（FAILED > STOPPED > SUCCESS），随后可 `UpdateConfig` 改图、`Rerun` 增量续跑——支持进程重启后从快照恢复已完成的流水线
+- 新增 `Rerun`：重新运行处于可修改状态的流水线，已终结状态（SUCCESS/FAILED/CANCELLED）的节点自动跳过，仅执行新增/未运行节点
+- 修复 `Rm` 未释放 `pipelineIds`，同进程无法同名重建实例的问题
+- 修复 `buildGraph` 复用 `config.Nodes` 的 Steps 切片回填运行时 ID 污染存储配置，导致 `UpdateConfig` 误判未修改节点的问题（深拷贝 Steps；`nodeConfigEqual` 忽略步骤 ID）
+- 修复 `validateImmutableFields` 将 nil 与空 map/切片误判为不等（Param、Logging.Headers、AI.Constraints、Metadate.Data、Executors.Config）
 - Docker executor 支持远程 daemon：`host`（tcp://… 或 ssh://user@host，未设置时回退 DOCKER_HOST）、`tlsVerify`、`certPath` 配置
 
 ## [Unreleased] - 2026-04-07

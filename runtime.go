@@ -14,11 +14,13 @@ type Runtime interface {
 	Get(id string) (dag.Pipeline, error)
 	//取消运行中的流水线
 	Cancel(ctx context.Context, id string) error
-	//执行异步流水线
+	//执行异步流水线（完成后实例即从 Runtime 删除）
 	RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)
-	//执行异步流水线并在完成后保留实例，支持后续 ModifyGraph/UpdateConfig 修改图后用 Rerun 继续运行
-	RunAsyncRetained(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)
-	//重新运行已完成且被保留的流水线（已终结状态的节点跳过，仅执行新增/未运行节点）
+	//加载流水线但不运行：恢复配置中的节点运行时状态并推导流水线状态，
+	//之后可通过 ModifyGraph/UpdateConfig 修改图，用 Rerun 继续运行。
+	//用于从运行结束时导出的快照 YAML（ExportConfig）重建已完成的流水线
+	LoadPipeline(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)
+	//重新运行处于可修改状态的流水线（已终结状态的节点跳过，仅执行新增/未运行节点）
 	Rerun(ctx context.Context, id string) error
 	//执行同步流水线
 	RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)

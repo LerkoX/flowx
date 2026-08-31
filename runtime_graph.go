@@ -435,10 +435,24 @@ func validateImmutableFields(old, new *core.PipelineConfig) error {
 	if !reflect.DeepEqual(normalizeExecutors(old.Executors), normalizeExecutors(new.Executors)) {
 		return fmt.Errorf("%w: Executors cannot be updated", core.ErrImmutableField)
 	}
-	if !reflect.DeepEqual(old.Logging, new.Logging) {
+	oldLog, newLog := old.Logging, new.Logging
+	if len(oldLog.Headers) == 0 {
+		oldLog.Headers = nil
+	}
+	if len(newLog.Headers) == 0 {
+		newLog.Headers = nil
+	}
+	if !reflect.DeepEqual(oldLog, newLog) {
 		return fmt.Errorf("%w: Logging cannot be updated", core.ErrImmutableField)
 	}
-	if !reflect.DeepEqual(old.AI, new.AI) {
+	oldAI, newAI := old.AI, new.AI
+	if len(oldAI.Constraints) == 0 {
+		oldAI.Constraints = nil
+	}
+	if len(newAI.Constraints) == 0 {
+		newAI.Constraints = nil
+	}
+	if !reflect.DeepEqual(oldAI, newAI) {
 		return fmt.Errorf("%w: AI cannot be updated", core.ErrImmutableField)
 	}
 	oldMeta, newMeta := old.Metadate, new.Metadate
