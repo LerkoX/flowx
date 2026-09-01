@@ -288,7 +288,7 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	// 检查是否应该跳过此节点
 	if p.shouldSkipNode(node) {
 		fmt.Printf("Skipping node %s (status: %s)\n", node.Id(), node.GetRuntimeStatus().Status)
-		p.NotifyEvent(PipelineNodeFinish)
+		p.NotifyEventForNode(PipelineNodeFinish, node)
 		return nil
 	}
 
@@ -298,14 +298,14 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	p.mu.Unlock()
 
 	// 通知节点开始
-	p.NotifyEvent(PipelineNodeStart)
+	p.NotifyEventForNode(PipelineNodeStart, node)
 	fmt.Printf("Executing node: %s\n", node.Id())
 
 	// 获取节点的executor配置
 	executorName := node.GetExecutor()
 	if executorName == "" {
 		fmt.Printf("Node %s has no executor configured, skipping\n", node.Id())
-		p.NotifyEvent(PipelineNodeFinish)
+		p.NotifyEventForNode(PipelineNodeFinish, node)
 		// 清理当前节点
 		p.mu.Lock()
 		p.currentNode = nil
@@ -328,7 +328,7 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	if err := p.executeNode(ctx, node, exec); err != nil {
 		fmt.Printf("Node %s execution failed: %v\n", node.Id(), err)
 		// 节点执行失败时触发 PipelineNodeFailed 事件
-		p.NotifyEvent(PipelineNodeFailed)
+		p.NotifyEventForNode(PipelineNodeFailed, node)
 		// 清理当前节点
 		p.mu.Lock()
 		p.currentNode = nil
@@ -337,7 +337,7 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	}
 
 	// 通知节点完成
-	p.NotifyEvent(PipelineNodeFinish)
+	p.NotifyEventForNode(PipelineNodeFinish, node)
 
 	// 清理当前节点
 	p.mu.Lock()

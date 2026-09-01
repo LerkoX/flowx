@@ -180,7 +180,11 @@ func (r *RuntimeImpl) extractExpression(label string) string {
 		return ""
 	}
 
-	engine := r.getTemplateEngine()
+	// 不能用 r.getTemplateEngine()：buildGraph 可能在持有 r.mu 写锁的
+	// preparePipeline 中被调用，内部再 RLock 会自死锁；
+	// ModifyGraph 路径持读锁时若有写者等待也会死锁。
+	// Validate 是无状态语法校验，与包级 ExtractExpression 一致，直接新建引擎。
+	engine := template.NewPongo2TemplateEngine()
 
 	// 使用模板引擎验证label是否是有效的模板表达式
 	if err := engine.Validate(label); err == nil {

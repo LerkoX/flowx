@@ -324,6 +324,27 @@ func (p *PipelineImpl) Notify() {
 	}
 }
 
+// NotifyEventForNode 通知与特定节点关联的事件。
+// 并行执行时 p.currentNode 会被多个 goroutine 交替覆盖/清空，
+// 直接在快照上指定节点，避免监听器经 CurrentNode() 拿到错乱的节点。
+func (p *PipelineImpl) NotifyEventForNode(event Event, node Node) {
+	p.mu.RLock()
+	listener := p.listener
+	listening := p.listening
+	snapshot := newPipelineSnapshot(p)
+	p.mu.RUnlock()
+
+	snapshot.currentNode = node
+
+	if listener != nil {
+		listener.Handle(snapshot, event)
+	}
+
+	if listening != nil {
+		listening(snapshot)
+	}
+}
+
 // NotifyEvent 通知监听器特定事件
 func (p *PipelineImpl) NotifyEvent(event Event) {
 	p.mu.RLock()
