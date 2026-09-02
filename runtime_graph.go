@@ -265,10 +265,11 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 			nodeConfigMap["extract"] = nodeConfig.Extract
 		}
 
-		// 使用 Name 作为节点 ID（与 buildGraph 一致）
-		nodeName := nodeConfig.Name
+		// 节点 ID 优先使用 Id（computeNodeModifications 已填入 Nodes map key，
+		// 与 buildGraph 使用 map key 的语义一致）；Name 为显示名，仅作回退
+		nodeName := nodeConfig.Id
 		if nodeName == "" {
-			nodeName = nodeConfig.Id
+			nodeName = nodeConfig.Name
 		}
 
 		node := dag.NewDGANodeWithConfig(
@@ -340,9 +341,9 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 			delete(config.Nodes, nodeID)
 		}
 		for _, nodeConfig := range modifications.AddNodes {
-			nodeName := nodeConfig.Name
+			nodeName := nodeConfig.Id
 			if nodeName == "" {
-				nodeName = nodeConfig.Id
+				nodeName = nodeConfig.Name
 			}
 			config.Nodes[nodeName] = nodeConfig
 		}
@@ -436,8 +437,8 @@ func validateImmutableFields(old, new *core.PipelineConfig) error {
 	if !reflect.DeepEqual(emptyMapToNil(old.Param), emptyMapToNil(new.Param)) {
 		return fmt.Errorf("%w: Param cannot be updated", core.ErrImmutableField)
 	}
-	if !reflect.DeepEqual(normalizeExecutors(old.Executors), normalizeExecutors(new.Executors)) {
-		return fmt.Errorf("%w: Executors cannot be updated", core.ErrImmutableField)
+	if err := validateExecutorsAdditive(old.Executors, new.Executors); err != nil {
+		return err
 	}
 	oldLog, newLog := old.Logging, new.Logging
 	if len(oldLog.Headers) == 0 {
@@ -474,6 +475,23 @@ func emptyMapToNil(m map[string]interface{}) map[string]interface{} {
 		return nil
 	}
 	return m
+}
+
+// validateExecutorsAdditive 校验执行器变更：快照中已有的条目不可修改/删除，
+// 但允许新增条目（续跑追加的节点可能引入快照之外类型的执行器，如 docker）
+func validateExecutorsAdditive(old, new map[string]core.ExecutorConfig) error {
+	normOld := normalizeExecutors(old)
+	normNew := normalizeExecutors(new)
+	for name, oldExec := range normOld {
+		newExec, ok := normNew[name]
+		if !ok {
+			return fmt.Errorf("%w: executor %q cannot be removed", core.ErrImmutableField, name)
+		}
+		if !reflect.DeepEqual(oldExec, newExec) {
+			return fmt.Errorf("%w: executor %q cannot be modified", core.ErrImmutableField, name)
+		}
+	}
+	return nil
 }
 
 // normalizeExecutors 归一化 Executors 配置：空 map 为 nil、各 entry 的 Config 空 map 为 nil
@@ -516,7 +534,10 @@ func (r *RuntimeImpl) computeNodeModifications(oldConfig, newConfig *core.Pipeli
 
 	// 找新增/修改的节点
 	for nodeName, newNodeConfig := range newNodes {
-		// 确保 Name 字段与 map key 一致（与 buildGraph 行为一致）
+		// 节点身份以 Nodes map key 为准（与 buildGraph 一致）：Name 是显示名，
+		// nodeRef 展开后可能与 map key 不同（如 echo 包显示名「回声」），
+		// 若用 Name 当 ID 会导致多个追加节点坍缩为同一节点
+		newNodeConfig.Id = nodeName
 		if newNodeConfig.Name == "" {
 			newNodeConfig.Name = nodeName
 		}
