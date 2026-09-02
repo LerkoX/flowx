@@ -450,3 +450,51 @@ func TestFilterURLDecode_Invalid(t *testing.T) {
 		t.Error("Expected error for invalid URL encoding")
 	}
 }
+
+// TestPongo2TemplateEngine_EvaluateBool_DottedContextKeys 验证 context 含扁平点键时
+// 条件表达式评估不再因 pongo2 键校验失败（续跑场景的历史 metadata 点键兜底过滤）
+func TestPongo2TemplateEngine_EvaluateBool_DottedContextKeys(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{
+		"iteration": 1,
+		"b1_4.text": "分支1 第4步",
+	}
+
+	result, err := engine.EvaluateBool("{{ iteration < 3 }}", ctx)
+	if err != nil {
+		t.Fatalf("EvaluateBool should not fail with dotted context keys: %v", err)
+	}
+	if !result {
+		t.Error("Expected true for '1 < 3'")
+	}
+
+	result, err = engine.EvaluateBool("{{ iteration < 3 }}", map[string]any{
+		"iteration": 3,
+		"b1_4.text": "x",
+	})
+	if err != nil {
+		t.Fatalf("EvaluateBool should not fail with dotted context keys: %v", err)
+	}
+	if result {
+		t.Error("Expected false for '3 < 3'")
+	}
+}
+
+// TestPongo2TemplateEngine_EvaluateString_DottedContextKeys 验证含扁平点键的 context
+// 不影响模板渲染，且嵌套结构中的同名值仍可正常引用
+func TestPongo2TemplateEngine_EvaluateString_DottedContextKeys(t *testing.T) {
+	engine := NewPongo2TemplateEngine()
+	ctx := map[string]any{
+		"b1_4.text": "扁平死键",
+		"b1_4":      map[string]any{"text": "嵌套值"},
+		"city":      "深圳",
+	}
+
+	result, err := engine.EvaluateString("{{ b1_4.text }} - {{ city }}", ctx)
+	if err != nil {
+		t.Fatalf("EvaluateString should not fail with dotted context keys: %v", err)
+	}
+	if result != "嵌套值 - 深圳" {
+		t.Errorf("Expected '嵌套值 - 深圳', got '%s'", result)
+	}
+}

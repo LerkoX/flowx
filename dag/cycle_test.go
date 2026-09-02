@@ -2,6 +2,7 @@ package dag
 
 import (
 	"context"
+	"github.com/LerkoX/flowx/metadata"
 	"sync"
 	"testing"
 
@@ -110,6 +111,8 @@ func TestDGAGraph_BuildForwardGraph(t *testing.T) {
 }
 
 // TestDGAGraph_LoopNodeSet 测试循环节点集合计算
+// 循环体 = 从回边 target 正向可达、且能正向回到 source 的节点；
+// source 之后的下游节点（D）不属于循环体，不应被重置重跑
 func TestDGAGraph_LoopNodeSet(t *testing.T) {
 	graph := NewDGAGraph()
 
@@ -131,11 +134,52 @@ func TestDGAGraph_LoopNodeSet(t *testing.T) {
 
 	loopNodes := graph.LoopNodeSet(backEdge)
 
-	// 循环节点应包含 A, B, C, D
-	// BFS 从 target=A 出发，沿正向边可达 B, C, D，source=C 也被显式添加
-	for _, id := range []string{"A", "B", "C", "D"} {
+	// 循环节点应包含 A, B, C（循环体），不包含出口下游节点 D
+	for _, id := range []string{"A", "B", "C"} {
 		if !loopNodes[id] {
 			t.Errorf("Loop node set should contain %s", id)
+		}
+	}
+	if loopNodes["D"] {
+		t.Error("Loop node set should not contain exit-downstream node D")
+	}
+}
+
+// TestDGAGraph_LoopExitNodeSet 测试循环出口下游节点集合计算
+func TestDGAGraph_LoopExitNodeSet(t *testing.T) {
+	graph := NewDGAGraph()
+
+	nodeA := NewDGANodeWithConfig("A", core.StatusUnknown, "local", "", nil, nil)
+	nodeB := NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", nil, nil)
+	nodeC := NewDGANodeWithConfig("C", core.StatusUnknown, "local", "", nil, nil)
+	nodeD := NewDGANodeWithConfig("D", core.StatusUnknown, "local", "", nil, nil)
+	nodeE := NewDGANodeWithConfig("E", core.StatusUnknown, "local", "", nil, nil)
+
+	graph.AddVertex(nodeA)
+	graph.AddVertex(nodeB)
+	graph.AddVertex(nodeC)
+	graph.AddVertex(nodeD)
+	graph.AddVertex(nodeE)
+
+	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
+	graph.AddEdge(NewDGAEdge(nodeB, nodeC))
+	backEdge := NewConditionalEdge(nodeC, nodeA, "{{ iteration < 5 }}")
+	graph.AddEdge(backEdge)
+	graph.AddEdge(NewDGAEdge(nodeC, nodeD))
+	graph.AddEdge(NewDGAEdge(nodeD, nodeE))
+
+	exitNodes := graph.LoopExitNodeSet([]Edge{backEdge})
+
+	// 出口下游节点应包含 D, E（source=C 正向可达且不在循环体内）
+	for _, id := range []string{"D", "E"} {
+		if !exitNodes[id] {
+			t.Errorf("Loop exit node set should contain %s", id)
+		}
+	}
+	// 循环体节点 A, B, C 不应出现在出口集合中
+	for _, id := range []string{"A", "B", "C"} {
+		if exitNodes[id] {
+			t.Errorf("Loop exit node set should not contain loop body node %s", id)
 		}
 	}
 }
@@ -228,6 +272,82 @@ func TestCyclicPipeline_MaxIterations(t *testing.T) {
 	t.Logf("Got expected error: %v", err)
 }
 
+// nodeStartRecorder 记录节点启动顺序的监听器
+type nodeStartRecorder struct {
+	mu     sync.Mutex
+	starts []string
+}
+
+func (r *nodeStartRecorder) Handle(p Pipeline, event Event) {
+	if event != PipelineNodeStart {
+		return
+	}
+	node := p.CurrentNode()
+	if node == nil {
+		return
+	}
+	r.mu.Lock()
+	r.starts = append(r.starts, node.Id())
+	r.mu.Unlock()
+}
+
+func (r *nodeStartRecorder) Events() []Event {
+	return []Event{PipelineNodeStart}
+}
+
+// TestCyclicPipeline_ExitNodesRunAfterLoop 验证循环出口下游节点推迟到循环结束后执行
+// 图：A -> B -> C -(回边 {{ iteration < 3 }})-> A，C -> D
+// 预期执行顺序：A B C A B C A B C D（循环体执行 3 次，D 仅在循环退出后执行一次）
+func TestCyclicPipeline_ExitNodesRunAfterLoop(t *testing.T) {
+	ctx := context.Background()
+
+	graph := NewDGAGraph()
+	nodeA := NewDGANodeWithConfig("A", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeB := NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo B"}}, nil)
+	nodeC := NewDGANodeWithConfig("C", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo C"}}, nil)
+	nodeD := NewDGANodeWithConfig("D", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo D"}}, nil)
+	graph.AddVertex(nodeA)
+	graph.AddVertex(nodeB)
+	graph.AddVertex(nodeC)
+	graph.AddVertex(nodeD)
+
+	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
+	graph.AddEdge(NewDGAEdge(nodeB, nodeC))
+	graph.AddEdge(NewConditionalEdge(nodeC, nodeA, "{{ iteration < 3 }}"))
+	graph.AddEdge(NewDGAEdge(nodeC, nodeD))
+
+	pipeline := NewPipeline(ctx).(*PipelineImpl)
+	pipeline.SetGraph(graph)
+	pipeline.SetMaxLoopIterations(10)
+
+	execProvider := provider.NewProvider()
+	execProvider.RegisterExecutor("local", provider.ExecutorConfig{
+		Type:   "local",
+		Config: map[string]interface{}{},
+	})
+	pipeline.SetExecutorProvider(execProvider)
+
+	recorder := &nodeStartRecorder{}
+	pipeline.Listening(recorder)
+
+	if err := pipeline.Run(ctx); err != nil {
+		t.Fatalf("Pipeline run failed: %v", err)
+	}
+
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+
+	expected := []string{"A", "B", "C", "A", "B", "C", "A", "B", "C", "D"}
+	if len(recorder.starts) != len(expected) {
+		t.Fatalf("Expected %d node starts %v, got %d: %v",
+			len(expected), expected, len(recorder.starts), recorder.starts)
+	}
+	for i, id := range expected {
+		if recorder.starts[i] != id {
+			t.Fatalf("Position %d: expected %s, got %s (full order: %v)", i, id, recorder.starts[i], recorder.starts)
+		}
+	}
+}
 
 // TestDGAGraph_Traversal_CyclicGraph 测试统一遍历算法在有环图上的回调遍历
 // 验证 Traversal 使用 forwardGraph（排除回边）计算层级，正确遍历所有节点
@@ -477,5 +597,64 @@ func TestDGAGraph_TraversalSteps_WithEntryNodes(t *testing.T) {
 	}
 	if levels[0][0] != "A" {
 		t.Errorf("Level 0 should start with entry node A, got %v", levels[0])
+	}
+}
+
+// TestCyclicPipeline_BackEdgeWithDottedMetadataKeys 复现续跑场景（studio 执行 96）：
+// LoadExecution 注入的历史 metadata 为扁平点键（NodeId.key），Run 启动时把 store
+// 全量加载进求值上下文；回边条件评估不应因 pongo2 非法键校验而失败
+func TestCyclicPipeline_BackEdgeWithDottedMetadataKeys(t *testing.T) {
+	ctx := context.Background()
+
+	graph := NewDGAGraph()
+	nodeA := NewDGANodeWithConfig("A", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
+	nodeB := NewDGANodeWithConfig("B", core.StatusUnknown, "local", "", []core.Step{{Name: "step1", Run: "echo B"}}, nil)
+	graph.AddVertex(nodeA)
+	graph.AddVertex(nodeB)
+	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
+	graph.AddEdge(NewConditionalEdge(nodeB, nodeA, "{{ iteration < 3 }}"))
+
+	pipeline := NewPipeline(ctx).(*PipelineImpl)
+	pipeline.SetGraph(graph)
+	pipeline.SetMaxLoopIterations(10)
+
+	// 模拟续跑注入：含扁平点键的历史 metadata
+	store, err := metadata.NewInConfigMetadataStore(core.MetadataConfig{
+		Type: "in-config",
+		Data: map[string]interface{}{
+			"A.text":    "历史输出",
+			"b1_4.text": "分支1 第4步",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create metadata store: %v", err)
+	}
+	pipeline.SetMetadata(store)
+
+	execProvider := provider.NewProvider()
+	execProvider.RegisterExecutor("local", provider.ExecutorConfig{
+		Type:   "local",
+		Config: map[string]interface{}{},
+	})
+	pipeline.SetExecutorProvider(execProvider)
+
+	recorder := &nodeStartRecorder{}
+	pipeline.Listening(recorder)
+
+	if err := pipeline.Run(ctx); err != nil {
+		t.Fatalf("Pipeline run with dotted metadata keys failed: %v", err)
+	}
+
+	// 循环体应执行 3 次：A B A B A B
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	expected := []string{"A", "B", "A", "B", "A", "B"}
+	if len(recorder.starts) != len(expected) {
+		t.Fatalf("Expected %v, got %v", expected, recorder.starts)
+	}
+	for i, id := range expected {
+		if recorder.starts[i] != id {
+			t.Fatalf("Position %d: expected %s, got %s (full: %v)", i, id, recorder.starts[i], recorder.starts)
+		}
 	}
 }
