@@ -392,37 +392,82 @@ func (dga *DGAGraph) buildForwardGraph() map[string][]string {
 }
 
 // LoopNodeSet 计算回边涉及的循环节点集合
-// 从回边的 target 出发，沿 forward edges BFS 到达 source 为止的所有节点
+// 循环体 = 从回边 target 沿正向边可达、且能沿正向边到达 source 的节点集合
+// （循环出口下游节点如 source 之后的 tail 链不在集合内，不会被重置重跑）
 func (dga *DGAGraph) LoopNodeSet(backEdge Edge) map[string]bool {
 	dga.mu.RLock()
 	defer dga.mu.RUnlock()
+	return dga.loopNodeSetUnlocked(backEdge)
+}
 
+// loopNodeSetUnlocked 计算循环节点集合（无锁版本）
+func (dga *DGAGraph) loopNodeSetUnlocked(backEdge Edge) map[string]bool {
 	target := backEdge.Target().Id()
 	source := backEdge.Source().Id()
 
-	result := make(map[string]bool)
 	forwardGraph := dga.buildForwardGraph()
 
-	// BFS 从 target 出发，收集可达的所有节点
-	queue := []string{target}
-	visited := map[string]bool{target: true}
+	// 从 target 出发沿正向边可达的节点
+	reachableFromTarget := bfsReachable(forwardGraph, target)
 
+	// 能沿正向边到达 source 的节点（在反向图上从 source BFS）
+	reverseGraph := make(map[string][]string)
+	for src, dests := range forwardGraph {
+		for _, dest := range dests {
+			reverseGraph[dest] = append(reverseGraph[dest], src)
+		}
+	}
+	canReachSource := bfsReachable(reverseGraph, source)
+
+	// 循环体 = 两集合交集；source 与 target 自身始终在集合中
+	result := make(map[string]bool)
+	for id := range reachableFromTarget {
+		if canReachSource[id] {
+			result[id] = true
+		}
+	}
+	result[source] = true
+	result[target] = true
+	return result
+}
+
+// LoopExitNodeSet 计算循环出口下游节点集合：
+// 从回边 source 沿正向边可达、但不属于任何循环体的节点。
+// 这些节点应在循环条件不满足退出后再执行，而非循环迭代期间反复执行
+func (dga *DGAGraph) LoopExitNodeSet(backEdges []Edge) map[string]bool {
+	dga.mu.RLock()
+	defer dga.mu.RUnlock()
+
+	forwardGraph := dga.buildForwardGraph()
+	result := make(map[string]bool)
+	for _, backEdge := range backEdges {
+		for id := range bfsReachable(forwardGraph, backEdge.Source().Id()) {
+			result[id] = true
+		}
+	}
+	// 剔除循环体节点（循环体节点需要每轮重跑，不属于出口下游）
+	for _, backEdge := range backEdges {
+		for id := range dga.loopNodeSetUnlocked(backEdge) {
+			delete(result, id)
+		}
+	}
+	return result
+}
+
+// bfsReachable 从 start 出发沿邻接表 BFS，返回所有可达节点（含 start 自身）
+func bfsReachable(adj map[string][]string, start string) map[string]bool {
+	result := map[string]bool{start: true}
+	queue := []string{start}
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
-		result[current] = true
-
-		for _, next := range forwardGraph[current] {
-			if !visited[next] {
-				visited[next] = true
+		for _, next := range adj[current] {
+			if !result[next] {
+				result[next] = true
 				queue = append(queue, next)
 			}
 		}
 	}
-
-	// source 也应该在集合中
-	result[source] = true
-
 	return result
 }
 

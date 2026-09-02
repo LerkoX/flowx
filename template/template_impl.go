@@ -5,11 +5,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/flosch/pongo2/v6"
 	"gopkg.in/yaml.v3"
 )
+
+// rePongo2Identifiers 与 pongo2 context.checkForValidIdentifiers 相同的校验规则
+var rePongo2Identifiers = regexp.MustCompile("^[a-zA-Z0-9_]+$")
+
+// sanitizeContext 过滤 pongo2 不接受的非法 context 键（如 NodeID.key 扁平点键）。
+// 这类键在 pongo2 中本就无法被引用（模板中 a.b 永远解析为对 map a 的属性访问），
+// 而 pongo2 的键校验是致命的——一个坏键会导致整个求值失败，这里做最后兜底
+func sanitizeContext(ctx map[string]any) map[string]any {
+	for k := range ctx {
+		if !rePongo2Identifiers.MatchString(k) {
+			filtered := make(map[string]any, len(ctx))
+			for key, val := range ctx {
+				if rePongo2Identifiers.MatchString(key) {
+					filtered[key] = val
+				}
+			}
+			return filtered
+		}
+	}
+	return ctx
+}
 
 // 预检查Pongo2TemplateEngine是否实现了TemplateEngine接口
 var _ TemplateEngine = (*Pongo2TemplateEngine)(nil)
@@ -178,7 +200,7 @@ func (e *Pongo2TemplateEngine) EvaluateBool(expression string, ctx map[string]an
 	}
 
 	// 执行模板
-	result, err := template.Execute(ctx)
+	result, err := template.Execute(sanitizeContext(ctx))
 	if err != nil {
 		return false, fmt.Errorf("failed to execute expression '%s': %w", expression, err)
 	}
@@ -195,7 +217,7 @@ func (e *Pongo2TemplateEngine) EvaluateString(expression string, ctx map[string]
 		return "", fmt.Errorf("failed to parse expression '%s': %w", expression, err)
 	}
 
-	result, err := tmpl.Execute(ctx)
+	result, err := tmpl.Execute(sanitizeContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("failed to execute expression '%s': %w", expression, err)
 	}

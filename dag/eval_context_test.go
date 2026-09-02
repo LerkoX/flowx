@@ -334,3 +334,34 @@ func TestDGAEvaluationContext_WithPipeline_DoesNotModifyOriginal(t *testing.T) {
 		t.Error("New context should have pipelineId")
 	}
 }
+
+// TestDGAEvaluationContext_All_DottedKeysNested 验证基础数据中的扁平点键
+// 经 All() 转换为嵌套结构（续跑场景：历史 metadata 点键经 WithParams 进入基础数据），
+// 不再以原始点键形式出现在 context 中（pongo2 要求合法标识符键）
+func TestDGAEvaluationContext_All_DottedKeysNested(t *testing.T) {
+	ctx := NewEvaluationContext().WithParams(map[string]any{
+		"b1_4.text": "分支1 第4步",
+		"plain":     "value",
+	})
+
+	all := ctx.All()
+
+	// 原始点键不应出现在 context 中
+	if _, exists := all["b1_4.text"]; exists {
+		t.Error("Dotted key 'b1_4.text' should not appear as flat key in context")
+	}
+
+	// 应转换为嵌套结构，值可正常访问
+	nodeObj, ok := all["b1_4"].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected nested map for 'b1_4', got %T", all["b1_4"])
+	}
+	if nodeObj["text"] != "分支1 第4步" {
+		t.Errorf("Expected b1_4.text='分支1 第4步', got '%v'", nodeObj["text"])
+	}
+
+	// 普通键不受影响
+	if all["plain"] != "value" {
+		t.Errorf("Expected plain='value', got '%v'", all["plain"])
+	}
+}

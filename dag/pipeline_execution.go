@@ -107,7 +107,8 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 
 // runLevelByLevel 逐层执行 BFS 遍历，支持暂停/恢复和循环图
 // 无环图：执行完所有层级后直接返回
-// 有环图：执行完所有层级后评估回边条件，满足则重置循环节点并继续迭代
+// 有环图：每轮迭代执行循环体并评估回边条件，满足则重置循环节点继续迭代；
+// 循环出口下游节点（回边 source 之后的非循环体节点）推迟到循环退出后再执行
 func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, evalCtx EvaluationContext, startLevel int) error {
 	iteration := 0
 	p.mu.RLock()
@@ -117,96 +118,23 @@ func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, 
 	for {
 		evalCtx = evalCtx.WithIteration(iteration)
 
-		// 计算初始层级
-		levels := dgaGraph.TraversalSteps(evalCtx)
-		if len(levels) == 0 {
-			return nil
-		}
-
-		var firstErr error
-		levelIdx := startLevel
-
-		for levelIdx < len(levels) {
-			// 检查暂停信号
-			p.pauseMu.Lock()
-			for p.status == core.StatusPaused {
-				// 保存当前层级并进入暂停状态
-				p.mu.Lock()
-				p.currentLevel = levelIdx
-				p.mu.Unlock()
-				p.NotifyEvent(PipelinePaused)
-
-				// 等待恢复信号
-				p.pauseCond.Wait()
-
-				// 恢复运行
-				p.mu.Lock()
-				p.status = core.StatusRunning
-				p.mu.Unlock()
-				p.NotifyEvent(PipelineResumed)
-
-				// 重新计算层级（图可能已被修改）
-				levels = dgaGraph.TraversalSteps(evalCtx)
-				if levelIdx >= len(levels) {
-					p.pauseMu.Unlock()
-					return nil
-				}
-			}
-			p.pauseMu.Unlock()
-
-			// 检查 context 是否已取消
-			select {
-			case <-ctx.Done():
-				p.mu.Lock()
-				p.status = core.StatusCancelled
-				p.mu.Unlock()
-				return ctx.Err()
-			default:
-			}
-
-			// 执行当前层级的所有节点
-			level := levels[levelIdx]
-			var wg sync.WaitGroup
-			var errMu sync.Mutex
-
-			for _, nodeID := range level {
-				node, exists := dgaGraph.GetNode(nodeID)
-				if !exists {
-					continue
-				}
-
-				wg.Add(1)
-				go func(n Node) {
-					defer wg.Done()
-					if err := p.executeNodeWithLifecycle(ctx, n); err != nil {
-						errMu.Lock()
-						if firstErr == nil {
-							firstErr = err
-						}
-						errMu.Unlock()
-					}
-				}(node)
-			}
-			wg.Wait()
-
-			if firstErr != nil {
-				return firstErr
-			}
-
-			levelIdx++
-
-			// 当前层执行完毕后，重新计算后续层级（确保条件边能获取到最新的 metadata）
-			if levelIdx < len(levels) {
-				levels = dgaGraph.TraversalSteps(evalCtx)
-			}
-		}
-
-		// 循环检测：评估回边条件
 		backEdges := dgaGraph.BackEdges()
+
+		// 有环图：迭代期间排除循环出口下游节点，待循环退出后统一执行
+		var exclude map[string]bool
+		if len(backEdges) > 0 {
+			exclude = dgaGraph.LoopExitNodeSet(backEdges)
+		}
+
+		if err := p.executeLevels(ctx, dgaGraph, evalCtx, startLevel, exclude); err != nil {
+			return err
+		}
+
 		if len(backEdges) == 0 {
 			return nil // 无环图：直接返回
 		}
 
+		// 循环检测：评估回边条件
 		shouldContinue := false
 		var activeLoopNodes map[string]bool
 
@@ -231,7 +159,11 @@ func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, 
 		}
 
 		if !shouldContinue {
-			return nil // 条件不满足：循环结束
+			// 循环结束：执行此前推迟的循环出口下游节点（其余节点已终结会被跳过）
+			if len(exclude) > 0 {
+				return p.executeLevels(ctx, dgaGraph, evalCtx, 0, nil)
+			}
+			return nil
 		}
 
 		iteration++
@@ -243,6 +175,116 @@ func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, 
 		p.resetLoopNodes(dgaGraph, activeLoopNodes)
 		startLevel = 0 // 从头开始遍历
 	}
+}
+
+// executeLevels 逐层执行 BFS 层级计划
+// exclude 非空时从层级计划中排除指定节点（用于循环迭代期间推迟循环出口下游节点）
+func (p *PipelineImpl) executeLevels(ctx context.Context, dgaGraph *DGAGraph, evalCtx EvaluationContext, startLevel int, exclude map[string]bool) error {
+	// 计算初始层级
+	levels := filterLevels(dgaGraph.TraversalSteps(evalCtx), exclude)
+	if len(levels) == 0 {
+		return nil
+	}
+
+	var firstErr error
+	levelIdx := startLevel
+
+	for levelIdx < len(levels) {
+		// 检查暂停信号
+		p.pauseMu.Lock()
+		for p.status == core.StatusPaused {
+			// 保存当前层级并进入暂停状态
+			p.mu.Lock()
+			p.currentLevel = levelIdx
+			p.mu.Unlock()
+			p.NotifyEvent(PipelinePaused)
+
+			// 等待恢复信号
+			p.pauseCond.Wait()
+
+			// 恢复运行
+			p.mu.Lock()
+			p.status = core.StatusRunning
+			p.mu.Unlock()
+			p.NotifyEvent(PipelineResumed)
+
+			// 重新计算层级（图可能已被修改）
+			levels = filterLevels(dgaGraph.TraversalSteps(evalCtx), exclude)
+			if levelIdx >= len(levels) {
+				p.pauseMu.Unlock()
+				return nil
+			}
+		}
+		p.pauseMu.Unlock()
+
+		// 检查 context 是否已取消
+		select {
+		case <-ctx.Done():
+			p.mu.Lock()
+			p.status = core.StatusCancelled
+			p.mu.Unlock()
+			return ctx.Err()
+		default:
+		}
+
+		// 执行当前层级的所有节点
+		level := levels[levelIdx]
+		var wg sync.WaitGroup
+		var errMu sync.Mutex
+
+		for _, nodeID := range level {
+			node, exists := dgaGraph.GetNode(nodeID)
+			if !exists {
+				continue
+			}
+
+			wg.Add(1)
+			go func(n Node) {
+				defer wg.Done()
+				if err := p.executeNodeWithLifecycle(ctx, n); err != nil {
+					errMu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					errMu.Unlock()
+				}
+			}(node)
+		}
+		wg.Wait()
+
+		if firstErr != nil {
+			return firstErr
+		}
+
+		levelIdx++
+
+		// 当前层执行完毕后，重新计算后续层级（确保条件边能获取到最新的 metadata）
+		if levelIdx < len(levels) {
+			levels = filterLevels(dgaGraph.TraversalSteps(evalCtx), exclude)
+		}
+	}
+
+	return nil
+}
+
+// filterLevels 从层级计划中排除指定节点（exclude 为空时原样返回）
+func filterLevels(levels [][]string, exclude map[string]bool) [][]string {
+	if len(exclude) == 0 {
+		return levels
+	}
+	filtered := make([][]string, 0, len(levels))
+	for _, level := range levels {
+		kept := make([]string, 0, len(level))
+		for _, id := range level {
+			if !exclude[id] {
+				kept = append(kept, id)
+			}
+		}
+		if len(kept) > 0 {
+			filtered = append(filtered, kept)
+		}
+	}
+	return filtered
 }
 
 func (p *PipelineImpl) resetLoopNodes(dgaGraph *DGAGraph, loopNodes map[string]bool) {

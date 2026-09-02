@@ -52,15 +52,36 @@ func convertBoolToString(v any) any {
 	}
 }
 
+// putContextValue 将键值放入 context：点键（NodeID.key）转换为嵌套结构，
+// 普通键直接设置。pongo2 要求 context 键为合法标识符，扁平点键不可达且会导致
+// 其校验致命失败，因此任何进入 context 的数据都必须经过此转换
+func putContextValue(result map[string]any, k string, v any) {
+	if dotIdx := lastIndexOfByte(k, '.'); dotIdx > 0 {
+		nodeID := k[:dotIdx]
+		keyName := k[dotIdx+1:]
+		// 如果节点ID 的嵌套对象不存在，创建它
+		if _, exists := result[nodeID]; !exists {
+			result[nodeID] = make(map[string]any)
+		}
+		// 将键值添加到节点的嵌套对象中
+		if nodeObj, ok := result[nodeID].(map[string]any); ok {
+			nodeObj[keyName] = v
+		}
+	} else {
+		result[k] = v
+	}
+}
+
 // All 返回上下文中所有数据的副本
 // 合并了：基础数据、节点数据、流水线数据
 // 将 "NodeID.key" 格式的扁平键转换为嵌套结构
 func (c *DGAEvaluationContext) All() map[string]any {
 	result := make(map[string]any)
 
-	// 复制基础数据
+	// 复制基础数据（点键转换为嵌套结构：续跑场景下历史 metadata 的扁平点键
+	// 会经 WithParams 进入基础数据，直接拷贝会导致 pongo2 键校验失败）
 	for k, v := range c.data {
-		result[k] = v
+		putContextValue(result, k, v)
 	}
 
 	// 添加节点相关数据
@@ -94,23 +115,7 @@ func (c *DGAEvaluationContext) All() map[string]any {
 		// 添加 metadata，并将 "NodeID.key" 格式转换为嵌套结构
 		if metadata := c.pipeline.Metadata(); metadata != nil {
 			for k, v := range metadata {
-				val := core.GetValue(v.Value)
-				// 检查键名是否包含点（节点ID.键名）
-				if dotIdx := lastIndexOfByte(k, '.'); dotIdx > 0 {
-					nodeID := k[:dotIdx]
-					keyName := k[dotIdx+1:]
-					// 如果节点ID 的嵌套对象对象不存在，创建它
-					if _, exists := result[nodeID]; !exists {
-						result[nodeID] = make(map[string]any)
-					}
-					// 将键值添加到节点的嵌套对象中
-					if nodeObj, ok := result[nodeID].(map[string]any); ok {
-						nodeObj[keyName] = val
-					}
-				} else {
-					// 不包含点的键，直接添加
-					result[k] = val
-				}
+				putContextValue(result, k, core.GetValue(v.Value))
 			}
 		}
 	}
