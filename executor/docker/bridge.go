@@ -64,6 +64,11 @@ func applyConfigToExecutor(config map[string]any, executor *DockerExecutor) erro
 		executor.setCertPath(certPath)
 	}
 
+	// 应用image配置（容器镜像，默认 alpine:latest）
+	if image, ok := getString(config, "image"); ok {
+		executor.setImage(image)
+	}
+
 	// 应用registry配置
 	if registry, ok := getString(config, "registry"); ok {
 		executor.setRegistry(registry)

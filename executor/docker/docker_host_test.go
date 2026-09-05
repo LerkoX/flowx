@@ -32,6 +32,25 @@ func TestApplyConfigToExecutor_Host(t *testing.T) {
 	}
 }
 
+// TestApplyConfigToExecutor_Image 验证 image 配置键可设置容器镜像
+func TestApplyConfigToExecutor_Image(t *testing.T) {
+	exec, _ := NewDockerExecutor()
+	if err := applyConfigToExecutor(map[string]any{"image": "python:3.11-slim"}, exec); err != nil {
+		t.Fatalf("applyConfigToExecutor() error = %v", err)
+	}
+	if exec.image != "python:3.11-slim" {
+		t.Errorf("image = %q, want %q", exec.image, "python:3.11-slim")
+	}
+	// 未配置时保持空，Prepare 时才回退默认镜像
+	exec2, _ := NewDockerExecutor()
+	if err := applyConfigToExecutor(map[string]any{}, exec2); err != nil {
+		t.Fatalf("applyConfigToExecutor() error = %v", err)
+	}
+	if exec2.image != "" {
+		t.Errorf("image = %q, want empty (default applied in Prepare)", exec2.image)
+	}
+}
+
 // TestApplyConfigToExecutor_HostSSH 验证 ssh:// 协议地址可透传
 func TestApplyConfigToExecutor_HostSSH(t *testing.T) {
 	exec, _ := NewDockerExecutor()

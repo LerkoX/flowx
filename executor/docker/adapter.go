@@ -26,6 +26,8 @@ func NewDockerAdapter() *DockerAdapter {
 //     未设置时读取环境变量 DOCKER_HOST，默认本机 unix socket）
 //   - tlsVerify: 是否对 daemon 连接启用 TLS 校验 bool（配合 host 使用）
 //   - certPath: TLS 证书目录 string（含 ca.pem/cert.pem/key.pem，默认 "~/.docker"）
+//   - image: 容器镜像 string（未设置时默认 "alpine:latest"；studio 展开器会把节点的
+//     image 字段注入到该执行器条目的 config.image，使节点声明镜像真正生效）
 //   - registry: 镜像仓库地址
 //   - network: Docker网络模式
 //   - volumes: 卷挂载列表 []string{"/host:/container"}（注意：远程 daemon 时为远端机器路径）
