@@ -377,6 +377,13 @@ func (p *PipelineImpl) SetExecutorProvider(provider ExecutorProvider) {
 	p.executors = make(map[string]executor.Executor)
 }
 
+// GetExecutorProvider 返回当前的 Executor 提供者
+func (p *PipelineImpl) GetExecutorProvider() ExecutorProvider {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.executorProvider
+}
+
 // getOrCreateExecutor 获取或创建Executor
 func (p *PipelineImpl) getOrCreateExecutor(ctx context.Context, name string) (executor.Executor, error) {
 	p.mu.Lock()

@@ -8,6 +8,7 @@ import (
 
 	"github.com/LerkoX/flowx/core"
 	"github.com/LerkoX/flowx/dag"
+	"github.com/LerkoX/flowx/executor/provider"
 	"github.com/LerkoX/flowx/template"
 	"github.com/tetrafolium/mermaid-check/ast"
 	"github.com/tetrafolium/mermaid-check/parser"
@@ -473,8 +474,35 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 	r.mu.Lock()
 	if config, ok := r.pipelineConfigs[id]; ok {
 		config.Graph = newConfig.Graph
+		// 持久化新增执行器条目（validateExecutorsAdditive 已保证已有条目未改删），
+		// 否则 ExportExecutionConfig 导出的快照丢失新增条目
+		if len(newConfig.Executors) > 0 {
+			if config.Executors == nil {
+				config.Executors = make(map[string]core.ExecutorConfig)
+			}
+			for name, execConfig := range newConfig.Executors {
+				if _, exists := config.Executors[name]; !exists {
+					config.Executors[name] = execConfig
+				}
+			}
+		}
 	}
 	r.mu.Unlock()
+
+	// 将合并后的执行器集合重新注册到运行中 pipeline 的 provider：
+	// UpdateConfig 允许新增执行器条目（续跑追加异构节点，如 docker），
+	// 但 provider 是 LoadPipeline 时按旧配置构建的，不重建会导致新节点
+	// 运行时报 executor config not found
+	if len(newConfig.Executors) > 0 {
+		execProvider := provider.NewProvider()
+		for name, execConfig := range newConfig.Executors {
+			execProvider.RegisterExecutor(name, provider.ExecutorConfig{
+				Type:   execConfig.Type,
+				Config: execConfig.Config,
+			})
+		}
+		pipeline.SetExecutorProvider(execProvider)
+	}
 
 	return nil
 }
