@@ -254,3 +254,39 @@ func TestModifyGraph_ComplexModification(t *testing.T) {
 		t.Error("Edge B->D should exist")
 	}
 }
+
+// 节点替换（如续跑时仅修改 executor）会连带删除关联边；Graph 未变时
+// UpdateConfig 不会重加边。替换后必须恢复边，否则节点变孤立根节点、
+// 调度顺序丢失（曾导致续跑追加的链式节点被并行执行）
+func TestModifyGraph_ReplaceNodePreservesEdges(t *testing.T) {
+	ctx := context.Background()
+	rt := NewRuntime(ctx).(*RuntimeImpl)
+	pipeline, _ := helperSetupModifiablePipeline(t, rt, "replace-node")
+
+	// B 未执行（StatusUnknown），替换其 executor；图结构不变
+	mods := dag.GraphModifications{
+		RemoveNodes: []string{"B"},
+		AddNodes: []core.NodeConfig{
+			{Id: "B", Name: "B", Executor: "local2", Steps: []core.Step{{Name: "step1", Run: "echo B"}}},
+		},
+	}
+
+	if err := rt.ModifyGraph(ctx, "replace-node", mods); err != nil {
+		t.Fatalf("ModifyGraph() error = %v", err)
+	}
+
+	graph := pipeline.GetGraph()
+	nodeB, ok := graph.GetNode("B")
+	if !ok {
+		t.Fatal("Node B should exist after replacement")
+	}
+	if nodeB.GetExecutor() != "local2" {
+		t.Errorf("Node B executor = %v, want local2", nodeB.GetExecutor())
+	}
+	if _, ok := graph.GetEdge("A", "B"); !ok {
+		t.Error("Edge A->B should be preserved after node replacement")
+	}
+	if _, ok := graph.GetEdge("B", "C"); !ok {
+		t.Error("Edge B->C should be preserved after node replacement")
+	}
+}

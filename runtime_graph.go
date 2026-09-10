@@ -215,6 +215,36 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 	snapshotNodes := graph.Nodes()
 	snapshotEdges := graph.Edges()
 
+	// 节点替换（同时在 RemoveNodes 与 AddNodes 中）会连带删除其关联边；
+	// 仅改节点配置（如 executor）而 Graph 未变时不会重加边，需记录下来在
+	// 重加节点后恢复，否则被替换节点会变成孤立节点、调度顺序丢失
+	type edgeSnapshot struct {
+		source, target, expression string
+	}
+	addNodeIDs := make(map[string]bool)
+	for _, nodeConfig := range modifications.AddNodes {
+		nodeName := nodeConfig.Id
+		if nodeName == "" {
+			nodeName = nodeConfig.Name
+		}
+		addNodeIDs[nodeName] = true
+	}
+	replacedIDs := make(map[string]bool)
+	for _, nodeID := range modifications.RemoveNodes {
+		if addNodeIDs[nodeID] {
+			replacedIDs[nodeID] = true
+		}
+	}
+	var replacedEdges []edgeSnapshot
+	if len(replacedIDs) > 0 {
+		for _, edge := range graph.Edges() {
+			sid, tid := edge.Source().Id(), edge.Target().Id()
+			if replacedIDs[sid] || replacedIDs[tid] {
+				replacedEdges = append(replacedEdges, edgeSnapshot{sid, tid, edge.Expression()})
+			}
+		}
+	}
+
 	// 回滚函数
 	rollback := func() {
 		// 恢复被删除的节点
@@ -283,6 +313,34 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 		node.EnsureIds()
 		nodeMap[nodeName] = node
 		graph.AddVertex(node)
+	}
+
+	// 3.5 恢复被替换节点的关联边（用重加后的新节点对象重建；AddGraph/AddEdges
+	// 可能已覆盖部分边，已存在的跳过）
+	for _, es := range replacedEdges {
+		if _, ok := graph.GetEdge(es.source, es.target); ok {
+			continue
+		}
+		srcNode, ok := graph.GetNode(es.source)
+		if !ok {
+			rollback()
+			return fmt.Errorf("source node %s not found for preserved edge", es.source)
+		}
+		destNode, ok := graph.GetNode(es.target)
+		if !ok {
+			rollback()
+			return fmt.Errorf("target node %s not found for preserved edge", es.target)
+		}
+		var edge dag.Edge
+		if es.expression != "" {
+			edge = dag.NewConditionalEdge(srcNode, destNode, es.expression)
+		} else {
+			edge = dag.NewDGAEdge(srcNode, destNode)
+		}
+		if err := graph.AddEdge(edge); err != nil {
+			rollback()
+			return fmt.Errorf("failed to preserve edge %s->%s: %w", es.source, es.target, err)
+		}
 	}
 
 	// 4. 添加新边
