@@ -290,3 +290,86 @@ func TestModifyGraph_ReplaceNodePreservesEdges(t *testing.T) {
 		t.Error("Edge B->C should be preserved after node replacement")
 	}
 }
+
+// UpdateConfig 新增执行器条目时，必须同时持久化到存储配置并注册进运行中
+// pipeline 的 provider——否则续跑追加的异构节点（如 docker）运行时报
+// executor config not found（曾导致续跑首轮失败）
+func TestUpdateConfig_AddExecutorUsable(t *testing.T) {
+	ctx := context.Background()
+	rt := NewRuntime(ctx).(*RuntimeImpl)
+	pipeline, _ := helperSetupModifiablePipeline(t, rt, "add-exec")
+
+	newYAML := `Version: "1.0"
+Name: modify-test
+Executors:
+  local:
+    type: local
+    config: {}
+  local2:
+    type: local
+    config: {}
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> D
+    D --> [*]
+Nodes:
+  A:
+    name: A
+    executor: local
+    steps:
+      - name: step1
+        run: echo A
+  B:
+    name: B
+    executor: local
+    steps:
+      - name: step1
+        run: echo B
+  C:
+    name: C
+    executor: local
+    steps:
+      - name: step1
+        run: echo C
+  D:
+    name: D
+    executor: local2
+    steps:
+      - name: step1
+        run: echo D
+`
+	if err := rt.UpdateConfig(ctx, "add-exec", newYAML); err != nil {
+		t.Fatalf("UpdateConfig() error = %v", err)
+	}
+
+	// 存储配置持久化新执行器
+	cfg := rt.pipelineConfigs["add-exec"]
+	if _, ok := cfg.Executors["local2"]; !ok {
+		t.Error("stored config should persist new executor local2")
+	}
+
+	// provider 可解析新执行器
+	prov := pipeline.(*dag.PipelineImpl).GetExecutorProvider()
+	if prov == nil {
+		t.Fatal("executor provider should not be nil")
+	}
+	if _, err := prov.GetExecutor(ctx, "local2"); err != nil {
+		t.Errorf("provider should resolve new executor local2: %v", err)
+	}
+	// 旧执行器仍可用
+	if _, err := prov.GetExecutor(ctx, "local"); err != nil {
+		t.Errorf("provider should still resolve local: %v", err)
+	}
+
+	// 新节点及其入边存在
+	graph := pipeline.GetGraph()
+	if _, ok := graph.GetNode("D"); !ok {
+		t.Error("Node D should exist")
+	}
+	if _, ok := graph.GetEdge("C", "D"); !ok {
+		t.Error("Edge C->D should exist")
+	}
+}
