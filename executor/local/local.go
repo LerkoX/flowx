@@ -156,15 +156,10 @@ func (l *LocalExecutor) killCurrentProcess() {
 		return
 	}
 
-	// 使用本地保存的 pid 获取进程并发送信号，不访问 ac.cmd.Process 的并发字段
-	process, err := os.FindProcess(ac.pid)
-	if err != nil || process == nil {
-		return
-	}
-
-	// 先尝试发送中断信号（Unix）或 Ctrl+Break（Windows）
-	if err := process.Signal(os.Interrupt); err != nil {
-		_ = process.Kill()
+	// 使用本地保存的 pid 终止进程（Linux 为整棵进程树，含 shell/script 包裹的孙进程）
+	// 先尝试发送中断信号（Unix 进程组 SIGINT）或 Ctrl+Break（Windows）
+	if err := interruptProcess(ac.pid); err != nil {
+		_ = killProcess(ac.pid)
 	} else {
 		// 发送信号成功，等待进程退出（最多2秒）
 		select {
@@ -172,7 +167,7 @@ func (l *LocalExecutor) killCurrentProcess() {
 			// 进程已退出
 		case <-time.After(2 * time.Second):
 			// 超时，强制终止
-			_ = process.Kill()
+			_ = killProcess(ac.pid)
 		}
 	}
 }
@@ -398,11 +393,9 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 	case err = <-waitErr:
 		// 命令正常退出
 	case <-ctx.Done():
-		// 上下文取消，强制终止（使用本地保存的 PID 避免竞争）
+		// 上下文取消，强制终止整棵进程树（使用本地保存的 PID 避免竞争）
 		if ac.pid > 0 {
-			if process, ferr := os.FindProcess(ac.pid); ferr == nil && process != nil {
-				_ = process.Kill()
-			}
+			_ = killProcess(ac.pid)
 		}
 		// 等待 Wait 返回，避免 goroutine 泄漏
 		<-waitErr
@@ -535,15 +528,15 @@ func (l *LocalExecutor) createCommand(ctx context.Context, command string) *exec
 	case "windows":
 		// Windows使用cmd.exe
 		if shell == "powershell" || shell == "pwsh" {
-			return exec.CommandContext(ctx, shell, "-Command", command)
+			return prepareCmd(exec.CommandContext(ctx, shell, "-Command", command))
 		}
-		return exec.CommandContext(ctx, "cmd", "/C", command)
+		return prepareCmd(exec.CommandContext(ctx, "cmd", "/C", command))
 	default:
 		// Unix-like系统使用sh或bash
 		if shell == "" {
 			shell = "/bin/sh"
 		}
-		return exec.CommandContext(ctx, shell, "-c", command)
+		return prepareCmd(exec.CommandContext(ctx, shell, "-c", command))
 	}
 }
 
@@ -557,9 +550,9 @@ func (l *LocalExecutor) createCommandWithPTY(ctx context.Context, command string
 	case "windows":
 		// Windows 不支持 PTY，回退到普通命令
 		if shell == "powershell" || shell == "pwsh" {
-			return exec.CommandContext(ctx, shell, "-Command", command)
+			return prepareCmd(exec.CommandContext(ctx, shell, "-Command", command))
 		}
-		return exec.CommandContext(ctx, "cmd", "/C", command)
+		return prepareCmd(exec.CommandContext(ctx, "cmd", "/C", command))
 	default:
 		// Unix-like 系统使用 script 命令模拟 PTY
 		if shell == "" {
@@ -567,7 +560,7 @@ func (l *LocalExecutor) createCommandWithPTY(ctx context.Context, command string
 		}
 		// 使用 script 命令创建伪终端；-e 透传子进程退出码（util-linux），
 		// 否则节点脚本 exit 非零会被 script 吞掉导致失败节点误报成功
-		return exec.CommandContext(ctx, "script", "-q", "-e", "-c", command, "/dev/null")
+		return prepareCmd(exec.CommandContext(ctx, "script", "-q", "-e", "-c", command, "/dev/null"))
 	}
 }
 
