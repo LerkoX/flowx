@@ -159,7 +159,7 @@
             <div class="sidebar-title">更多文档</div>
             <a href="quickstart.html">快速开始</a>
             <a href="configuration.html">配置参考</a>
-            <a href="pipeline.html">流水线核心</a>
+            <a href="workflow.html">流水线核心</a>
             <a href="executors.html">执行器系统</a>
             <a href="node.html">节点与步骤</a>
             <a href="edge.html">条件边与循环</a>
@@ -189,25 +189,25 @@
         <table>
             <thead><tr><th>常量</th><th>值</th><th>触发时机</th></tr></thead>
             <tbody>
-                <tr><td><code>EventPipelineInit</code></td><td><code>PipelineInit</code></td><td>流水线初始化</td></tr>
-                <tr><td><code>EventPipelineStart</code></td><td><code>PipelineStart</code></td><td>流水线开始执行</td></tr>
-                <tr><td><code>EventPipelineFinish</code></td><td><code>PipelineFinish</code></td><td>流水线执行完成</td></tr>
-                <tr><td><code>EventPipelineCancelled</code></td><td><code>PipelineCancelled</code></td><td>流水线被取消</td></tr>
-                <tr><td><code>EventPipelinePaused</code></td><td><code>PipelinePaused</code></td><td>流水线暂停</td></tr>
-                <tr><td><code>EventPipelineResumed</code></td><td><code>PipelineResumed</code></td><td>流水线恢复</td></tr>
-                <tr><td><code>EventPipelineGraphModified</code></td><td><code>PipelineGraphModified</code></td><td>图被动态修改</td></tr>
-                <tr><td><code>EventPipelineExecutorPrepare</code></td><td><code>PipelineExecutorPrepare</code></td><td>执行器准备中</td></tr>
-                <tr><td><code>EventPipelineExecutorPrepareDone</code></td><td><code>PipelineExecutorPrepareDone</code></td><td>执行器准备完成</td></tr>
-                <tr><td><code>EventPipelineStatusUpdate</code></td><td><code>PipelineStatusUpdate</code></td><td>流水线状态更新</td></tr>
-                <tr><td><code>EventPipelineNodeStart</code></td><td><code>PipelineNodeStart</code></td><td>节点开始执行</td></tr>
-                <tr><td><code>EventPipelineNodeFinish</code></td><td><code>PipelineNodeFinish</code></td><td>节点执行完成</td></tr>
+                <tr><td><code>EventWorkflowInit</code></td><td><code>WorkflowInit</code></td><td>流水线初始化</td></tr>
+                <tr><td><code>EventWorkflowStart</code></td><td><code>WorkflowStart</code></td><td>流水线开始执行</td></tr>
+                <tr><td><code>EventWorkflowFinish</code></td><td><code>WorkflowFinish</code></td><td>流水线执行完成</td></tr>
+                <tr><td><code>EventWorkflowCancelled</code></td><td><code>WorkflowCancelled</code></td><td>流水线被取消</td></tr>
+                <tr><td><code>EventWorkflowPaused</code></td><td><code>WorkflowPaused</code></td><td>流水线暂停</td></tr>
+                <tr><td><code>EventWorkflowResumed</code></td><td><code>WorkflowResumed</code></td><td>流水线恢复</td></tr>
+                <tr><td><code>EventWorkflowGraphModified</code></td><td><code>WorkflowGraphModified</code></td><td>图被动态修改</td></tr>
+                <tr><td><code>EventWorkflowExecutorPrepare</code></td><td><code>WorkflowExecutorPrepare</code></td><td>执行器准备中</td></tr>
+                <tr><td><code>EventWorkflowExecutorPrepareDone</code></td><td><code>WorkflowExecutorPrepareDone</code></td><td>执行器准备完成</td></tr>
+                <tr><td><code>EventWorkflowStatusUpdate</code></td><td><code>WorkflowStatusUpdate</code></td><td>流水线状态更新</td></tr>
+                <tr><td><code>EventWorkflowNodeStart</code></td><td><code>WorkflowNodeStart</code></td><td>节点开始执行</td></tr>
+                <tr><td><code>EventWorkflowNodeFinish</code></td><td><code>WorkflowNodeFinish</code></td><td>节点执行完成</td></tr>
             </tbody>
         </table>
 
         <h2 id="listener">Listener 接口</h2>
 
         <pre><code class="language-go">type Listener interface {
-    Handle(p Pipeline, event Event)  // 处理事件
+    Handle(p Workflow, event Event)  // 处理事件
     Events() []Event                  // 订阅的事件列表
 }</code></pre>
 
@@ -227,75 +227,75 @@ type MyListener struct{}
 
 func (l *MyListener) Events() []flowx.Event {
     return []flowx.Event{
-        flowx.EventPipelineNodeStart,
-        flowx.EventPipelineNodeFinish,
+        flowx.EventWorkflowNodeStart,
+        flowx.EventWorkflowNodeFinish,
     }
 }
 
-func (l *MyListener) Handle(p flowx.Pipeline, event flowx.Event) {
-    fmt.Printf("Event: %s, Pipeline: %s\n", event, p.Id())
+func (l *MyListener) Handle(p flowx.Workflow, event flowx.Event) {
+    fmt.Printf("Event: %s, Workflow: %s\n", event, p.Id())
 }
 
 // 使用
 listener := &MyListener{}
-p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, listener)</code></pre>
+p, _ := rt.RunSync(ctx, "workflow-001", configYAML, listener)</code></pre>
 
         <h3>使用内置 DGAListener</h3>
         <pre><code class="language-go">// 创建监听器
 listener := &flowx.DGAListener{
     Events: []flowx.Event{
-        flowx.EventPipelineNodeStart,
-        flowx.EventPipelineNodeFinish,
+        flowx.EventWorkflowNodeStart,
+        flowx.EventWorkflowNodeFinish,
     },
-    Handler: func(p flowx.Pipeline, event flowx.Event) {
+    Handler: func(p flowx.Workflow, event flowx.Event) {
         fmt.Printf("Event: %s\n", event)
     },
 }
 
-p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, listener)</code></pre>
+p, _ := rt.RunSync(ctx, "workflow-001", configYAML, listener)</code></pre>
 
         <h3>完整事件处理示例</h3>
         <pre><code class="language-go">listener := flowx.NewListener()
-listener.Handle(func(p flowx.Pipeline, event flowx.Event) {
+listener.Handle(func(p flowx.Workflow, event flowx.Event) {
     switch event {
-    case flowx.PipelineInit:
-        fmt.Println("Pipeline initialized")
-    case flowx.PipelineStart:
-        fmt.Println("Pipeline started")
-    case flowx.PipelineFinish:
-        fmt.Println("Pipeline finished")
-    case flowx.PipelineExecutorPrepare:
+    case flowx.WorkflowInit:
+        fmt.Println("Workflow initialized")
+    case flowx.WorkflowStart:
+        fmt.Println("Workflow started")
+    case flowx.WorkflowFinish:
+        fmt.Println("Workflow finished")
+    case flowx.WorkflowExecutorPrepare:
         fmt.Println("Executor preparing")
-    case flowx.PipelineExecutorPrepareDone:
+    case flowx.WorkflowExecutorPrepareDone:
         fmt.Println("Executor prepared")
-    case flowx.PipelineNodeStart:
+    case flowx.WorkflowNodeStart:
         fmt.Println("Node started")
-    case flowx.PipelineNodeFinish:
+    case flowx.WorkflowNodeFinish:
         fmt.Println("Node completed")
-    case flowx.PipelineCancelled:
-        fmt.Println("Pipeline cancelled")
-    case flowx.PipelineStatusUpdate:
-        fmt.Println("Pipeline status updated")
-    case flowx.PipelinePaused:
-        fmt.Println("Pipeline paused")
-    case flowx.PipelineResumed:
-        fmt.Println("Pipeline resumed")
-    case flowx.PipelineGraphModified:
-        fmt.Println("Pipeline graph modified")
+    case flowx.WorkflowCancelled:
+        fmt.Println("Workflow cancelled")
+    case flowx.WorkflowStatusUpdate:
+        fmt.Println("Workflow status updated")
+    case flowx.WorkflowPaused:
+        fmt.Println("Workflow paused")
+    case flowx.WorkflowResumed:
+        fmt.Println("Workflow resumed")
+    case flowx.WorkflowGraphModified:
+        fmt.Println("Workflow graph modified")
     }
 })
 
-pipeline, err := runtime.RunSync(ctx, "id", config, listener)</code></pre>
+workflow, err := runtime.RunSync(ctx, "id", config, listener)</code></pre>
 
         <h2 id="builtin">内置监听器</h2>
         <p>FlowX 提供了 <code>DGAListener</code> 结构体，方便快速创建事件监听器：</p>
 
         <pre><code class="language-go">type DGAListener struct {
     Events  []Event
-    Handler func(p Pipeline, event Event)
+    Handler func(p Workflow, event Event)
 }
 
-func (l *DGAListener) Handle(p Pipeline, event Event) {
+func (l *DGAListener) Handle(p Workflow, event Event) {
     if l.Handler != nil {
         l.Handler(p, event)
     }
@@ -307,10 +307,10 @@ func (l *DGAListener) EventsList() []Event {
 
         <p><strong>常见使用场景</strong>：</p>
         <ul>
-            <li><strong>监控</strong>：监听 <code>PipelineNodeStart</code> 和 <code>PipelineNodeFinish</code>，将节点执行时间推送到监控系统</li>
-            <li><strong>通知</strong>：监听 <code>PipelineFinish</code>，在流水线完成时发送邮件/消息通知</li>
+            <li><strong>监控</strong>：监听 <code>WorkflowNodeStart</code> 和 <code>WorkflowNodeFinish</code>，将节点执行时间推送到监控系统</li>
+            <li><strong>通知</strong>：监听 <code>WorkflowFinish</code>，在流水线完成时发送邮件/消息通知</li>
             <li><strong>日志</strong>：监听所有事件，记录详细的执行日志</li>
-            <li><strong>审计</strong>：监听 <code>PipelineGraphModified</code>，记录图结构变更</li>
+            <li><strong>审计</strong>：监听 <code>WorkflowGraphModified</code>，记录图结构变更</li>
         </ul>
     </article>
 </div>

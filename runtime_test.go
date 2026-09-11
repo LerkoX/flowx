@@ -52,43 +52,43 @@ func TestNewRuntime(t *testing.T) {
 	}
 }
 
-// TestRuntimeImpl_Get tests getting a pipeline
+// TestRuntimeImpl_Get tests getting a workflow
 func TestRuntimeImpl_Get(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
-	// Test getting non-existent pipeline
+	// Test getting non-existent workflow
 	_, err := runtime.Get("non-existent")
 	if err == nil {
-		t.Fatal("Expected error when getting non-existent pipeline")
+		t.Fatal("Expected error when getting non-existent workflow")
 	}
 }
 
-// TestRuntimeImpl_RunSync tests synchronous pipeline execution
+// TestRuntimeImpl_RunSync tests synchronous workflow execution
 func TestRuntimeImpl_RunSync(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
 	// Prepare test configuration with new format
-	config := loadTestConfig(t, "sync_pipeline.yaml")
+	config := loadTestConfig(t, "sync_workflow.yaml")
 
 	// Create test listener
 	listener := &TestListener{}
 
-	// Execute synchronous pipeline
-	pipeline, err := runtime.RunSync(ctx, "test-sync-pipeline", config, listener)
+	// Execute synchronous workflow
+	workflow, err := runtime.RunSync(ctx, "test-sync-workflow", config, listener)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 
-	// Check if pipeline is cleaned up
-	_, err = runtime.Get("test-sync-pipeline")
+	// Check if workflow is cleaned up
+	_, err = runtime.Get("test-sync-workflow")
 	if err == nil {
-		t.Fatal("Pipeline should be cleaned up after sync execution")
+		t.Fatal("Workflow should be cleaned up after sync execution")
 	}
 }
 
@@ -123,60 +123,60 @@ func TestRuntimeImpl_RunSync_DuplicateID(t *testing.T) {
 	// Second execution with same ID
 	_, err = runtime.RunSync(ctx, "duplicate-id", config, nil)
 	if err == nil {
-		t.Fatal("Expected error when running pipeline with duplicate ID")
+		t.Fatal("Expected error when running workflow with duplicate ID")
 	}
 }
 
-// TestRuntimeImpl_RunAsync tests asynchronous pipeline execution
+// TestRuntimeImpl_RunAsync tests asynchronous workflow execution
 func TestRuntimeImpl_RunAsync(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
 	// Prepare test configuration with new format
-	config := loadTestConfig(t, "async_pipeline.yaml")
+	config := loadTestConfig(t, "async_workflow.yaml")
 
 	// Create test listener
 	listener := &TestListener{}
 
-	// Execute asynchronous pipeline
-	pipeline, err := runtime.RunAsync(ctx, "test-async-pipeline", config, listener)
+	// Execute asynchronous workflow
+	workflow, err := runtime.RunAsync(ctx, "test-async-workflow", config, listener)
 	if err != nil {
 		t.Fatalf("RunAsync failed: %v", err)
 	}
 
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 
-	// Check if pipeline is stored in runtime
-	retrieved, err := runtime.Get("test-async-pipeline")
+	// Check if workflow is stored in runtime
+	retrieved, err := runtime.Get("test-async-workflow")
 	if err != nil {
-		t.Fatalf("Pipeline should be stored in runtime: %v", err)
+		t.Fatalf("Workflow should be stored in runtime: %v", err)
 	}
-	if retrieved != pipeline {
-		t.Fatal("Retrieved pipeline should be the same instance")
+	if retrieved != workflow {
+		t.Fatal("Retrieved workflow should be the same instance")
 	}
 
 	// Wait for async execution to complete
 	select {
-	case <-pipeline.Done():
-		// Pipeline completed
+	case <-workflow.Done():
+		// Workflow completed
 	case <-time.After(5 * time.Second):
-		// Cancel pipeline
-		runtime.Cancel(ctx, "test-async-pipeline")
+		// Cancel workflow
+		runtime.Cancel(ctx, "test-async-workflow")
 	}
 }
 
-// TestRuntimeImpl_Cancel tests pipeline cancellation
+// TestRuntimeImpl_Cancel tests workflow cancellation
 func TestRuntimeImpl_Cancel(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
-	// Prepare test configuration with new format - use sleep to ensure pipeline is running
+	// Prepare test configuration with new format - use sleep to ensure workflow is running
 	config := loadTestConfig(t, "long_running.yaml")
 
-	// Execute asynchronous pipeline
-	pipeline, err := runtime.RunAsync(ctx, "test-cancel-pipeline", config, nil)
+	// Execute asynchronous workflow
+	workflow, err := runtime.RunAsync(ctx, "test-cancel-workflow", config, nil)
 	if err != nil {
 		t.Fatalf("RunAsync failed: %v", err)
 	}
@@ -184,39 +184,39 @@ func TestRuntimeImpl_Cancel(t *testing.T) {
 	// 等待流水线开始执行
 	time.Sleep(200 * time.Millisecond)
 
-	// Cancel pipeline before it completes
-	err = runtime.Cancel(ctx, "test-cancel-pipeline")
+	// Cancel workflow before it completes
+	err = runtime.Cancel(ctx, "test-cancel-workflow")
 	if err != nil {
 		t.Fatalf("Cancel failed: %v", err)
 	}
 
-	// Wait for pipeline to be cancelled
+	// Wait for workflow to be cancelled
 	select {
-	case <-pipeline.Done():
-		// Pipeline was cancelled successfully
+	case <-workflow.Done():
+		// Workflow was cancelled successfully
 	case <-time.After(2 * time.Second):
-		t.Fatal("Pipeline should be cancelled quickly")
+		t.Fatal("Workflow should be cancelled quickly")
 	}
 }
 
-// TestRuntimeImpl_Cancel_NonExistent tests cancelling non-existent pipeline
+// TestRuntimeImpl_Cancel_NonExistent tests cancelling non-existent workflow
 func TestRuntimeImpl_Cancel_NonExistent(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
-	err := runtime.Cancel(ctx, "non-existent-pipeline")
+	err := runtime.Cancel(ctx, "non-existent-workflow")
 	if err == nil {
-		t.Fatal("Expected error when cancelling non-existent pipeline")
+		t.Fatal("Expected error when cancelling non-existent workflow")
 	}
 }
 
-// TestRuntimeImpl_Rm tests pipeline removal
+// TestRuntimeImpl_Rm tests workflow removal
 func TestRuntimeImpl_Rm(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
-	// Remove pipeline (this should not panic even if pipeline doesn't exist)
-	runtime.Rm("test-rm-pipeline")
+	// Remove workflow (this should not panic even if workflow doesn't exist)
+	runtime.Rm("test-rm-workflow")
 }
 
 // TestRuntimeImpl_Done tests Done channel
@@ -324,8 +324,8 @@ func TestRuntimeImpl_ConcurrentAccess(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			defer func() { done <- true }()
-			pipelineConfig := loadTestConfigTemplate(t, "concurrent_template.yaml", id, id, id)
-			_, err := runtime.RunAsync(ctx, fmt.Sprintf("pipeline-%d", id), pipelineConfig, nil)
+			workflowConfig := loadTestConfigTemplate(t, "concurrent_template.yaml", id, id, id)
+			_, err := runtime.RunAsync(ctx, fmt.Sprintf("workflow-%d", id), workflowConfig, nil)
 			if err != nil {
 				t.Errorf("Concurrent RunAsync failed: %v", err)
 			}
@@ -338,7 +338,7 @@ func TestRuntimeImpl_ConcurrentAccess(t *testing.T) {
 	}
 }
 
-// TestRuntimeImpl_MultiPipelineConcurrency 测试多条流水线并发的完整生命周期
+// TestRuntimeImpl_MultiWorkflowConcurrency 测试多条流水线并发的完整生命周期
 // 测试配置使用包含节点间数据传递的 node_data_passing.yaml
 // 验证点：
 // 1. 所有流水线成功启动
@@ -346,105 +346,105 @@ func TestRuntimeImpl_ConcurrentAccess(t *testing.T) {
 // 3. 验证每个流水线的最终状态为 SUCCESS
 // 4. 验证节点间数据传递正确（Generate.value 和 Generate.message）
 // 5. 验证事件监听器的线程安全性
-func TestRuntimeImpl_MultiPipelineConcurrency(t *testing.T) {
+func TestRuntimeImpl_MultiWorkflowConcurrency(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
-	const numPipelines = 5 // 并发流水线数量
+	const numWorkflows = 5 // 并发流水线数量
 
 	// 使用带缓冲的 channel 收集错误，避免 goroutine 阻塞
-	errors := make(chan error, numPipelines)
+	errors := make(chan error, numWorkflows)
 
 	// 使用 WaitGroup 等待所有 goroutine 完成
 	var wg sync.WaitGroup
 
 	// 使用 channel 收集每个流水线的结果
-	type pipelineResult struct {
+	type workflowResult struct {
 		id     string
 		status string
 		event  int
 	}
-	results := make(chan pipelineResult, numPipelines)
+	results := make(chan workflowResult, numWorkflows)
 
 	// 记录开始时间用于性能监控
 	startTime := time.Now()
 
 	// 串行准备所有配置（避免模板引擎并发竞争）
-	configs := make([]string, numPipelines)
-	for i := 0; i < numPipelines; i++ {
+	configs := make([]string, numWorkflows)
+	for i := 0; i < numWorkflows; i++ {
 		configs[i] = loadTestConfig(t, "node_data_passing.yaml")
 	}
 
 	// 并发启动多个流水线
-	for i := 0; i < numPipelines; i++ {
+	for i := 0; i < numWorkflows; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
 
-			pipelineConfig := configs[id]
-			pipelineID := fmt.Sprintf("multi-concurrent-pipeline-%d", id)
+			workflowConfig := configs[id]
+			workflowID := fmt.Sprintf("multi-concurrent-workflow-%d", id)
 
 			// 为每个流水线创建独立的监听器
 			listener := NewRecordingListener()
 
 			// 启动异步流水线
-			pipeline, err := runtime.RunAsync(ctx, pipelineID, pipelineConfig, listener)
+			workflow, err := runtime.RunAsync(ctx, workflowID, workflowConfig, listener)
 			if err != nil {
-				errors <- fmt.Errorf("pipeline %d RunAsync failed: %w", id, err)
+				errors <- fmt.Errorf("workflow %d RunAsync failed: %w", id, err)
 				return
 			}
 
 			// 等待流水线执行完成，最多等待10秒（因为有3个节点串行）
 			select {
-			case <-pipeline.Done():
+			case <-workflow.Done():
 				// 流水线正常完成，获取状态
-				status := pipeline.Status()
-				eventCount := listener.Count(dag.PipelineNodeFinish)
+				status := workflow.Status()
+				eventCount := listener.Count(dag.WorkflowNodeFinish)
 
 				// 验证数据传递是否成功
-				metadata := pipeline.Metadata()
+				metadata := workflow.Metadata()
 				if metadata == nil {
-					errors <- fmt.Errorf("pipeline %s: metadata is nil", pipelineID)
+					errors <- fmt.Errorf("workflow %s: metadata is nil", workflowID)
 					return
 				}
 
 				// 验证 Generate 节点的数据是否正确传递
 				if fieldItem, ok := metadata["Generate.value"]; !ok {
-					errors <- fmt.Errorf("pipeline %s: Generate.value not found in metadata", pipelineID)
+					errors <- fmt.Errorf("workflow %s: Generate.value not found in metadata", workflowID)
 				} else {
 					// 允许 int 或 float64 类型
 					switch v := core.GetValue(fieldItem.Value).(type) {
 					case string:
 						if v != "42" {
-							errors <- fmt.Errorf("pipeline %s: expected Generate.value=42, got %v", pipelineID, v)
+							errors <- fmt.Errorf("workflow %s: expected Generate.value=42, got %v", workflowID, v)
 						}
 					case float64:
 						if v != 42.0 {
-							errors <- fmt.Errorf("pipeline %s: expected Generate.value=42.0, got %v", pipelineID, v)
+							errors <- fmt.Errorf("workflow %s: expected Generate.value=42.0, got %v", workflowID, v)
 						}
 					case int:
 						if v != 42 {
-							errors <- fmt.Errorf("pipeline %s: expected Generate.value=42, got %v", pipelineID, v)
+							errors <- fmt.Errorf("workflow %s: expected Generate.value=42, got %v", workflowID, v)
 						}
 					}
 				}
 
 				if fieldItem, ok := metadata["Generate.message"]; !ok {
-					errors <- fmt.Errorf("pipeline %s: Generate.message not found in metadata", pipelineID)
+					errors <- fmt.Errorf("workflow %s: Generate.message not found in metadata", workflowID)
 				} else if core.GetValue(fieldItem.Value) != "hello world" {
-					errors <- fmt.Errorf("pipeline %s: expected Generate.message='hello world', got %v", pipelineID, fieldItem.Value)
+					errors <- fmt.Errorf("workflow %s: expected Generate.message='hello world', got %v", workflowID, fieldItem.Value)
 				}
 
-				results <- pipelineResult{id: pipelineID, status: status, event: eventCount}
+				results <- workflowResult{id: workflowID, status: status, event: eventCount}
 
-				t.Logf("Pipeline %s completed with status: %s", pipelineID, status)
+				t.Logf("Workflow %s completed with status: %s", workflowID, status)
 
 			case <-time.After(30 * time.Second):
 				// 超时处理
-				errors <- fmt.Errorf("pipeline %s timed out after 10 seconds", pipelineID)
+				errors <- fmt.Errorf("workflow %s timed out after 10 seconds", workflowID)
 				// 尝试取消超时的流水线
-				if cancelErr := runtime.Cancel(ctx, pipelineID); cancelErr != nil {
-					t.Logf("Failed to cancel timeout pipeline %s: %v", pipelineID, cancelErr)
+				if cancelErr := runtime.Cancel(ctx, workflowID); cancelErr != nil {
+					t.Logf("Failed to cancel timeout workflow %s: %v", workflowID, cancelErr)
 				}
 			}
 		}(i)
@@ -461,62 +461,62 @@ func TestRuntimeImpl_MultiPipelineConcurrency(t *testing.T) {
 	errorCount := 0
 	for err := range errors {
 		errorCount++
-		t.Errorf("Pipeline execution error: %v", err)
+		t.Errorf("Workflow execution error: %v", err)
 	}
 
 	// 如果有错误，提前返回
 	if errorCount > 0 {
-		t.Fatalf("%d pipeline(s) failed to execute", errorCount)
+		t.Fatalf("%d workflow(s) failed to execute", errorCount)
 	}
 
 	// 验证所有流水线的执行结果
-	completedPipelines := 0
+	completedWorkflows := 0
 	for result := range results {
-		completedPipelines++
+		completedWorkflows++
 
 		// 验证流水线状态为 SUCCESS
 		if result.status != core.StatusSuccess {
-			t.Errorf("Pipeline %s expected status %s, got %s",
+			t.Errorf("Workflow %s expected status %s, got %s",
 				result.id, core.StatusSuccess, result.status)
 		}
 
 		// 验证至少有一个节点执行完成（应该有3个：Generate, Process, Consume）
 		if result.event != 3 {
-			t.Errorf("Pipeline %s expected 3 finished nodes, got %d", result.id, result.event)
+			t.Errorf("Workflow %s expected 3 finished nodes, got %d", result.id, result.event)
 		}
 	}
 
 	// 验证所有流水线都完成了
-	if completedPipelines != numPipelines {
-		t.Errorf("Expected %d completed pipelines, got %d", numPipelines, completedPipelines)
+	if completedWorkflows != numWorkflows {
+		t.Errorf("Expected %d completed workflows, got %d", numWorkflows, completedWorkflows)
 	}
 
 	// 性能监控
 	duration := time.Since(startTime)
-	avgDuration := duration / time.Duration(numPipelines)
+	avgDuration := duration / time.Duration(numWorkflows)
 
-	t.Logf("Multi-pipeline concurrency test completed:")
-	t.Logf("  - Total pipelines: %d", numPipelines)
+	t.Logf("Multi-workflow concurrency test completed:")
+	t.Logf("  - Total workflows: %d", numWorkflows)
 	t.Logf("  - Total duration: %v", duration)
-	t.Logf("  - Average per pipeline: %v", avgDuration)
-	t.Logf("  - All pipelines completed successfully")
+	t.Logf("  - Average per workflow: %v", avgDuration)
+	t.Logf("  - All workflows completed successfully")
 	t.Logf("  - All data transfers verified")
 }
 
 // TestListener test listener implementation
 type TestListener struct{}
 
-func (l *TestListener) Handle(p dag.Pipeline, event dag.Event) {
+func (l *TestListener) Handle(p dag.Workflow, event dag.Event) {
 	// Simple implementation that does nothing for testing
 }
 
 func (l *TestListener) Events() []dag.Event {
 	return []dag.Event{
-		dag.PipelineInit,
-		dag.PipelineStart,
-		dag.PipelineFinish,
-		dag.PipelineNodeStart,
-		dag.PipelineNodeFinish,
+		dag.WorkflowInit,
+		dag.WorkflowStart,
+		dag.WorkflowFinish,
+		dag.WorkflowNodeStart,
+		dag.WorkflowNodeFinish,
 	}
 }
 
@@ -532,7 +532,7 @@ func NewRecordingListener() *RecordingListener {
 	}
 }
 
-func (l *RecordingListener) Handle(p dag.Pipeline, event dag.Event) {
+func (l *RecordingListener) Handle(p dag.Workflow, event dag.Event) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.events = append(l.events, event)
@@ -542,11 +542,11 @@ func (l *RecordingListener) Events() []dag.Event {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return []dag.Event{
-		dag.PipelineInit,
-		dag.PipelineStart,
-		dag.PipelineFinish,
-		dag.PipelineNodeStart,
-		dag.PipelineNodeFinish,
+		dag.WorkflowInit,
+		dag.WorkflowStart,
+		dag.WorkflowFinish,
+		dag.WorkflowNodeStart,
+		dag.WorkflowNodeFinish,
 	}
 }
 
@@ -573,7 +573,7 @@ func (l *RecordingListener) Count(eventType dag.Event) int {
 // TestParseGraphEdges_BasicStateDiagram 测试基本状态图解析
 func TestParseGraphEdges_BasicStateDiagram(t *testing.T) {
 	ctx := context.Background()
-	config := &core.PipelineConfig{
+	config := &core.WorkflowConfig{
 		Nodes: map[string]core.NodeConfig{
 			"Merge":  {},
 			"Build":  {},
@@ -608,7 +608,7 @@ func TestParseGraphEdges_BasicStateDiagram(t *testing.T) {
 // TestParseGraphEdges_ComplexDiagram 测试复杂状态图（并行路径）
 func TestParseGraphEdges_ComplexDiagram(t *testing.T) {
 	ctx := context.Background()
-	config := &core.PipelineConfig{
+	config := &core.WorkflowConfig{
 		Nodes: map[string]core.NodeConfig{
 			"Checkout": {},
 			"Lint":     {},
@@ -638,7 +638,7 @@ func TestParseGraphEdges_ComplexDiagram(t *testing.T) {
 // TestParseGraphEdges_EmptyGraph 测试空图
 func TestParseGraphEdges_EmptyGraph(t *testing.T) {
 	ctx := context.Background()
-	config := &core.PipelineConfig{
+	config := &core.WorkflowConfig{
 		Nodes: map[string]core.NodeConfig{
 			"Node1": {},
 			"Node2": {},
@@ -658,7 +658,7 @@ func TestParseGraphEdges_EmptyGraph(t *testing.T) {
 // TestParseGraphEdges_InvalidSyntax 测试无效语法
 func TestParseGraphEdges_InvalidSyntax(t *testing.T) {
 	ctx := context.Background()
-	config := &core.PipelineConfig{
+	config := &core.WorkflowConfig{
 		Nodes: map[string]core.NodeConfig{
 			"Node1": {},
 			"Node2": {},
@@ -679,7 +679,7 @@ func TestParseGraphEdges_InvalidSyntax(t *testing.T) {
 // TestParseGraphEdges_MissingNode 测试配置中缺失节点
 func TestParseGraphEdges_MissingNode(t *testing.T) {
 	ctx := context.Background()
-	config := &core.PipelineConfig{
+	config := &core.WorkflowConfig{
 		Nodes: map[string]core.NodeConfig{
 			"A": {},
 			// B 缺失
@@ -764,7 +764,7 @@ func TestExtractExpression(t *testing.T) {
 // TestParseGraphEdges_ConditionalEdges 测试条件边解析
 func TestParseGraphEdges_ConditionalEdges(t *testing.T) {
 	ctx := context.Background()
-	config := &core.PipelineConfig{
+	config := &core.WorkflowConfig{
 		Nodes: map[string]core.NodeConfig{
 			"A": {},
 			"B": {},
@@ -811,7 +811,7 @@ func TestParseGraphEdges_ConditionalEdges(t *testing.T) {
 // TestParseGraphEdges_UnconditionalEdges 测试无条件边解析
 func TestParseGraphEdges_UnconditionalEdges(t *testing.T) {
 	ctx := context.Background()
-	config := &core.PipelineConfig{
+	config := &core.WorkflowConfig{
 		Nodes: map[string]core.NodeConfig{
 			"A": {},
 			"B": {},
@@ -841,7 +841,7 @@ func TestParseGraphEdges_UnconditionalEdges(t *testing.T) {
 // TestParseGraphEdges_WithNotes 测试带注释的图
 func TestParseGraphEdges_WithNotes(t *testing.T) {
 	ctx := context.Background()
-	config := &core.PipelineConfig{
+	config := &core.WorkflowConfig{
 		Nodes: map[string]core.NodeConfig{
 			"Start":   {},
 			"Process": {},
@@ -874,18 +874,18 @@ func TestRuntimeImpl_RenderParam_SelfReference(t *testing.T) {
 
 	config := loadTestConfig(t, "param_self_reference.yaml")
 
-	pipeline, err := runtime.RunSync(ctx, "testParam-self-ref", config, nil)
+	workflow, err := runtime.RunSync(ctx, "testParam-self-ref", config, nil)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	// 验证pipeline的param值是否正确渲染
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	// 验证workflow的param值是否正确渲染
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 
 	// 我们可以通过检查节点的配置来验证Param是否被正确渲染
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if graph == nil {
 		t.Fatal("Graph should not be nil")
 	}
@@ -925,17 +925,17 @@ func TestRuntimeImpl_RenderMetadata_ReferenceParam(t *testing.T) {
 
 	config := loadTestConfig(t, "metadata_ref_param.yaml")
 
-	pipeline, err := runtime.RunSync(ctx, "test-metadata-ref-param", config, nil)
+	workflow, err := runtime.RunSync(ctx, "test-metadata-ref-param", config, nil)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 
 	// 获取metadata验证值
-	metadata := pipeline.Metadata()
+	metadata := workflow.Metadata()
 	if metadata == nil {
 		t.Fatal("Metadata should not be nil")
 	}
@@ -961,13 +961,13 @@ func TestRuntimeImpl_RenderParam_NestedStructures(t *testing.T) {
 
 	config := loadTestConfig(t, "param_nested.yaml")
 
-	pipeline, err := runtime.RunSync(ctx, "testParam-nested", config, nil)
+	workflow, err := runtime.RunSync(ctx, "testParam-nested", config, nil)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 }
 
@@ -979,13 +979,13 @@ func TestRuntimeImpl_RenderParam_WithUndefinedVariable(t *testing.T) {
 	config := loadTestConfig(t, "param_undefined.yaml")
 
 	// version未定义，应该保持模板字符串原样
-	pipeline, err := runtime.RunSync(ctx, "testParam-undefined", config, nil)
+	workflow, err := runtime.RunSync(ctx, "testParam-undefined", config, nil)
 	if err != nil {
 		t.Fatalf("RunSync should not fail with undefined variables: %v", err)
 	}
 
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 }
 
@@ -1071,25 +1071,25 @@ func TestRuntimeImpl_NodeDataPassing(t *testing.T) {
 	config := loadTestConfig(t, "node_data_passing.yaml")
 
 	listener := NewRecordingListener()
-	pipeline, err := runtime.RunSync(ctx, "node-data-passing", config, listener)
+	workflow, err := runtime.RunSync(ctx, "node-data-passing", config, listener)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 
 	// 验证所有节点都执行了
-	if listener.Count(dag.PipelineNodeStart) != 3 {
-		t.Errorf("Expected 3 PipelineNodeStart events, got %d", listener.Count(dag.PipelineNodeStart))
+	if listener.Count(dag.WorkflowNodeStart) != 3 {
+		t.Errorf("Expected 3 WorkflowNodeStart events, got %d", listener.Count(dag.WorkflowNodeStart))
 	}
-	if listener.Count(dag.PipelineNodeFinish) != 3 {
-		t.Errorf("Expected 3 PipelineNodeFinish events, got %d", listener.Count(dag.PipelineNodeFinish))
+	if listener.Count(dag.WorkflowNodeFinish) != 3 {
+		t.Errorf("Expected 3 WorkflowNodeFinish events, got %d", listener.Count(dag.WorkflowNodeFinish))
 	}
 
 	// 验证 metadata 中包含提取的数据
-	metadata := pipeline.Metadata()
+	metadata := workflow.Metadata()
 	if metadata == nil {
 		t.Fatal("Metadata should not be nil")
 	}
@@ -1136,24 +1136,24 @@ func TestRuntimeImpl_ParallelNodes(t *testing.T) {
 	listener := NewRecordingListener()
 
 	startTime := time.Now()
-	pipeline, err := runtime.RunSync(ctx, "parallel-nodes", config, listener)
+	workflow, err := runtime.RunSync(ctx, "parallel-nodes", config, listener)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
 	duration := time.Since(startTime)
-	t.Logf("Pipeline execution took: %v", duration)
+	t.Logf("Workflow execution took: %v", duration)
 
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 
 	// 验证所有节点都执行了 (Start, TaskA, TaskB, TaskC, Merge = 5个节点)
-	if listener.Count(dag.PipelineNodeStart) != 5 {
-		t.Errorf("Expected 5 PipelineNodeStart events, got %d", listener.Count(dag.PipelineNodeStart))
+	if listener.Count(dag.WorkflowNodeStart) != 5 {
+		t.Errorf("Expected 5 WorkflowNodeStart events, got %d", listener.Count(dag.WorkflowNodeStart))
 	}
-	if listener.Count(dag.PipelineNodeFinish) != 5 {
-		t.Errorf("Expected 5 PipelineNodeFinish events, got %d", listener.Count(dag.PipelineNodeFinish))
+	if listener.Count(dag.WorkflowNodeFinish) != 5 {
+		t.Errorf("Expected 5 WorkflowNodeFinish events, got %d", listener.Count(dag.WorkflowNodeFinish))
 	}
 
 	// 并行执行应该比串行执行快得多
@@ -1172,35 +1172,35 @@ func TestRuntimeImpl_RuntimeRecovery(t *testing.T) {
 	config := loadTestConfig(t, "runtime_recovery.yaml")
 
 	listener := NewRecordingListener()
-	pipeline, err := runtime.RunSync(ctx, "runtime-recovery", config, listener)
+	workflow, err := runtime.RunSync(ctx, "runtime-recovery", config, listener)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 
 	// 验证只有 Step2 和 Step3 执行了（Step1 被跳过）
 	// 因为 Step1 的状态是 SUCCESS，应该被跳过
-	// 被跳过的节点会触发 PipelineNodeFinish 但不会触发 PipelineNodeStart
+	// 被跳过的节点会触发 WorkflowNodeFinish 但不会触发 WorkflowNodeStart
 	expectedStartEvents := 2 // Step2 和 Step3
 	expectedFinishEvents := 3 // Step1 (跳过), Step2, Step3
 
-	if listener.Count(dag.PipelineNodeStart) != expectedStartEvents {
-		t.Errorf("Expected %d PipelineNodeStart events, got %d (recovery may not be working)", expectedStartEvents, listener.Count(dag.PipelineNodeStart))
+	if listener.Count(dag.WorkflowNodeStart) != expectedStartEvents {
+		t.Errorf("Expected %d WorkflowNodeStart events, got %d (recovery may not be working)", expectedStartEvents, listener.Count(dag.WorkflowNodeStart))
 	}
-	if listener.Count(dag.PipelineNodeFinish) != expectedFinishEvents {
-		t.Errorf("Expected %d PipelineNodeFinish events, got %d (recovery may not be working)", expectedFinishEvents, listener.Count(dag.PipelineNodeFinish))
+	if listener.Count(dag.WorkflowNodeFinish) != expectedFinishEvents {
+		t.Errorf("Expected %d WorkflowNodeFinish events, got %d (recovery may not be working)", expectedFinishEvents, listener.Count(dag.WorkflowNodeFinish))
 	}
 
-	// 验证 pipeline 状态为成功
-	if pipeline.Status() != core.StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
+	// 验证 workflow 状态为成功
+	if workflow.Status() != core.StatusSuccess {
+		t.Errorf("Expected workflow status %s, got %s", core.StatusSuccess, workflow.Status())
 	}
 
 	// 验证 Step1 的状态仍然为 SUCCESS
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if graph == nil {
 		t.Fatal("Graph should not be nil")
 	}
@@ -1226,32 +1226,32 @@ func TestRuntimeImpl_ParallelStepRecovery(t *testing.T) {
 	config := loadTestConfig(t, "parallel_with_step_recovery.yaml")
 
 	listener := NewRecordingListener()
-	pipeline, err := runtime.RunSync(ctx, "parallel-step-recovery", config, listener)
+	workflow, err := runtime.RunSync(ctx, "parallel-step-recovery", config, listener)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline == nil {
-		t.Fatal("Pipeline should not be nil")
+	if workflow == nil {
+		t.Fatal("Workflow should not be nil")
 	}
 
 	// 验证 Task1 执行了
 	// Task2 完全跳过（所有步骤都是 SUCCESS）
 	// Task3 只执行了 second-step（init 和 first-step 跳过）
 	// Merge 执行了
-	// 所以预期有 3 个 PipelineNodeStart 事件（Task1, Task3, Merge）
+	// 所以预期有 3 个 WorkflowNodeStart 事件（Task1, Task3, Merge）
 	expectedStartEvents := 3
-	if listener.Count(dag.PipelineNodeStart) != expectedStartEvents {
-		t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartEvents, listener.Count(dag.PipelineNodeStart))
+	if listener.Count(dag.WorkflowNodeStart) != expectedStartEvents {
+		t.Errorf("Expected %d WorkflowNodeStart events, got %d", expectedStartEvents, listener.Count(dag.WorkflowNodeStart))
 	}
 
-	// 验证 pipeline 状态为成功
-	if pipeline.Status() != core.StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
+	// 验证 workflow 状态为成功
+	if workflow.Status() != core.StatusSuccess {
+		t.Errorf("Expected workflow status %s, got %s", core.StatusSuccess, workflow.Status())
 	}
 
 	// 验证 Task2 的所有步骤都是 SUCCESS
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if graph == nil {
 		t.Fatal("Graph should not be nil")
 	}
@@ -1327,19 +1327,19 @@ func TestRuntimeImpl_ConditionalEdge_SimpleParam(t *testing.T) {
 		config := loadTestConfig(t, "conditional_edge_simple.yaml")
 		listener := NewRecordingListener()
 
-		pipeline, err := runtime.RunSync(ctx, "conditional-simple-prod", config, listener)
+		workflow, err := runtime.RunSync(ctx, "conditional-simple-prod", config, listener)
 		if err != nil {
 			t.Fatalf("RunSync failed: %v", err)
 		}
 
-		if pipeline.Status() != core.StatusSuccess {
-			t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
+		if workflow.Status() != core.StatusSuccess {
+			t.Errorf("Expected workflow status %s, got %s", core.StatusSuccess, workflow.Status())
 		}
 
 		// 验证执行的节点：Check 和 Deploy 应该执行，Test 不应该执行
 		expectedStartNodes := 2 // Check 和 Deploy
-		if listener.Count(dag.PipelineNodeStart) != expectedStartNodes {
-			t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartNodes, listener.Count(dag.PipelineNodeStart))
+		if listener.Count(dag.WorkflowNodeStart) != expectedStartNodes {
+			t.Errorf("Expected %d WorkflowNodeStart events, got %d", expectedStartNodes, listener.Count(dag.WorkflowNodeStart))
 		}
 	})
 
@@ -1359,23 +1359,23 @@ func TestRuntimeImpl_ConditionalEdge_Metadata(t *testing.T) {
 	config := loadTestConfig(t, "conditional_edge_metadata.yaml")
 	listener := NewRecordingListener()
 
-	pipeline, err := runtime.RunSync(ctx, "conditional-metadata", config, listener)
+	workflow, err := runtime.RunSync(ctx, "conditional-metadata", config, listener)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != core.StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
+	if workflow.Status() != core.StatusSuccess {
+		t.Errorf("Expected workflow status %s, got %s", core.StatusSuccess, workflow.Status())
 	}
 
 	// 验证执行的节点：Setup, Generate, Process, Deploy (shouldDeploy=true)
 	expectedStartNodes := 4
-	if listener.Count(dag.PipelineNodeStart) != expectedStartNodes {
-		t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartNodes, listener.Count(dag.PipelineNodeStart))
+	if listener.Count(dag.WorkflowNodeStart) != expectedStartNodes {
+		t.Errorf("Expected %d WorkflowNodeStart events, got %d", expectedStartNodes, listener.Count(dag.WorkflowNodeStart))
 	}
 
 	// 验证 metadata 中的值（布尔值已转换为字符串）
-	metadata := pipeline.Metadata()
+	metadata := workflow.Metadata()
 	if metadata == nil {
 		t.Fatal("Metadata should not be nil")
 	}
@@ -1400,27 +1400,27 @@ func TestRuntimeImpl_ConditionalEdge_Complex(t *testing.T) {
 	config := loadTestConfig(t, "conditional_edge_complex.yaml")
 	listener := NewRecordingListener()
 
-	pipeline, err := runtime.RunSync(ctx, "conditional-complex", config, listener)
+	workflow, err := runtime.RunSync(ctx, "conditional-complex", config, listener)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != core.StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
+	if workflow.Status() != core.StatusSuccess {
+		t.Errorf("Expected workflow status %s, got %s", core.StatusSuccess, workflow.Status())
 	}
 
 	// 验证执行的节点：Start -> Staging -> FeatureCheck (env=staging, featureFlag=true)
 	// 注意：由于 Staging 节点没有 extract 数据，所以 FeatureCheck 可能无法通过条件边
 	// 实际执行节点数取决于特征标志的评估结果
 	expectedStartNodes := 3
-	actualStartNodes := listener.Count(dag.PipelineNodeStart)
+	actualStartNodes := listener.Count(dag.WorkflowNodeStart)
 	if actualStartNodes != expectedStartNodes {
-		t.Logf("Warning: Expected %d PipelineNodeStart events, got %d", expectedStartNodes, actualStartNodes)
+		t.Logf("Warning: Expected %d WorkflowNodeStart events, got %d", expectedStartNodes, actualStartNodes)
 		// 暂时不报错，先查看实际行为
 	}
 
-	// 验证 pipeline metadata 包含 Param 值
-	metadata := pipeline.Metadata()
+	// 验证 workflow metadata 包含 Param 值
+	metadata := workflow.Metadata()
 	if metadata == nil {
 		t.Fatal("Metadata should not be nil")
 	}
@@ -1456,74 +1456,74 @@ func TestRuntimeImpl_ConditionalEdge_MultiCondition(t *testing.T) {
 	config := loadTestConfig(t, "conditional_edge_multi_cond.yaml")
 	listener := NewRecordingListener()
 
-	pipeline, err := runtime.RunSync(ctx, "conditional-multi-cond", config, listener)
+	workflow, err := runtime.RunSync(ctx, "conditional-multi-cond", config, listener)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != core.StatusSuccess {
-		t.Errorf("Expected pipeline status %s, got %s", core.StatusSuccess, pipeline.Status())
+	if workflow.Status() != core.StatusSuccess {
+		t.Errorf("Expected workflow status %s, got %s", core.StatusSuccess, workflow.Status())
 	}
 
 	// 验证执行的节点：Validate -> Build -> Deploy
 	// testsPassed=true 且 codeCoverage=85 >= 80
 	expectedStartNodes := 3
-	if listener.Count(dag.PipelineNodeStart) != expectedStartNodes {
-		t.Errorf("Expected %d PipelineNodeStart events, got %d", expectedStartNodes, listener.Count(dag.PipelineNodeStart))
+	if listener.Count(dag.WorkflowNodeStart) != expectedStartNodes {
+		t.Errorf("Expected %d WorkflowNodeStart events, got %d", expectedStartNodes, listener.Count(dag.WorkflowNodeStart))
 	}
 }
 
-// TestComprehensivePipelineExecution 综合测试流水线线的主要功能
-func TestComprehensivePipelineExecution(t *testing.T) {
+// TestComprehensiveWorkflowExecution 综合测试流水线线的主要功能
+func TestComprehensiveWorkflowExecution(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
 	t.Run("同步执行流水线", func(t *testing.T) {
 		listener := NewRecordingListener()
 		config := loadTestConfig(t, "comprehensive_sync.yaml")
-		pipeline, err := runtime.RunSync(ctx, "comprehensive-sync", config, listener)
+		workflow, err := runtime.RunSync(ctx, "comprehensive-sync", config, listener)
 		if err != nil {
 			t.Fatalf("RunSync failed: %v", err)
 		}
-		if pipeline == nil {
-			t.Fatal("Pipeline should not be nil")
+		if workflow == nil {
+			t.Fatal("Workflow should not be nil")
 		}
 
 		// 验证事件
-		if listener.Count(dag.PipelineStart) == 0 {
-			t.Error("Expected PipelineStart event")
+		if listener.Count(dag.WorkflowStart) == 0 {
+			t.Error("Expected WorkflowStart event")
 		}
-		if listener.Count(dag.PipelineFinish) == 0 {
-			t.Error("Expected PipelineFinish event")
+		if listener.Count(dag.WorkflowFinish) == 0 {
+			t.Error("Expected WorkflowFinish event")
 		}
-		if listener.Count(dag.PipelineNodeStart) < 2 {
-			t.Error("Expected at least 2 PipelineNodeStart events")
+		if listener.Count(dag.WorkflowNodeStart) < 2 {
+			t.Error("Expected at least 2 WorkflowNodeStart events")
 		}
-		if listener.Count(dag.PipelineNodeFinish) < 2 {
-			t.Error("Expected at least 2 PipelineNodeFinish events")
+		if listener.Count(dag.WorkflowNodeFinish) < 2 {
+			t.Error("Expected at least 2 WorkflowNodeFinish events")
 		}
 	})
 
 	t.Run("异步执行流水线", func(t *testing.T) {
 		listener := NewRecordingListener()
 		config := loadTestConfig(t, "comprehensive_async.yaml")
-		pipeline, err := runtime.RunAsync(ctx, "comprehensive-async", config, listener)
+		workflow, err := runtime.RunAsync(ctx, "comprehensive-async", config, listener)
 		if err != nil {
 			t.Fatalf("RunAsync failed: %v", err)
 		}
-		if pipeline == nil {
-			t.Fatal("Pipeline should not be nil")
+		if workflow == nil {
+			t.Fatal("Workflow should not be nil")
 		}
 
 		// 验证流水线存储在runtime中
 		_, err = runtime.Get("comprehensive-async")
 		if err != nil {
-			t.Fatal("Pipeline should be stored in runtime")
+			t.Fatal("Workflow should be stored in runtime")
 		}
 
 		// 等待异步执行完成
 		select {
-		case <-pipeline.Done():
+		case <-workflow.Done():
 			// 执行完成
 		case <-time.After(5 * time.Second):
 			// 超时时取消流水线
@@ -1531,26 +1531,26 @@ func TestComprehensivePipelineExecution(t *testing.T) {
 		}
 
 		// 验证事件
-		if listener.Count(dag.PipelineStart) == 0 {
-			t.Error("Expected PipelineStart event")
+		if listener.Count(dag.WorkflowStart) == 0 {
+			t.Error("Expected WorkflowStart event")
 		}
-		if listener.Count(dag.PipelineFinish) == 0 {
-			t.Error("Expected PipelineFinish event")
+		if listener.Count(dag.WorkflowFinish) == 0 {
+			t.Error("Expected WorkflowFinish event")
 		}
 	})
 
 	t.Run("Param模板渲染", func(t *testing.T) {
 		config := loadTestConfig(t, "comprehensive_param_render.yaml")
-		pipeline, err := runtime.RunSync(ctx, "param-render-test", config, nil)
+		workflow, err := runtime.RunSync(ctx, "param-render-test", config, nil)
 		if err != nil {
 			t.Fatalf("RunSync failed: %v", err)
 		}
-		if pipeline == nil {
-			t.Fatal("Pipeline should not be nil")
+		if workflow == nil {
+			t.Fatal("Workflow should not be nil")
 		}
 
 		// 验证graph存在
-		graph := pipeline.GetGraph()
+		graph := workflow.GetGraph()
 		if graph == nil {
 			t.Fatal("Graph should not be nil")
 		}
@@ -1562,16 +1562,16 @@ func TestComprehensivePipelineExecution(t *testing.T) {
 
 	t.Run("Metadata创建和渲染", func(t *testing.T) {
 		config := loadTestConfig(t, "comprehensive_metadata.yaml")
-		pipeline, err := runtime.RunSync(ctx, "metadata-test", config, nil)
+		workflow, err := runtime.RunSync(ctx, "metadata-test", config, nil)
 		if err != nil {
 			t.Fatalf("RunSync failed: %v", err)
 		}
-		if pipeline == nil {
-			t.Fatal("Pipeline should not be nil")
+		if workflow == nil {
+			t.Fatal("Workflow should not be nil")
 		}
 
 		// 验证metadata值
-		metadata := pipeline.Metadata()
+		metadata := workflow.Metadata()
 		if metadata == nil {
 			t.Fatal("Metadata should not be nil")
 		}
@@ -1598,41 +1598,41 @@ func TestComprehensivePipelineExecution(t *testing.T) {
 	t.Run("多节点DAG执行", func(t *testing.T) {
 		listener := NewRecordingListener()
 		config := loadTestConfig(t, "comprehensive_dag.yaml")
-		pipeline, err := runtime.RunSync(ctx, "dag-test", config, listener)
+		workflow, err := runtime.RunSync(ctx, "dag-test", config, listener)
 		if err != nil {
 			t.Fatalf("RunSync failed: %v", err)
 		}
-		if pipeline == nil {
-			t.Fatal("Pipeline should not be nil")
+		if workflow == nil {
+			t.Fatal("Workflow should not be nil")
 		}
 
 		// 验证所有节点都执行了
-		graph := pipeline.GetGraph()
+		graph := workflow.GetGraph()
 		nodes := graph.Nodes()
 		if len(nodes) != 4 {
 			t.Fatalf("Expected 4 nodes, got %d", len(nodes))
 		}
 
 		// 验证事件
-		if listener.Count(dag.PipelineNodeStart) != 4 {
-			t.Errorf("Expected 4 PipelineNodeStart events, got %d", listener.Count(dag.PipelineNodeStart))
+		if listener.Count(dag.WorkflowNodeStart) != 4 {
+			t.Errorf("Expected 4 WorkflowNodeStart events, got %d", listener.Count(dag.WorkflowNodeStart))
 		}
-		if listener.Count(dag.PipelineNodeFinish) != 4 {
-			t.Errorf("Expected 4 PipelineNodeFinish events, got %d", listener.Count(dag.PipelineNodeFinish))
+		if listener.Count(dag.WorkflowNodeFinish) != 4 {
+			t.Errorf("Expected 4 WorkflowNodeFinish events, got %d", listener.Count(dag.WorkflowNodeFinish))
 		}
 	})
 
 	t.Run("并行执行", func(t *testing.T) {
-		numPipelines := 5
+		numWorkflows := 5
 		var wg sync.WaitGroup
-		errors := make(chan error, numPipelines)
+		errors := make(chan error, numWorkflows)
 
-		for i := 0; i < numPipelines; i++ {
+		for i := 0; i < numWorkflows; i++ {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
-				pipelineConfig := loadTestConfigTemplate(t, "parallel_template.yaml", id, id)
-				_, err := runtime.RunAsync(ctx, fmt.Sprintf("parallel-pipeline-%d", id), pipelineConfig, nil)
+				workflowConfig := loadTestConfigTemplate(t, "parallel_template.yaml", id, id)
+				_, err := runtime.RunAsync(ctx, fmt.Sprintf("parallel-workflow-%d", id), workflowConfig, nil)
 				if err != nil {
 					errors <- err
 				}
@@ -1643,14 +1643,14 @@ func TestComprehensivePipelineExecution(t *testing.T) {
 		close(errors)
 
 		for err := range errors {
-			t.Errorf("Parallel pipeline failed: %v", err)
+			t.Errorf("Parallel workflow failed: %v", err)
 		}
 
-		for i := 0; i < numPipelines; i++ {
-			pipelineId := fmt.Sprintf("parallel-pipeline-%d", i)
-			_, err := runtime.Get(pipelineId)
+		for i := 0; i < numWorkflows; i++ {
+			workflowId := fmt.Sprintf("parallel-workflow-%d", i)
+			_, err := runtime.Get(workflowId)
 			if err != nil {
-				t.Errorf("Pipeline %s should be stored: %v", pipelineId, err)
+				t.Errorf("Workflow %s should be stored: %v", workflowId, err)
 			}
 		}
 	})
@@ -1661,10 +1661,10 @@ func TestRuntimeImpl_ExportConfig(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
-	config := loadTestConfig(t, "async_pipeline.yaml")
+	config := loadTestConfig(t, "async_workflow.yaml")
 
 	// 启动异步流水线
-	pipeline, err := runtime.RunAsync(ctx, "test-export", config, nil)
+	workflow, err := runtime.RunAsync(ctx, "test-export", config, nil)
 	if err != nil {
 		t.Fatalf("RunAsync failed: %v", err)
 	}
@@ -1680,7 +1680,7 @@ func TestRuntimeImpl_ExportConfig(t *testing.T) {
 	}
 
 	// 验证导出的 YAML 可以被解析
-	exportedConfig := &core.PipelineConfig{}
+	exportedConfig := &core.WorkflowConfig{}
 	err = yaml.Unmarshal([]byte(yamlStr), exportedConfig)
 	if err != nil {
 		t.Fatalf("Failed to parse exported YAML: %v", err)
@@ -1693,7 +1693,7 @@ func TestRuntimeImpl_ExportConfig(t *testing.T) {
 
 	// 等待流水线完成
 	select {
-	case <-pipeline.Done():
+	case <-workflow.Done():
 	case <-time.After(5 * time.Second):
 		runtime.Cancel(ctx, "test-export")
 	}
@@ -1706,7 +1706,7 @@ func TestRuntimeImpl_ExportConfig_NotFound(t *testing.T) {
 
 	_, err := runtime.ExportConfig("non-existent")
 	if err == nil {
-		t.Fatal("Expected error when exporting non-existent pipeline")
+		t.Fatal("Expected error when exporting non-existent workflow")
 	}
 }
 
@@ -1755,81 +1755,81 @@ func TestRuntimeImpl_SetTemplateEngine_Nil(t *testing.T) {
 	}
 }
 
-// TestRuntimeImpl_Pause_NotFound tests pausing a non-existent pipeline
+// TestRuntimeImpl_Pause_NotFound tests pausing a non-existent workflow
 func TestRuntimeImpl_Pause_NotFound(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx).(*RuntimeImpl)
 
 	err := runtime.Pause(ctx, "nonexistent-id")
 	if err == nil {
-		t.Error("Expected error for non-existent pipeline")
+		t.Error("Expected error for non-existent workflow")
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("Error should contain 'not found', got: %v", err)
 	}
 }
 
-// TestRuntimeImpl_Resume_NotFound tests resuming a non-existent pipeline
+// TestRuntimeImpl_Resume_NotFound tests resuming a non-existent workflow
 func TestRuntimeImpl_Resume_NotFound(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx).(*RuntimeImpl)
 
 	err := runtime.Resume(ctx, "nonexistent-id")
 	if err == nil {
-		t.Error("Expected error for non-existent pipeline")
+		t.Error("Expected error for non-existent workflow")
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("Error should contain 'not found', got: %v", err)
 	}
 }
 
-// TestRuntimeImpl_CleanupCompletedPipelines tests cleaning up completed pipelines
-func TestRuntimeImpl_CleanupCompletedPipelines(t *testing.T) {
+// TestRuntimeImpl_CleanupCompletedWorkflows tests cleaning up completed workflows
+func TestRuntimeImpl_CleanupCompletedWorkflows(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx).(*RuntimeImpl)
 
-	// Manually create a completed pipeline and register to runtime
-	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
-	close(pipeline.DoneChanForTest()) // simulate completed
+	// Manually create a completed workflow and register to runtime
+	workflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
+	close(workflow.DoneChanForTest()) // simulate completed
 
 	runtime.mu.Lock()
-	runtime.pipelines["completed-pipeline"] = pipeline
+	runtime.workflows["completed-workflow"] = workflow
 	runtime.mu.Unlock()
 
-	// Manually create a running pipeline
-	runningPipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
+	// Manually create a running workflow
+	runningWorkflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
 	runtime.mu.Lock()
-	runtime.pipelines["running-pipeline"] = runningPipeline
+	runtime.workflows["running-workflow"] = runningWorkflow
 	runtime.mu.Unlock()
 
 	// Execute cleanup
-	runtime.cleanupCompletedPipelines()
+	runtime.cleanupCompletedWorkflows()
 
-	// Verify completed pipeline is cleaned up
+	// Verify completed workflow is cleaned up
 	runtime.mu.RLock()
-	_, completedExists := runtime.pipelines["completed-pipeline"]
-	_, runningExists := runtime.pipelines["running-pipeline"]
+	_, completedExists := runtime.workflows["completed-workflow"]
+	_, runningExists := runtime.workflows["running-workflow"]
 	runtime.mu.RUnlock()
 
 	if completedExists {
-		t.Error("Completed pipeline should have been cleaned up")
+		t.Error("Completed workflow should have been cleaned up")
 	}
 	if !runningExists {
-		t.Error("Running pipeline should not have been cleaned up")
+		t.Error("Running workflow should not have been cleaned up")
 	}
 }
 
-// TestSetPipelineParam tests setting pipeline parameters
-func TestSetPipelineParam(t *testing.T) {
-	pipeline := dag.NewPipeline(context.Background()).(*dag.PipelineImpl)
+// TestSetWorkflowParam tests setting workflow parameters
+func TestSetWorkflowParam(t *testing.T) {
+	workflow := dag.NewWorkflow(context.Background()).(*dag.WorkflowImpl)
 	param := map[string]interface{}{
 		"key1": "value1",
 		"key2": 42,
 	}
 
-	SetPipelineParam(pipeline, param)
+	SetWorkflowParam(workflow, param)
 
-	p := pipeline.ParamForTest()
+	p := workflow.ParamForTest()
 	if core.GetValue(p["key1"].Value) != "value1" {
 		t.Errorf("param[key1] = %v, want 'value1'", p["key1"].Value)
 	}
@@ -1838,15 +1838,15 @@ func TestSetPipelineParam(t *testing.T) {
 	}
 }
 
-// TestSetPipelineParam_NonPipelineImpl tests setting params on nil
-func TestSetPipelineParam_NonPipelineImpl(t *testing.T) {
+// TestSetWorkflowParam_NonWorkflowImpl tests setting params on nil
+func TestSetWorkflowParam_NonWorkflowImpl(t *testing.T) {
 	// Passing nil should not panic
-	SetPipelineParam(nil, map[string]interface{}{"key": "value"})
+	SetWorkflowParam(nil, map[string]interface{}{"key": "value"})
 }
 
 // TestValidateImmutableFields_NoChanges tests validation with identical configs
 func TestValidateImmutableFields_NoChanges(t *testing.T) {
-	old := &core.PipelineConfig{
+	old := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Param:   map[string]interface{}{"k": "v"},
@@ -1859,8 +1859,8 @@ func TestValidateImmutableFields_NoChanges(t *testing.T) {
 
 // TestValidateImmutableFields_VersionChanged tests validation when version changes
 func TestValidateImmutableFields_VersionChanged(t *testing.T) {
-	old := &core.PipelineConfig{Version: "1.0", Name: "test"}
-	newCfg := &core.PipelineConfig{Version: "2.0", Name: "test"}
+	old := &core.WorkflowConfig{Version: "1.0", Name: "test"}
+	newCfg := &core.WorkflowConfig{Version: "2.0", Name: "test"}
 
 	err := validateImmutableFields(old, newCfg)
 	if err == nil {
@@ -1873,8 +1873,8 @@ func TestValidateImmutableFields_VersionChanged(t *testing.T) {
 
 // TestValidateImmutableFields_NameChanged tests validation when name changes
 func TestValidateImmutableFields_NameChanged(t *testing.T) {
-	old := &core.PipelineConfig{Version: "1.0", Name: "test"}
-	newCfg := &core.PipelineConfig{Version: "1.0", Name: "changed"}
+	old := &core.WorkflowConfig{Version: "1.0", Name: "test"}
+	newCfg := &core.WorkflowConfig{Version: "1.0", Name: "changed"}
 
 	err := validateImmutableFields(old, newCfg)
 	if err == nil {
@@ -1884,8 +1884,8 @@ func TestValidateImmutableFields_NameChanged(t *testing.T) {
 
 // TestValidateImmutableFields_MaxLoopIterationsChanged tests validation when max loop iterations changes
 func TestValidateImmutableFields_MaxLoopIterationsChanged(t *testing.T) {
-	old := &core.PipelineConfig{Version: "1.0", Name: "test", MaxLoopIterations: 100}
-	newCfg := &core.PipelineConfig{Version: "1.0", Name: "test", MaxLoopIterations: 200}
+	old := &core.WorkflowConfig{Version: "1.0", Name: "test", MaxLoopIterations: 100}
+	newCfg := &core.WorkflowConfig{Version: "1.0", Name: "test", MaxLoopIterations: 200}
 
 	err := validateImmutableFields(old, newCfg)
 	if err == nil {
@@ -1895,8 +1895,8 @@ func TestValidateImmutableFields_MaxLoopIterationsChanged(t *testing.T) {
 
 // TestValidateImmutableFields_ParamChanged tests validation when param changes
 func TestValidateImmutableFields_ParamChanged(t *testing.T) {
-	old := &core.PipelineConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v1"}}
-	newCfg := &core.PipelineConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v2"}}
+	old := &core.WorkflowConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v1"}}
+	newCfg := &core.WorkflowConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v2"}}
 
 	err := validateImmutableFields(old, newCfg)
 	if err == nil {
@@ -1906,12 +1906,12 @@ func TestValidateImmutableFields_ParamChanged(t *testing.T) {
 
 // TestValidateImmutableFields_ExecutorsChanged tests validation when executors change
 func TestValidateImmutableFields_ExecutorsChanged(t *testing.T) {
-	old := &core.PipelineConfig{
+	old := &core.WorkflowConfig{
 		Version:   "1.0",
 		Name:      "test",
 		Executors: map[string]core.ExecutorConfig{"local": {Type: "local"}},
 	}
-	newCfg := &core.PipelineConfig{
+	newCfg := &core.WorkflowConfig{
 		Version:   "1.0",
 		Name:      "test",
 		Executors: map[string]core.ExecutorConfig{"docker": {Type: "docker"}},
@@ -1925,12 +1925,12 @@ func TestValidateImmutableFields_ExecutorsChanged(t *testing.T) {
 
 // TestValidateImmutableFields_LoggingChanged tests validation when logging changes
 func TestValidateImmutableFields_LoggingChanged(t *testing.T) {
-	old := &core.PipelineConfig{
+	old := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Logging: core.LoggingConfig{Endpoint: "http://old"},
 	}
-	newCfg := &core.PipelineConfig{
+	newCfg := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Logging: core.LoggingConfig{Endpoint: "http://new"},
@@ -1944,12 +1944,12 @@ func TestValidateImmutableFields_LoggingChanged(t *testing.T) {
 
 // TestValidateImmutableFields_AIChanged tests validation when AI config changes
 func TestValidateImmutableFields_AIChanged(t *testing.T) {
-	old := &core.PipelineConfig{
+	old := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		AI:      core.AIConfig{Intent: "old"},
 	}
-	newCfg := &core.PipelineConfig{
+	newCfg := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		AI:      core.AIConfig{Intent: "new"},
@@ -1963,12 +1963,12 @@ func TestValidateImmutableFields_AIChanged(t *testing.T) {
 
 // TestValidateImmutableFields_MetadateChanged tests validation when metadata config changes
 func TestValidateImmutableFields_MetadateChanged(t *testing.T) {
-	old := &core.PipelineConfig{
+	old := &core.WorkflowConfig{
 		Version:  "1.0",
 		Name:     "test",
 		Metadate: core.MetadataConfig{Type: "old"},
 	}
-	newCfg := &core.PipelineConfig{
+	newCfg := &core.WorkflowConfig{
 		Version:  "1.0",
 		Name:     "test",
 		Metadate: core.MetadataConfig{Type: "new"},
@@ -1982,12 +1982,12 @@ func TestValidateImmutableFields_MetadateChanged(t *testing.T) {
 
 // TestValidateImmutableFields_NodesMutable tests that nodes are mutable
 func TestValidateImmutableFields_NodesMutable(t *testing.T) {
-	old := &core.PipelineConfig{
+	old := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Nodes:   map[string]core.NodeConfig{"A": {Name: "A"}},
 	}
-	newCfg := &core.PipelineConfig{
+	newCfg := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Nodes:   map[string]core.NodeConfig{"B": {Name: "B"}},
@@ -2001,12 +2001,12 @@ func TestValidateImmutableFields_NodesMutable(t *testing.T) {
 
 // TestValidateImmutableFields_GraphMutable tests that graph is mutable
 func TestValidateImmutableFields_GraphMutable(t *testing.T) {
-	old := &core.PipelineConfig{
+	old := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Graph:   "stateDiagram-v2\n    [*] --> A",
 	}
-	newCfg := &core.PipelineConfig{
+	newCfg := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Graph:   "stateDiagram-v2\n    [*] --> B",
@@ -2018,71 +2018,71 @@ func TestValidateImmutableFields_GraphMutable(t *testing.T) {
 	}
 }
 
-// TestListPipelines_EmptyRuntime 测试空 Runtime 返回空列表
-func TestListPipelines_EmptyRuntime(t *testing.T) {
+// TestListWorkflows_EmptyRuntime 测试空 Runtime 返回空列表
+func TestListWorkflows_EmptyRuntime(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
-	pipelines := runtime.ListPipelines()
-	if pipelines == nil {
-		t.Fatal("ListPipelines should not return nil")
+	workflows := runtime.ListWorkflows()
+	if workflows == nil {
+		t.Fatal("ListWorkflows should not return nil")
 	}
-	if len(pipelines) != 0 {
-		t.Errorf("Expected 0 pipelines, got %d", len(pipelines))
+	if len(workflows) != 0 {
+		t.Errorf("Expected 0 workflows, got %d", len(workflows))
 	}
 }
 
-// TestListPipelines_WithPipelines 测试有活跃流水线时返回正确列表
-func TestListPipelines_WithPipelines(t *testing.T) {
+// TestListWorkflows_WithWorkflows 测试有活跃流水线时返回正确列表
+func TestListWorkflows_WithWorkflows(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
 	// 使用同步执行来确保流水线在执行期间存在于 runtime 中
-	config := loadTestConfig(t, "sync_pipeline.yaml")
+	config := loadTestConfig(t, "sync_workflow.yaml")
 
 	// 执行同步流水线
-	_, err := runtime.RunSync(ctx, "test-pipeline-1", config, nil)
+	_, err := runtime.RunSync(ctx, "test-workflow-1", config, nil)
 	if err != nil {
 		// 某些测试环境可能缺少依赖，跳过
 		t.Skipf("RunSync failed (may be expected in test environment): %v", err)
 	}
 
 	// 同步执行完成后流水线会被移除
-	pipelines := runtime.ListPipelines()
-	if len(pipelines) != 0 {
-		t.Errorf("Expected 0 active pipelines after sync completion, got %d", len(pipelines))
+	workflows := runtime.ListWorkflows()
+	if len(workflows) != 0 {
+		t.Errorf("Expected 0 active workflows after sync completion, got %d", len(workflows))
 	}
 }
 
-// TestListPipelines_AsyncExecution 测试异步执行期间的列表
-func TestListPipelines_AsyncExecution(t *testing.T) {
+// TestListWorkflows_AsyncExecution 测试异步执行期间的列表
+func TestListWorkflows_AsyncExecution(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 
-	config := loadTestConfig(t, "sync_pipeline.yaml")
+	config := loadTestConfig(t, "sync_workflow.yaml")
 
 	// 执行异步流水线
-	_, err := runtime.RunAsync(ctx, "async-test-pipeline", config, nil)
+	_, err := runtime.RunAsync(ctx, "async-test-workflow", config, nil)
 	if err != nil {
 		t.Skipf("RunAsync failed (may be expected in test environment): %v", err)
 	}
 
 	// 检查列表中包含异步流水线
-	pipelines := runtime.ListPipelines()
+	workflows := runtime.ListWorkflows()
 	found := false
-	for _, id := range pipelines {
-		if id == "async-test-pipeline" {
+	for _, id := range workflows {
+		if id == "async-test-workflow" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("Expected async-test-pipeline to be in ListPipelines")
+		t.Error("Expected async-test-workflow to be in ListWorkflows")
 	}
 
 	// 等待异步执行完成
 	time.Sleep(2 * time.Second)
 
 	// 清理
-	runtime.Rm("async-test-pipeline")
+	runtime.Rm("async-test-workflow")
 }

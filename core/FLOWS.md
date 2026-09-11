@@ -1,10 +1,10 @@
 # Core 模块流程图
 
-## PipelineConfig 配置结构
+## WorkflowConfig 配置结构
 
 ```mermaid
 flowchart TD
-    A[PipelineConfig] --> B[Version<br/>版本号]
+    A[WorkflowConfig] --> B[Version<br/>版本号]
     A --> C[Name<br/>流水线名称]
     A --> D[Metadate<br/>MetadataConfig<br/>元数据配置]
     A --> E[AI<br/>AIConfig<br/>AI配置]
@@ -105,7 +105,7 @@ flowchart TD
 stateDiagram-v2
     [*] --> PENDING: 初始化
 
-    PENDING --> RUNNING: Pipeline.Run
+    PENDING --> RUNNING: Workflow.Run
 
     RUNNING --> PAUSED: Pause<br/>输入请求
 

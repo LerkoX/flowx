@@ -160,7 +160,7 @@
             <div class="sidebar-title">更多文档</div>
             <a href="quickstart.html">快速开始</a>
             <a href="configuration.html">配置参考</a>
-            <a href="pipeline.html">流水线核心</a>
+            <a href="workflow.html">流水线核心</a>
             <a href="executors.html">执行器系统</a>
             <a href="node.html">节点与步骤</a>
             <a href="edge.html">条件边与循环</a>
@@ -187,8 +187,8 @@
         <h2 id="render-phases">渲染阶段</h2>
         <p>模板渲染在两个不同阶段发生：</p>
 
-        <h3>1. 配置解析阶段（Pipeline 启动前）</h3>
-        <p>在 <code>RuntimeImpl</code> 创建 Pipeline 时渲染以下字段：</p>
+        <h3>1. 配置解析阶段（Workflow 启动前）</h3>
+        <p>在 <code>RuntimeImpl</code> 创建 Workflow 时渲染以下字段：</p>
         <ul>
             <li><strong>Param</strong>：支持自引用，最多迭代 10 次防止无限循环</li>
             <li><strong>Metadata.data</strong>：引用 <code>Param</code> 中的值</li>

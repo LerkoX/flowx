@@ -236,7 +236,7 @@
             <div class="sidebar-title">更多文档</div>
             <a href="quickstart.html">快速开始</a>
             <a href="configuration.html">配置参考</a>
-            <a href="pipeline.html">流水线核心</a>
+            <a href="workflow.html">流水线核心</a>
             <a href="executors.html">执行器系统</a>
             <a href="node.html">节点与步骤</a>
             <a href="edge.html">条件边与循环</a>
@@ -258,14 +258,14 @@
         <pre class="mermaid">flowchart TD
     subgraph Runtime["Runtime 管理器"]
         direction TB
-        R1["RunSync / RunAsync"] --> R2["Pipeline 实例"]
+        R1["RunSync / RunAsync"] --> R2["Workflow 实例"]
         R2 --> R3["Get / Cancel / Pause / Resume"]
         R3 --> R4["ExportConfig"]
         R4 --> R5["UpdateConfig / ModifyGraph"]
         R5 --> R6["后台清理"]
     end
 
-    subgraph PipelineInstance["Pipeline 实例"]
+    subgraph WorkflowInstance["Workflow 实例"]
         direction TB
         P1["状态: Pending"] --> P2["状态: Running"]
         P2 --> P3{"终态?"}
@@ -276,19 +276,19 @@
         P7 -->|恢复| P2
     end
 
-    R2 --> PipelineInstance
+    R2 --> WorkflowInstance
 
     style Runtime fill:#e0f2fe,stroke:#2563eb
-    style PipelineInstance fill:#fef3c7,stroke:#f59e0b
+    style WorkflowInstance fill:#fef3c7,stroke:#f59e0b
     style P4 fill:#dcfce7,stroke:#10b981
     style P5 fill:#fee2e2,stroke:#ef4444
     style P6 fill:#fee2e2,stroke:#ef4444</pre>
 
         <pre><code class="language-go">type Runtime interface {
-    Get(id string) (Pipeline, error)
+    Get(id string) (Workflow, error)
     Cancel(ctx context.Context, id string) error
-    RunAsync(ctx, id, configYAML string, listener Listener) (Pipeline, error)
-    RunSync(ctx, id, configYAML string, listener Listener) (Pipeline, error)
+    RunAsync(ctx, id, configYAML string, listener Listener) (Workflow, error)
+    RunSync(ctx, id, configYAML string, listener Listener) (Workflow, error)
     Rm(id string)
     Done() chan struct{}
     Notify(data any) error
@@ -309,16 +309,16 @@
 
         <h3>同步执行 RunSync</h3>
         <p>在调用 goroutine 中阻塞执行，直到流水线完成。</p>
-        <pre><code class="language-go">p, err := rt.RunSync(ctx, "pipeline-001", configYAML, listener)
+        <pre><code class="language-go">p, err := rt.RunSync(ctx, "workflow-001", configYAML, listener)
 if err != nil {
     log.Fatal(err)
 }
 // p.Status() 此时已经是终态
-fmt.Println("Pipeline completed:", p.Status())</code></pre>
+fmt.Println("Workflow completed:", p.Status())</code></pre>
 
         <h3>异步执行 RunAsync</h3>
-        <p>在新的 goroutine 中执行，立即返回 Pipeline 实例。</p>
-        <pre><code class="language-go">p, err := rt.RunAsync(ctx, "pipeline-001", configYAML, listener)
+        <p>在新的 goroutine 中执行，立即返回 Workflow 实例。</p>
+        <pre><code class="language-go">p, err := rt.RunAsync(ctx, "workflow-001", configYAML, listener)
 if err != nil {
     log.Fatal(err)
 }
@@ -327,22 +327,22 @@ if err != nil {
 
 // 等待完成
 <-p.Done()
-fmt.Println("Pipeline completed:", p.Status())</code></pre>
+fmt.Println("Workflow completed:", p.Status())</code></pre>
 
         <blockquote>
-            <strong>注意</strong>：异步执行的 Pipeline 在完成后会自动从 Runtime 的内部 map 中移除。
+            <strong>注意</strong>：异步执行的 Workflow 在完成后会自动从 Runtime 的内部 map 中移除。
         </blockquote>
 
         <h3>重复 ID 处理</h3>
         <p>如果使用已存在的 ID 调用 <code>RunSync</code> 或 <code>RunAsync</code>，会返回错误：</p>
-        <pre><code class="language-go">_, err := rt.RunSync(ctx, "pipeline-001", configYAML, nil) // 成功
-_, err = rt.RunSync(ctx, "pipeline-001", configYAML, nil)   // 错误：重复 ID</code></pre>
+        <pre><code class="language-go">_, err := rt.RunSync(ctx, "workflow-001", configYAML, nil) // 成功
+_, err = rt.RunSync(ctx, "workflow-001", configYAML, nil)   // 错误：重复 ID</code></pre>
 
         <h2 id="snapshot">快照与恢复</h2>
 
         <h3>导出配置</h3>
         <p><code>ExportConfig</code> 将正在运行的流水线状态导出为 YAML 字符串，包含所有节点和步骤的运行时状态。</p>
-        <pre><code class="language-go">yamlStr, err := rt.ExportConfig("pipeline-001")
+        <pre><code class="language-go">yamlStr, err := rt.ExportConfig("workflow-001")
 if err != nil {
     log.Fatal(err)
 }
@@ -358,10 +358,10 @@ if err != nil {
         <h3>恢复执行</h3>
         <p>使用导出的配置作为输入，已完成的节点和步骤会被自动跳过：</p>
         <pre><code class="language-go">// 1. 导出当前状态
-yamlStr, _ := rt.ExportConfig("pipeline-001")
+yamlStr, _ := rt.ExportConfig("workflow-001")
 
 // 2. 稍后恢复
-p, _ := rt.RunSync(ctx, "pipeline-001-recovered", yamlStr, nil)
+p, _ := rt.RunSync(ctx, "workflow-001-recovered", yamlStr, nil)
 // 已完成的节点（状态为 SUCCESS/FAILED/CANCELLED）会被跳过
 // 从中断处继续执行</code></pre>
 
@@ -369,11 +369,11 @@ p, _ := rt.RunSync(ctx, "pipeline-001-recovered", yamlStr, nil)
 
         <h3>暂停流水线</h3>
         <p><code>Pause</code> 让流水线在当前 BFS 层级执行完成后暂停：</p>
-        <pre><code class="language-go">err := rt.Pause(ctx, "pipeline-001")</code></pre>
+        <pre><code class="language-go">err := rt.Pause(ctx, "workflow-001")</code></pre>
         <p>暂停后流水线状态变为 <code>PAUSED</code>，可以通过 <code>ExportConfig</code> 导出状态，或通过 <code>ModifyGraph</code> 修改图结构。</p>
 
         <h3>恢复流水线</h3>
-        <pre><code class="language-go">err := rt.Resume(ctx, "pipeline-001")</code></pre>
+        <pre><code class="language-go">err := rt.Resume(ctx, "workflow-001")</code></pre>
         <p>恢复后会重新计算 BFS 层级（图可能已被修改），从暂停时的层级继续执行。</p>
 
         <h2 id="update">配置更新</h2>
@@ -381,7 +381,7 @@ p, _ := rt.RunSync(ctx, "pipeline-001-recovered", yamlStr, nil)
 
         <pre><code class="language-go">newConfig := `
 Version: "1.0"
-Name: updated-pipeline
+Name: updated-workflow
 
 Graph: |
   stateDiagram-v2
@@ -402,7 +402,7 @@ Nodes:
         run: echo "Deploying..."
 `
 
-err := rt.UpdateConfig(ctx, "pipeline-001", newConfig)</code></pre>
+err := rt.UpdateConfig(ctx, "workflow-001", newConfig)</code></pre>
 
         <p><strong>规则</strong>：</p>
         <ul>
@@ -420,7 +420,7 @@ rt.StartBackground()
 // 停止后台清理
 rt.StopBackground()</code></pre>
 
-        <p>清理逻辑：移除状态为终态（<code>SUCCESS</code>、<code>FAILED</code>、<code>ABORTED</code>）的 Pipeline 记录。</p>
+        <p>清理逻辑：移除状态为终态（<code>SUCCESS</code>、<code>FAILED</code>、<code>ABORTED</code>）的 Workflow 记录。</p>
 
         <h2 id="logging">日志推送</h2>
         <p>Runtime 支持设置日志推送器（Pusher），将执行日志推送到外部系统。</p>
@@ -445,7 +445,7 @@ rt.Notify(map[string]any{
 rt.Notify(42)</code></pre>
 
         <h2>并发安全</h2>
-        <p><code>RuntimeImpl</code> 使用 <code>sync.RWMutex</code> 保护内部 Pipeline map：</p>
+        <p><code>RuntimeImpl</code> 使用 <code>sync.RWMutex</code> 保护内部 Workflow map：</p>
         <ul>
             <li><code>Get</code>、<code>ExportConfig</code> 使用读锁</li>
             <li><code>RunSync</code>、<code>RunAsync</code>、<code>Rm</code>、<code>Cancel</code> 使用写锁</li>

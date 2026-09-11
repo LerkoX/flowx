@@ -11,7 +11,7 @@ import (
 )
 
 // setupMetadata 设置流水线的metadata
-func (r *RuntimeImpl) setupMetadata(ctx context.Context, pipeline dag.Pipeline, config *core.PipelineConfig) error {
+func (r *RuntimeImpl) setupMetadata(ctx context.Context, workflow dag.Workflow, config *core.WorkflowConfig) error {
 	// 检查是否有metadata配置（注意配置中是Metadate）
 	// 只有当配置了 Metadate.Type 且有数据时才创建 store
 	if config.Metadate.Type == "" || config.Metadate.Data == nil || len(config.Metadate.Data) == 0 {
@@ -20,25 +20,25 @@ func (r *RuntimeImpl) setupMetadata(ctx context.Context, pipeline dag.Pipeline, 
 
 	// 创建metadata store
 	factory := metadata.NewMetadataStoreFactory()
-	store, err := factory.Create(config.Metadate, pipeline.Id())
+	store, err := factory.Create(config.Metadate, workflow.Id())
 	if err != nil {
 		return fmt.Errorf("failed to create metadata store: %w", err)
 	}
 
-	// 设置到pipeline
-	pipeline.SetMetadata(store)
+	// 设置到workflow
+	workflow.SetMetadata(store)
 	return nil
 }
 
 // parseConfig 解析流水线配置
-func (r *RuntimeImpl) parseConfig(config string) (*core.PipelineConfig, error) {
-	// 直接解析为 PipelineConfig
+func (r *RuntimeImpl) parseConfig(config string) (*core.WorkflowConfig, error) {
+	// 直接解析为 WorkflowConfig
 	// Param 和 Metadate.Data 保持 map[string]interface{}（yaml.v2 兼容）
-	var pipelineConfig core.PipelineConfig
-	err := yaml.Unmarshal([]byte(config), &pipelineConfig)
+	var workflowConfig core.WorkflowConfig
+	err := yaml.Unmarshal([]byte(config), &workflowConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal yaml config: %w", err)
 	}
 
-	return &pipelineConfig, nil
+	return &workflowConfig, nil
 }

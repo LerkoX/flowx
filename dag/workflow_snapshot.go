@@ -10,14 +10,14 @@ import (
 	"github.com/LerkoX/flowx/template"
 )
 
-// errReadOnly 是 pipelineSnapshot 的写操作返回的错误
-var errReadOnly = errors.New("pipeline snapshot is read-only")
+// errReadOnly 是 workflowSnapshot 的写操作返回的错误
+var errReadOnly = errors.New("workflow snapshot is read-only")
 
-// pipelineSnapshot 是 PipelineImpl 的只读快照，用于回调通知
-// 它实现了 Pipeline 接口，但所有写方法都会返回 errReadOnly
-// 这样可以在 Notify/NotifyEvent 中安全地将 pipeline 状态传递给外部监听器
-// 避免回调期间 pipeline 状态被并发修改导致的不一致问题
-type pipelineSnapshot struct {
+// workflowSnapshot 是 WorkflowImpl 的只读快照，用于回调通知
+// 它实现了 Workflow 接口，但所有写方法都会返回 errReadOnly
+// 这样可以在 Notify/NotifyEvent 中安全地将 workflow 状态传递给外部监听器
+// 避免回调期间 workflow 状态被并发修改导致的不一致问题
+type workflowSnapshot struct {
 	id          string
 	status      string
 	graph       Graph
@@ -26,9 +26,9 @@ type pipelineSnapshot struct {
 	param       map[string]core.FieldItem
 }
 
-// newPipelineSnapshot 从 PipelineImpl 创建只读快照
+// newWorkflowSnapshot 从 WorkflowImpl 创建只读快照
 // 调用者必须持有 p.mu 的读锁或写锁
-func newPipelineSnapshot(p *PipelineImpl) *pipelineSnapshot {
+func newWorkflowSnapshot(p *WorkflowImpl) *workflowSnapshot {
 	// 直接拷贝 metadata（避免调用 Metadata() 导致死锁）
 	metadataCopy := make(Metadata)
 	for k, v := range p.metadata {
@@ -41,7 +41,7 @@ func newPipelineSnapshot(p *PipelineImpl) *pipelineSnapshot {
 		paramCopy[k] = v
 	}
 
-	return &pipelineSnapshot{
+	return &workflowSnapshot{
 		id:          p.id,
 		status:      p.status,
 		graph:       p.graph,
@@ -52,32 +52,32 @@ func newPipelineSnapshot(p *PipelineImpl) *pipelineSnapshot {
 }
 
 // Id 返回流水线的ID
-func (s *pipelineSnapshot) Id() string {
+func (s *workflowSnapshot) Id() string {
 	return s.id
 }
 
 // GetGraph 返回流水线的图结构
-func (s *pipelineSnapshot) GetGraph() Graph {
+func (s *workflowSnapshot) GetGraph() Graph {
 	return s.graph
 }
 
 // SetGraph 设置流水线的图结构（只读，panic）
-func (s *pipelineSnapshot) SetGraph(graph Graph) {
+func (s *workflowSnapshot) SetGraph(graph Graph) {
 	panic(errReadOnly)
 }
 
 // Status 返回流水线的整体状态
-func (s *pipelineSnapshot) Status() string {
+func (s *workflowSnapshot) Status() string {
 	return s.status
 }
 
 // SetMetadata 设置元数据（只读，panic）
-func (s *pipelineSnapshot) SetMetadata(store metadata.MetadataStore) {
+func (s *workflowSnapshot) SetMetadata(store metadata.MetadataStore) {
 	panic(errReadOnly)
 }
 
 // Metadata 获取元数据
-func (s *pipelineSnapshot) Metadata() Metadata {
+func (s *workflowSnapshot) Metadata() Metadata {
 	result := make(Metadata)
 	for k, v := range s.metadata {
 		result[k] = v
@@ -86,62 +86,62 @@ func (s *pipelineSnapshot) Metadata() Metadata {
 }
 
 // Listening 设置流水线执行事件监听（只读，panic）
-func (s *pipelineSnapshot) Listening(listener Listener) {
+func (s *workflowSnapshot) Listening(listener Listener) {
 	panic(errReadOnly)
 }
 
 // Done 返回一个通道，用于通知流水线何时完成（快照中返回 nil）
-func (s *pipelineSnapshot) Done() <-chan struct{} {
+func (s *workflowSnapshot) Done() <-chan struct{} {
 	return nil
 }
 
 // Run 执行流水线（只读，panic）
-func (s *pipelineSnapshot) Run(ctx context.Context) error {
+func (s *workflowSnapshot) Run(ctx context.Context) error {
 	panic(errReadOnly)
 }
 
 // Notify 通知（只读，panic）
-func (s *pipelineSnapshot) Notify() {
+func (s *workflowSnapshot) Notify() {
 	panic(errReadOnly)
 }
 
 // Cancel 取消流水线（只读，panic）
-func (s *pipelineSnapshot) Cancel() {
+func (s *workflowSnapshot) Cancel() {
 	panic(errReadOnly)
 }
 
 // SetExecutorProvider 设置Executor提供者（只读，panic）
-func (s *pipelineSnapshot) SetExecutorProvider(provider ExecutorProvider) {
+func (s *workflowSnapshot) SetExecutorProvider(provider ExecutorProvider) {
 	panic(errReadOnly)
 }
 
 // SetTemplateEngine 设置模板引擎（只读，panic）
-func (s *pipelineSnapshot) SetTemplateEngine(engine template.TemplateEngine) {
+func (s *workflowSnapshot) SetTemplateEngine(engine template.TemplateEngine) {
 	panic(errReadOnly)
 }
 
 // GetTemplateEngine 获取模板引擎（快照中返回 nil）
-func (s *pipelineSnapshot) GetTemplateEngine() template.TemplateEngine {
+func (s *workflowSnapshot) GetTemplateEngine() template.TemplateEngine {
 	return nil
 }
 
 // SetPusher 设置日志推送器（只读，panic）
-func (s *pipelineSnapshot) SetPusher(pusher logger.Pusher) {
+func (s *workflowSnapshot) SetPusher(pusher logger.Pusher) {
 	panic(errReadOnly)
 }
 
 // Pause 暂停流水线（只读，panic）
-func (s *pipelineSnapshot) Pause() error {
+func (s *workflowSnapshot) Pause() error {
 	return errReadOnly
 }
 
 // Resume 恢复暂停的流水线（只读，panic）
-func (s *pipelineSnapshot) Resume(ctx context.Context) error {
+func (s *workflowSnapshot) Resume(ctx context.Context) error {
 	return errReadOnly
 }
 
 // IsModifiable 判断当前是否可修改图
-func (s *pipelineSnapshot) IsModifiable() bool {
+func (s *workflowSnapshot) IsModifiable() bool {
 	switch s.status {
 	case core.StatusPaused, core.StatusStopped, core.StatusFailed, core.StatusCancelled, core.StatusSuccess:
 		return true
@@ -151,17 +151,17 @@ func (s *pipelineSnapshot) IsModifiable() bool {
 }
 
 // CurrentNode 返回当前正在执行的节点
-func (s *pipelineSnapshot) CurrentNode() Node {
+func (s *workflowSnapshot) CurrentNode() Node {
 	return s.currentNode
 }
 
 // SetParam 设置 param 值（只读，panic）
-func (s *pipelineSnapshot) SetParam(param map[string]interface{}) {
+func (s *workflowSnapshot) SetParam(param map[string]interface{}) {
 	panic(errReadOnly)
 }
 
 // GetParam 获取 param 值（只读）
-func (s *pipelineSnapshot) GetParam() Metadata {
+func (s *workflowSnapshot) GetParam() Metadata {
 	result := make(Metadata, len(s.param))
 	for k, v := range s.param {
 		result[k] = v
@@ -170,9 +170,9 @@ func (s *pipelineSnapshot) GetParam() Metadata {
 }
 
 // SetMaxLoopIterations 设置循环图最大迭代次数（只读，panic）
-func (s *pipelineSnapshot) SetMaxLoopIterations(max int) {
+func (s *workflowSnapshot) SetMaxLoopIterations(max int) {
 	panic(errReadOnly)
 }
 
-// 预检查 pipelineSnapshot 是否实现了 Pipeline 接口
-var _ Pipeline = (*pipelineSnapshot)(nil)
+// 预检查 workflowSnapshot 是否实现了 Workflow 接口
+var _ Workflow = (*workflowSnapshot)(nil)

@@ -1,12 +1,12 @@
 # 配置参考
 
-Pipelinex 使用 YAML 格式定义流水线配置。本文档详细说明所有配置字段。
+Workflowx 使用 YAML 格式定义流水线配置。本文档详细说明所有配置字段。
 
 ## 完整结构
 
 ```yaml
 Version: "1.0"
-Name: my-pipeline
+Name: my-workflow
 
 Metadate:
   type: in-config
@@ -345,7 +345,7 @@ Graph: |
     D --> [*]
 ```
 
-> 更多详情参见 [流水线核心](pipeline.md) 中循环图部分
+> 更多详情参见 [流水线核心](workflow.md) 中循环图部分
 
 ---
 

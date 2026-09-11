@@ -1,11 +1,11 @@
 # 流水线核心
 
-本文档介绍 Pipelinex 的核心流水线机制：DAG 图结构、统一遍历算法（支持有环/无环图）、循环执行、暂停恢复、动态图修改和事件系统。
+本文档介绍 Workflowx 的核心流水线机制：DAG 图结构、统一遍历算法（支持有环/无环图）、循环执行、暂停恢复、动态图修改和事件系统。
 
-## Pipeline 接口
+## Workflow 接口
 
 ```go
-type Pipeline interface {
+type Workflow interface {
     Id() string                                          // 流水线唯一 ID（UUID）
     GetGraph() Graph                                     // 获取 DAG 图
     SetGraph(graph Graph)                                // 设置 DAG 图
@@ -175,7 +175,7 @@ Init → Running → Success
 
 ```
 Run() 被调用
-  ├── 触发 PipelineStart 事件
+  ├── 触发 WorkflowStart 事件
   ├── 创建求值上下文（EvaluationContext）
   ├── 逐层 BFS 执行（runLevelByLevel）
   │   ├── 循环开始：
@@ -191,7 +191,7 @@ Run() 被调用
   │       ├── 评估回边条件 → true → 重置循环节点，继续迭代
   │       └── 评估回边条件 → false → 循环结束
   ├── 清理所有执行器
-  ├── 触发 PipelineFinish 事件
+  ├── 触发 WorkflowFinish 事件
   └── 关闭 doneChan
 ```
 
@@ -220,24 +220,24 @@ Run() 被调用
 
 | 常量 | 值 | 触发时机 |
 |------|------|---------|
-| `EventPipelineInit` | `PipelineInit` | 流水线初始化 |
-| `EventPipelineStart` | `PipelineStart` | 流水线开始执行 |
-| `EventPipelineFinish` | `PipelineFinish` | 流水线执行完成 |
-| `EventPipelineCancelled` | `PipelineCancelled` | 流水线被取消 |
-| `EventPipelinePaused` | `PipelinePaused` | 流水线暂停 |
-| `EventPipelineResumed` | `PipelineResumed` | 流水线恢复 |
-| `EventPipelineGraphModified` | `PipelineGraphModified` | 图被动态修改 |
-| `EventPipelineExecutorPrepare` | `PipelineExecutorPrepare` | 执行器准备中 |
-| `EventPipelineExecutorPrepareDone` | `PipelineExecutorPrepareDone` | 执行器准备完成 |
-| `EventPipelineStatusUpdate` | `PipelineStatusUpdate` | 流水线状态更新 |
-| `EventPipelineNodeStart` | `PipelineNodeStart` | 节点开始执行 |
-| `EventPipelineNodeFinish` | `PipelineNodeFinish` | 节点执行完成 |
+| `EventWorkflowInit` | `WorkflowInit` | 流水线初始化 |
+| `EventWorkflowStart` | `WorkflowStart` | 流水线开始执行 |
+| `EventWorkflowFinish` | `WorkflowFinish` | 流水线执行完成 |
+| `EventWorkflowCancelled` | `WorkflowCancelled` | 流水线被取消 |
+| `EventWorkflowPaused` | `WorkflowPaused` | 流水线暂停 |
+| `EventWorkflowResumed` | `WorkflowResumed` | 流水线恢复 |
+| `EventWorkflowGraphModified` | `WorkflowGraphModified` | 图被动态修改 |
+| `EventWorkflowExecutorPrepare` | `WorkflowExecutorPrepare` | 执行器准备中 |
+| `EventWorkflowExecutorPrepareDone` | `WorkflowExecutorPrepareDone` | 执行器准备完成 |
+| `EventWorkflowStatusUpdate` | `WorkflowStatusUpdate` | 流水线状态更新 |
+| `EventWorkflowNodeStart` | `WorkflowNodeStart` | 节点开始执行 |
+| `EventWorkflowNodeFinish` | `WorkflowNodeFinish` | 节点执行完成 |
 
 ### Listener 接口
 
 ```go
 type Listener interface {
-    Handle(p Pipeline, event Event)  // 处理事件
+    Handle(p Workflow, event Event)  // 处理事件
     Events() []Event                  // 订阅的事件列表
 }
 ```
@@ -248,23 +248,23 @@ type Listener interface {
 // 创建监听器
 listener := &flowx.DGAListener{
     Events: []flowx.Event{
-        flowx.EventPipelineNodeStart,
-        flowx.EventPipelineNodeFinish,
+        flowx.EventWorkflowNodeStart,
+        flowx.EventWorkflowNodeFinish,
     },
-    Handler: func(p flowx.Pipeline, event flowx.Event) {
+    Handler: func(p flowx.Workflow, event flowx.Event) {
         fmt.Printf("Event: %s\n", event)
     },
 }
 
-p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, listener)
+p, _ := rt.RunSync(ctx, "workflow-001", configYAML, listener)
 ```
 
 ## 并发安全
 
 - `DGAGraph` 使用 `sync.RWMutex` 保护节点和边的并发访问
-- `PipelineImpl` 使用 `sync.Once` 确保 `doneChan` 只关闭一次
+- `WorkflowImpl` 使用 `sync.Once` 确保 `doneChan` 只关闭一次
 - 遍历过程中使用 `sync.WaitGroup` 等待并行节点
-- 执行器按名称缓存，同一 Pipeline 中同名执行器共享实例
+- 执行器按名称缓存，同一 Workflow 中同名执行器共享实例
 
 ## 暂停与恢复
 
@@ -273,10 +273,10 @@ p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, listener)
 调用 `Pause()` 后，流水线会在当前层级的所有节点执行完成后暂停：
 
 ```go
-pipeline, _ := rt.RunAsync(ctx, "pipeline-001", config, nil)
+workflow, _ := rt.RunAsync(ctx, "workflow-001", config, nil)
 
 // 暂停（等待当前层执行完毕）
-err := pipeline.Pause()
+err := workflow.Pause()
 ```
 
 ### 恢复流水线
@@ -284,7 +284,7 @@ err := pipeline.Pause()
 调用 `Resume()` 恢复暂停的流水线：
 
 ```go
-err := pipeline.Resume(ctx)
+err := workflow.Resume(ctx)
 ```
 
 ### 暂停期间可修改图
@@ -312,7 +312,7 @@ mods := flowx.GraphModifications{
     },
 }
 
-err := rt.ModifyGraph(ctx, "pipeline-001", mods)
+err := rt.ModifyGraph(ctx, "workflow-001", mods)
 ```
 
 修改操作是原子的：如果任何一步失败，会自动回滚到修改前的状态。
@@ -326,4 +326,4 @@ err := rt.ModifyGraph(ctx, "pipeline-001", mods)
 5. 解析 Mermaid 图片段（如果有）
 6. 校验图结构（允许条件回边，拒绝无条件环）
 7. 更新存储的配置
-8. 触发 `PipelineGraphModified` 事件
+8. 触发 `WorkflowGraphModified` 事件

@@ -265,7 +265,7 @@
         <p>FlowX 的流水线基于 DAG（有向无环图）结构组织任务。每个节点代表一个执行单元，边代表执行顺序和依赖关系。引擎使用 BFS 层级遍历算法，支持无环图和有环图（通过条件回边实现循环）。</p>
 
         <pre class="mermaid">flowchart TD
-    Start([Run]) --> Event1[触发 PipelineStart]
+    Start([Run]) --> Event1[触发 WorkflowStart]
     Event1 --> Init[创建求值上下文]
     Init --> Loop{循环检测}
     Loop -->|有回边| SetIter[设置 iteration]
@@ -282,7 +282,7 @@
     CheckBackEdge -->|true| Reset[重置循环节点]
     Reset --> Loop
     CheckBackEdge -->|false| Cleanup[清理执行器]
-    Cleanup --> Event2[触发 PipelineFinish]
+    Cleanup --> Event2[触发 WorkflowFinish]
     Event2 --> Done([关闭 doneChan])
     Pause --> Resume[恢复] --> BFS
 
@@ -293,7 +293,7 @@
         <pre style="white-space: pre; overflow-x: auto;"><code class="language-plaintext">流水线执行流程：
 
 Run() 被调用
-  ├── 触发 PipelineStart 事件
+  ├── 触发 WorkflowStart 事件
   ├── 创建求值上下文（EvaluationContext）
   ├── 逐层 BFS 执行（runLevelByLevel）
   │   ├── 循环开始：
@@ -309,7 +309,7 @@ Run() 被调用
   │       ├── 评估回边条件 → true → 重置循环节点，继续迭代
   │       └── 评估回边条件 → false → 循环结束
   ├── 清理所有执行器
-  ├── 触发 PipelineFinish 事件
+  ├── 触发 WorkflowFinish 事件
   └── 关闭 doneChan
 </code></pre>
 
@@ -498,13 +498,13 @@ Graph: |
 
         <h3>暂停流水线</h3>
         <p>调用 <code>Pause()</code> 后，流水线会在当前层级的所有节点执行完成后暂停：</p>
-        <pre><code class="language-go">pipeline, _ := rt.RunAsync(ctx, "pipeline-001", config, nil)
+        <pre><code class="language-go">workflow, _ := rt.RunAsync(ctx, "workflow-001", config, nil)
 
 // 暂停（等待当前层执行完毕）
-err := pipeline.Pause()</code></pre>
+err := workflow.Pause()</code></pre>
 
         <h3>恢复流水线</h3>
-        <pre><code class="language-go">err := pipeline.Resume(ctx)</code></pre>
+        <pre><code class="language-go">err := workflow.Resume(ctx)</code></pre>
 
         <p>恢复后会重新计算 BFS 层级（图可能已被修改），从暂停时的层级继续执行。</p>
 
@@ -527,7 +527,7 @@ err := pipeline.Pause()</code></pre>
     },
 }
 
-err := rt.ModifyGraph(ctx, "pipeline-001", mods)</code></pre>
+err := rt.ModifyGraph(ctx, "workflow-001", mods)</code></pre>
 
         <p>修改操作是<strong>原子</strong>的：如果任何一步失败，会自动回滚到修改前的状态。</p>
 
@@ -540,7 +540,7 @@ err := rt.ModifyGraph(ctx, "pipeline-001", mods)</code></pre>
             <li>解析 Mermaid 图片段（如果有）</li>
             <li>校验图结构（允许条件回边，拒绝无条件环）</li>
             <li>更新存储的配置</li>
-            <li>触发 <code>PipelineGraphModified</code> 事件</li>
+            <li>触发 <code>WorkflowGraphModified</code> 事件</li>
         </ol>
 
         <h2 id="events">事件系统</h2>
@@ -549,16 +549,16 @@ err := rt.ModifyGraph(ctx, "pipeline-001", mods)</code></pre>
         <table>
             <thead><tr><th>事件常量</th><th>值</th><th>触发时机</th></tr></thead>
             <tbody>
-                <tr><td><code>EventPipelineInit</code></td><td><code>PipelineInit</code></td><td>流水线初始化</td></tr>
-                <tr><td><code>EventPipelineStart</code></td><td><code>PipelineStart</code></td><td>流水线开始执行</td></tr>
-                <tr><td><code>EventPipelineFinish</code></td><td><code>PipelineFinish</code></td><td>流水线执行完成</td></tr>
-                <tr><td><code>EventPipelineNodeStart</code></td><td><code>PipelineNodeStart</code></td><td>节点开始执行</td></tr>
-                <tr><td><code>EventPipelineNodeFinish</code></td><td><code>PipelineNodeFinish</code></td><td>节点执行完成</td></tr>
-                <tr><td><code>EventPipelinePaused</code></td><td><code>PipelinePaused</code></td><td>流水线暂停</td></tr>
-                <tr><td><code>EventPipelineResumed</code></td><td><code>PipelineResumed</code></td><td>流水线恢复</td></tr>
-                <tr><td><code>EventPipelineCancelled</code></td><td><code>PipelineCancelled</code></td><td>流水线被取消</td></tr>
-                <tr><td><code>EventPipelineStatusUpdate</code></td><td><code>PipelineStatusUpdate</code></td><td>流水线状态更新</td></tr>
-                <tr><td><code>EventPipelineGraphModified</code></td><td><code>PipelineGraphModified</code></td><td>图被动态修改</td></tr>
+                <tr><td><code>EventWorkflowInit</code></td><td><code>WorkflowInit</code></td><td>流水线初始化</td></tr>
+                <tr><td><code>EventWorkflowStart</code></td><td><code>WorkflowStart</code></td><td>流水线开始执行</td></tr>
+                <tr><td><code>EventWorkflowFinish</code></td><td><code>WorkflowFinish</code></td><td>流水线执行完成</td></tr>
+                <tr><td><code>EventWorkflowNodeStart</code></td><td><code>WorkflowNodeStart</code></td><td>节点开始执行</td></tr>
+                <tr><td><code>EventWorkflowNodeFinish</code></td><td><code>WorkflowNodeFinish</code></td><td>节点执行完成</td></tr>
+                <tr><td><code>EventWorkflowPaused</code></td><td><code>WorkflowPaused</code></td><td>流水线暂停</td></tr>
+                <tr><td><code>EventWorkflowResumed</code></td><td><code>WorkflowResumed</code></td><td>流水线恢复</td></tr>
+                <tr><td><code>EventWorkflowCancelled</code></td><td><code>WorkflowCancelled</code></td><td>流水线被取消</td></tr>
+                <tr><td><code>EventWorkflowStatusUpdate</code></td><td><code>WorkflowStatusUpdate</code></td><td>流水线状态更新</td></tr>
+                <tr><td><code>EventWorkflowGraphModified</code></td><td><code>WorkflowGraphModified</code></td><td>图被动态修改</td></tr>
             </tbody>
         </table>
 

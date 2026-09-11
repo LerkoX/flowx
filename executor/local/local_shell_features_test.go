@@ -49,8 +49,8 @@ func TestExecuteCommandWithStreaming_ShellScript(t *testing.T) {
 	}
 }
 
-// TestExecuteCommandWithStreaming_Pipeline 测试管道命令
-func TestExecuteCommandWithStreaming_Pipeline(t *testing.T) {
+// TestExecuteCommandWithStreaming_Workflow 测试管道命令
+func TestExecuteCommandWithStreaming_Workflow(t *testing.T) {
 	exec := NewLocalExecutor()
 
 	ctx := context.Background()

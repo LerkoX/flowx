@@ -55,7 +55,7 @@ func main() {
     // 流水线配置
     config := `
 Version: "1.0"
-Name: example-pipeline
+Name: example-workflow
 
 Executors:
   local:
@@ -83,7 +83,7 @@ Nodes:
 `
 
     // 同步执行流水线
-    pipeline, err := runtime.RunSync(ctx, "pipeline-1", config, nil)
+    workflow, err := runtime.RunSync(ctx, "workflow-1", config, nil)
     if err != nil {
         fmt.Printf("流水线执行失败: %v\n", err)
         return
@@ -147,7 +147,7 @@ FlowX 使用 YAML 配置，结构如下：
 
 ```yaml
 Version: "1.0"              # 配置版本
-Name: my-pipeline           # 流水线名称
+Name: my-workflow           # 流水线名称
 
 Metadate:                   # 元数据配置
   type: in-config           # 存储类型：in-config, redis, http
@@ -242,7 +242,7 @@ Executors:
     type: k8s
     config:
       namespace: default
-      serviceAccount: pipeline-sa
+      serviceAccount: workflow-sa
       podReadyTimeout: "60s"  # Pod 就绪等待超时
 ```
 
@@ -363,73 +363,73 @@ type MyListener struct{}
 
 func (l *MyListener) Events() []dag.Event {
     return []dag.Event{
-        core.EventPipelineInit,
-        core.EventPipelineStart,
-        core.EventPipelineFinish,
-        core.EventPipelineExecutorPrepare,
-        core.EventPipelineExecutorPrepareDone,
-        core.EventPipelineNodeStart,
-        core.EventPipelineNodeFinish,
-        core.EventPipelineNodeFailed,
-        core.EventPipelineCancelled,
-        core.EventPipelineStatusUpdate,
-        core.EventPipelinePaused,
-        core.EventPipelineResumed,
-        core.EventPipelineGraphModified,
+        core.EventWorkflowInit,
+        core.EventWorkflowStart,
+        core.EventWorkflowFinish,
+        core.EventWorkflowExecutorPrepare,
+        core.EventWorkflowExecutorPrepareDone,
+        core.EventWorkflowNodeStart,
+        core.EventWorkflowNodeFinish,
+        core.EventWorkflowNodeFailed,
+        core.EventWorkflowCancelled,
+        core.EventWorkflowStatusUpdate,
+        core.EventWorkflowPaused,
+        core.EventWorkflowResumed,
+        core.EventWorkflowGraphModified,
     }
 }
 
-func (l *MyListener) Handle(p dag.Pipeline, event dag.Event) {
+func (l *MyListener) Handle(p dag.Workflow, event dag.Event) {
     switch event {
-    case core.EventPipelineInit:
+    case core.EventWorkflowInit:
         fmt.Println("流水线初始化")
-    case core.EventPipelineStart:
+    case core.EventWorkflowStart:
         fmt.Println("流水线开始")
-    case core.EventPipelineFinish:
+    case core.EventWorkflowFinish:
         fmt.Println("流水线完成")
-    case core.EventPipelineExecutorPrepare:
+    case core.EventWorkflowExecutorPrepare:
         fmt.Println("执行器准备中")
-    case core.EventPipelineExecutorPrepareDone:
+    case core.EventWorkflowExecutorPrepareDone:
         fmt.Println("执行器准备完成")
-    case core.EventPipelineNodeStart:
+    case core.EventWorkflowNodeStart:
         fmt.Println("节点开始执行")
-    case core.EventPipelineNodeFinish:
+    case core.EventWorkflowNodeFinish:
         fmt.Println("节点执行完成")
-    case core.EventPipelineNodeFailed:
+    case core.EventWorkflowNodeFailed:
         fmt.Println("节点执行失败")
-    case core.EventPipelineCancelled:
+    case core.EventWorkflowCancelled:
         fmt.Println("流水线已取消")
-    case core.EventPipelineStatusUpdate:
+    case core.EventWorkflowStatusUpdate:
         fmt.Println("流水线状态更新")
-    case core.EventPipelinePaused:
+    case core.EventWorkflowPaused:
         fmt.Println("流水线已暂停")
-    case core.EventPipelineResumed:
+    case core.EventWorkflowResumed:
         fmt.Println("流水线已恢复")
-    case core.EventPipelineGraphModified:
+    case core.EventWorkflowGraphModified:
         fmt.Println("流水线图已修改")
     }
 }
 
-pipeline, err := runtime.RunSync(ctx, "id", config, &MyListener{})
+workflow, err := runtime.RunSync(ctx, "id", config, &MyListener{})
 ```
 
 **可用事件：**
 
 | 事件 | 描述 |
 |------|------|
-| `PipelineInit` | 流水线初始化 |
-| `PipelineStart` | 流水线开始执行 |
-| `PipelineFinish` | 流水线执行完成（成功或失败） |
-| `PipelineExecutorPrepare` | 节点执行器正在准备 |
-| `PipelineExecutorPrepareDone` | 节点执行器准备完成 |
-| `PipelineNodeStart` | 节点开始执行 |
-| `PipelineNodeFinish` | 节点执行完成 |
-| `PipelineNodeFailed` | 节点执行失败 |
-| `PipelineCancelled` | 流水线被取消 |
-| `PipelineStatusUpdate` | 流水线状态变更 |
-| `PipelinePaused` | 流水线暂停 |
-| `PipelineResumed` | 流水线恢复执行 |
-| `PipelineGraphModified` | 流水线图被修改 |
+| `WorkflowInit` | 流水线初始化 |
+| `WorkflowStart` | 流水线开始执行 |
+| `WorkflowFinish` | 流水线执行完成（成功或失败） |
+| `WorkflowExecutorPrepare` | 节点执行器正在准备 |
+| `WorkflowExecutorPrepareDone` | 节点执行器准备完成 |
+| `WorkflowNodeStart` | 节点开始执行 |
+| `WorkflowNodeFinish` | 节点执行完成 |
+| `WorkflowNodeFailed` | 节点执行失败 |
+| `WorkflowCancelled` | 流水线被取消 |
+| `WorkflowStatusUpdate` | 流水线状态变更 |
+| `WorkflowPaused` | 流水线暂停 |
+| `WorkflowResumed` | 流水线恢复执行 |
+| `WorkflowGraphModified` | 流水线图被修改 |
 
 ## 动态图修改
 
@@ -443,7 +443,7 @@ import (
     "github.com/LerkoX/flowx/dag"
 )
 
-err := runtime.ModifyGraph(ctx, "pipeline-id", dag.GraphModifications{
+err := runtime.ModifyGraph(ctx, "workflow-id", dag.GraphModifications{
     AddNodes: []core.NodeConfig{
         {
             Name: "NewNode",
@@ -468,7 +468,7 @@ err := runtime.ModifyGraph(ctx, "pipeline-id", dag.GraphModifications{
 ```go
 newConfig := `
 Version: "1.0"
-Name: my-pipeline
+Name: my-workflow
 
 Graph: |
   stateDiagram-v2
@@ -489,7 +489,7 @@ Nodes:
         run: echo "Deploying..."
 `
 
-err := runtime.UpdateConfig(ctx, "pipeline-id", newConfig)
+err := runtime.UpdateConfig(ctx, "workflow-id", newConfig)
 ```
 
 规则：
@@ -508,9 +508,9 @@ graph TB
         RTI[Runtime Impl]
     end
 
-    subgraph "Pipeline Core"
-        PL[Pipeline]
-        PLI[Pipeline Impl]
+    subgraph "Workflow Core"
+        PL[Workflow]
+        PLI[Workflow Impl]
         NODE[Node]
         EDGE[Edge]
         EVAL[Eval Context]
@@ -582,16 +582,16 @@ graph TB
 
 ## API 参考
 
-`Pipeline`、`Listener`、`Event`、`GraphModifications`、`EdgeModification`、`EdgeRemoval` 等类型定义在 `dag` 包（`github.com/LerkoX/flowx/dag`）中。`NodeConfig` 和 `Step` 定义在 `core` 包（`github.com/LerkoX/flowx/core`）中。事件常量（如 `core.EventPipelineStart`）也位于 `core` 包。
+`Workflow`、`Listener`、`Event`、`GraphModifications`、`EdgeModification`、`EdgeRemoval` 等类型定义在 `dag` 包（`github.com/LerkoX/flowx/dag`）中。`NodeConfig` 和 `Step` 定义在 `core` 包（`github.com/LerkoX/flowx/core`）中。事件常量（如 `core.EventWorkflowStart`）也位于 `core` 包。
 
 ### Runtime
 
 ```go
 type Runtime interface {
-    Get(id string) (dag.Pipeline, error)                          // 根据 ID 获取流水线
+    Get(id string) (dag.Workflow, error)                          // 根据 ID 获取流水线
     Cancel(ctx context.Context, id string) error                  // 取消运行中的流水线
-    RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)  // 异步执行
-    RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)   // 同步执行
+    RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error)  // 异步执行
+    RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error)   // 同步执行
     Rm(id string)                                                 // 移除流水线记录
     Done() chan struct{}                                          // 运行时完成信号
     Notify(data interface{}) error                                // 通知运行时
@@ -606,14 +606,14 @@ type Runtime interface {
     Resume(ctx context.Context, id string) error                  // 恢复暂停或停止的流水线
     ModifyGraph(ctx context.Context, id string, modifications dag.GraphModifications) error // 原子化修改图
     UpdateConfig(ctx context.Context, id string, newConfigYAML string) error // 通过 YAML 差异更新流水线
-    ListPipelines() []string                                      // 列出所有活跃的流水线ID
+    ListWorkflows() []string                                      // 列出所有活跃的流水线ID
 }
 ```
 
-### Pipeline
+### Workflow
 
 ```go
-type Pipeline interface {
+type Workflow interface {
     Id() string                                               // 获取流水线 ID
     GetGraph() dag.Graph                                      // 获取 DAG 图
     SetGraph(graph dag.Graph)                                 // 设置 DAG 图

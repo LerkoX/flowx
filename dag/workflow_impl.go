@@ -14,7 +14,7 @@ import (
 	"github.com/LerkoX/flowx/template"
 )
 
-type PipelineImpl struct {
+type WorkflowImpl struct {
 	id               string
 	graph            Graph
 	status           string
@@ -38,8 +38,8 @@ type PipelineImpl struct {
 	currentNode      Node                   // 当前正在执行的节点
 }
 
-func NewPipeline(ctx context.Context) Pipeline {
-	p := &PipelineImpl{
+func NewWorkflow(ctx context.Context) Workflow {
+	p := &WorkflowImpl{
 		id:          core.NewUUID(),
 		executors:   make(map[string]executor.Executor),
 		doneChan:    make(chan struct{}),
@@ -49,12 +49,12 @@ func NewPipeline(ctx context.Context) Pipeline {
 	return p
 }
 
-// 预检查PipelineImpl是否实现了Pipeline接口
-var _ Pipeline = (*PipelineImpl)(nil)
+// 预检查WorkflowImpl是否实现了Workflow接口
+var _ Workflow = (*WorkflowImpl)(nil)
 var _ Graph = (*DGAGraph)(nil)
 
 // SetParam 设置 param 值
-func (p *PipelineImpl) SetParam(param map[string]interface{}) {
+func (p *WorkflowImpl) SetParam(param map[string]interface{}) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	// 将 map[string]interface{} 转换为 map[string]FieldItem
@@ -65,7 +65,7 @@ func (p *PipelineImpl) SetParam(param map[string]interface{}) {
 }
 
 // GetParam 获取渲染后的 param 值
-func (p *PipelineImpl) GetParam() Metadata {
+func (p *WorkflowImpl) GetParam() Metadata {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	result := make(Metadata, len(p.param))
@@ -76,7 +76,7 @@ func (p *PipelineImpl) GetParam() Metadata {
 }
 
 // SetMaxLoopIterations 设置循环图最大迭代次数
-func (p *PipelineImpl) SetMaxLoopIterations(max int) {
+func (p *WorkflowImpl) SetMaxLoopIterations(max int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if max > 0 {
@@ -85,40 +85,40 @@ func (p *PipelineImpl) SetMaxLoopIterations(max int) {
 }
 
 // Id 返回流水线的ID
-func (p *PipelineImpl) Id() string {
+func (p *WorkflowImpl) Id() string {
 	return p.id
 }
 
 // GetGraph 返回流水线的图结构
-func (p *PipelineImpl) GetGraph() Graph {
+func (p *WorkflowImpl) GetGraph() Graph {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.graph
 }
 
 // SetGraph 设置流水线的图结构
-func (p *PipelineImpl) SetGraph(graph Graph) {
+func (p *WorkflowImpl) SetGraph(graph Graph) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.graph = graph
 }
 
 // Status 返回流水线的整体状态
-func (p *PipelineImpl) Status() string {
+func (p *WorkflowImpl) Status() string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.status
 }
 
 // SetMetadata 设置流水线的元数据存储
-func (p *PipelineImpl) SetMetadata(store metadata.MetadataStore) {
+func (p *WorkflowImpl) SetMetadata(store metadata.MetadataStore) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.metadataStore = store
 }
 
 // Metadata 获取流水线的元数据
-func (p *PipelineImpl) Metadata() Metadata {
+func (p *WorkflowImpl) Metadata() Metadata {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -150,21 +150,21 @@ func (p *PipelineImpl) Metadata() Metadata {
 }
 
 // Listening 设置流水线执行事件监听器
-func (p *PipelineImpl) Listening(fn Listener) {
+func (p *WorkflowImpl) Listening(fn Listener) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.listener = fn
 }
 
 // Done 返回一个通道，用于通知流水线何时完成
-func (p *PipelineImpl) Done() <-chan struct{} {
+func (p *WorkflowImpl) Done() <-chan struct{} {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.doneChan
 }
 
 // shouldSkipNode 检查节点是否应该跳过执行
-func (p *PipelineImpl) shouldSkipNode(node Node) bool {
+func (p *WorkflowImpl) shouldSkipNode(node Node) bool {
 	runtimeStatus := node.GetRuntimeStatus()
 	if runtimeStatus == nil {
 		return false
@@ -180,9 +180,9 @@ func (p *PipelineImpl) shouldSkipNode(node Node) bool {
 }
 
 // DeriveStatusFromNodes 根据节点运行时状态推导流水线状态。
-// 用于加载携带运行时状态的快照配置（LoadPipeline）后恢复可修改状态：
+// 用于加载携带运行时状态的快照配置（LoadWorkflow）后恢复可修改状态：
 // 有 FAILED 节点 → FAILED；有未终结节点 → STOPPED；全部成功 → SUCCESS。
-func (p *PipelineImpl) DeriveStatusFromNodes() {
+func (p *WorkflowImpl) DeriveStatusFromNodes() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -218,7 +218,7 @@ func (p *PipelineImpl) DeriveStatusFromNodes() {
 }
 
 // Pause 暂停流水线，等待当前层执行完成后暂停
-func (p *PipelineImpl) Pause() error {
+func (p *WorkflowImpl) Pause() error {
 	p.pauseMu.Lock()
 	defer p.pauseMu.Unlock()
 
@@ -236,7 +236,7 @@ func (p *PipelineImpl) Pause() error {
 }
 
 // Resume 恢复暂停的流水线
-func (p *PipelineImpl) Resume(ctx context.Context) error {
+func (p *WorkflowImpl) Resume(ctx context.Context) error {
 	p.pauseMu.Lock()
 	defer p.pauseMu.Unlock()
 
@@ -254,14 +254,14 @@ func (p *PipelineImpl) Resume(ctx context.Context) error {
 }
 
 // CurrentNode 返回当前正在执行的节点（如有）
-func (p *PipelineImpl) CurrentNode() Node {
+func (p *WorkflowImpl) CurrentNode() Node {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.currentNode
 }
 
 // IsModifiable 判断当前是否可修改图
-func (p *PipelineImpl) IsModifiable() bool {
+func (p *WorkflowImpl) IsModifiable() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	switch p.status {
@@ -273,7 +273,7 @@ func (p *PipelineImpl) IsModifiable() bool {
 }
 
 // restoreTraversalState 恢复遍历状态并重置
-func (p *PipelineImpl) restoreTraversalState() int {
+func (p *WorkflowImpl) restoreTraversalState() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	level := p.currentLevel
@@ -282,7 +282,7 @@ func (p *PipelineImpl) restoreTraversalState() int {
 }
 
 // Cancel 终止流水线
-func (p *PipelineImpl) Cancel() {
+func (p *WorkflowImpl) Cancel() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -292,7 +292,7 @@ func (p *PipelineImpl) Cancel() {
 
 		// 通知监听器关于取消事件
 		if p.listener != nil {
-			p.listener.Handle(p, core.EventPipelineCancelled)
+			p.listener.Handle(p, core.EventWorkflowCancelled)
 		}
 
 		if p.listening != nil {
@@ -305,11 +305,11 @@ func (p *PipelineImpl) Cancel() {
 // 节点
 // 我们就可以在这里做一些处理
 // 执行ListeningFn函数
-func (p *PipelineImpl) Notify() {
+func (p *WorkflowImpl) Notify() {
 	p.mu.RLock()
 	listening := p.listening
 	listener := p.listener
-	snapshot := newPipelineSnapshot(p)
+	snapshot := newWorkflowSnapshot(p)
 	p.mu.RUnlock()
 
 	// 如果设置了ListeningFn则调用它
@@ -327,11 +327,11 @@ func (p *PipelineImpl) Notify() {
 // NotifyEventForNode 通知与特定节点关联的事件。
 // 并行执行时 p.currentNode 会被多个 goroutine 交替覆盖/清空，
 // 直接在快照上指定节点，避免监听器经 CurrentNode() 拿到错乱的节点。
-func (p *PipelineImpl) NotifyEventForNode(event Event, node Node) {
+func (p *WorkflowImpl) NotifyEventForNode(event Event, node Node) {
 	p.mu.RLock()
 	listener := p.listener
 	listening := p.listening
-	snapshot := newPipelineSnapshot(p)
+	snapshot := newWorkflowSnapshot(p)
 	p.mu.RUnlock()
 
 	snapshot.currentNode = node
@@ -346,11 +346,11 @@ func (p *PipelineImpl) NotifyEventForNode(event Event, node Node) {
 }
 
 // NotifyEvent 通知监听器特定事件
-func (p *PipelineImpl) NotifyEvent(event Event) {
+func (p *WorkflowImpl) NotifyEvent(event Event) {
 	p.mu.RLock()
 	listener := p.listener
 	listening := p.listening
-	snapshot := newPipelineSnapshot(p)
+	snapshot := newWorkflowSnapshot(p)
 	p.mu.RUnlock()
 
 	if listener != nil {
@@ -363,14 +363,14 @@ func (p *PipelineImpl) NotifyEvent(event Event) {
 }
 
 // notifyCurrentStatus 通知监听器当前流水线状态
-func (p *PipelineImpl) notifyCurrentStatus(listener Listener, snapshot Pipeline) {
+func (p *WorkflowImpl) notifyCurrentStatus(listener Listener, snapshot Workflow) {
 	// 此方法可用于通知详细的状态变化
 	// 目前，它仅用当前流水线调用监听器
-	listener.Handle(snapshot, core.EventPipelineStatusUpdate)
+	listener.Handle(snapshot, core.EventWorkflowStatusUpdate)
 }
 
 // SetExecutorProvider 设置Executor提供者
-func (p *PipelineImpl) SetExecutorProvider(provider ExecutorProvider) {
+func (p *WorkflowImpl) SetExecutorProvider(provider ExecutorProvider) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.executorProvider = provider
@@ -378,14 +378,14 @@ func (p *PipelineImpl) SetExecutorProvider(provider ExecutorProvider) {
 }
 
 // GetExecutorProvider 返回当前的 Executor 提供者
-func (p *PipelineImpl) GetExecutorProvider() ExecutorProvider {
+func (p *WorkflowImpl) GetExecutorProvider() ExecutorProvider {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.executorProvider
 }
 
 // getOrCreateExecutor 获取或创建Executor
-func (p *PipelineImpl) getOrCreateExecutor(ctx context.Context, name string) (executor.Executor, error) {
+func (p *WorkflowImpl) getOrCreateExecutor(ctx context.Context, name string) (executor.Executor, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -410,7 +410,7 @@ func (p *PipelineImpl) getOrCreateExecutor(ctx context.Context, name string) (ex
 }
 
 // cleanupExecutors 清理所有executor
-func (p *PipelineImpl) cleanupExecutors(ctx context.Context) {
+func (p *WorkflowImpl) cleanupExecutors(ctx context.Context) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -423,21 +423,21 @@ func (p *PipelineImpl) cleanupExecutors(ctx context.Context) {
 }
 
 // SetTemplateEngine 设置模板引擎
-func (p *PipelineImpl) SetTemplateEngine(engine template.TemplateEngine) {
+func (p *WorkflowImpl) SetTemplateEngine(engine template.TemplateEngine) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.templateEngine = engine
 }
 
 // GetTemplateEngine 获取模板引擎
-func (p *PipelineImpl) GetTemplateEngine() template.TemplateEngine {
+func (p *WorkflowImpl) GetTemplateEngine() template.TemplateEngine {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.templateEngine
 }
 
 // SetPusher 设置日志推送器
-func (p *PipelineImpl) SetPusher(pusher logger.Pusher) {
+func (p *WorkflowImpl) SetPusher(pusher logger.Pusher) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.pusher = pusher
@@ -471,7 +471,7 @@ func tryParseJSON(v interface{}) interface{} {
 }
 
 // buildRenderContext 构建渲染上下文，包含 Param 和动态 Metadata
-func (p *PipelineImpl) buildRenderContext() map[string]any {
+func (p *WorkflowImpl) buildRenderContext() map[string]any {
 	ctx := make(map[string]any)
 
 	// 添加 Param（提取 FieldItem.Value 用于模板渲染）
@@ -524,7 +524,7 @@ func (p *PipelineImpl) buildRenderContext() map[string]any {
 }
 
 // renderStringWithRuntimeContext 使用运行时上下文渲染字符串
-func (p *PipelineImpl) renderStringWithRuntimeContext(templateStr string) (string, error) {
+func (p *WorkflowImpl) renderStringWithRuntimeContext(templateStr string) (string, error) {
 	engine := p.GetTemplateEngine()
 	if engine == nil {
 		return templateStr, nil // 没有模板引擎，返回原始值

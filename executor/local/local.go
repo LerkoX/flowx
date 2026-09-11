@@ -565,8 +565,9 @@ func (l *LocalExecutor) createCommandWithPTY(ctx context.Context, command string
 		if shell == "" {
 			shell = "/bin/sh"
 		}
-		// 使用 script 命令创建伪终端
-		return exec.CommandContext(ctx, "script", "-q", "-c", command, "/dev/null")
+		// 使用 script 命令创建伪终端；-e 透传子进程退出码（util-linux），
+		// 否则节点脚本 exit 非零会被 script 吞掉导致失败节点误报成功
+		return exec.CommandContext(ctx, "script", "-q", "-e", "-c", command, "/dev/null")
 	}
 }
 

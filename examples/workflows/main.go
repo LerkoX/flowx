@@ -16,14 +16,14 @@ import (
 	"github.com/LerkoX/flowx/logger"
 )
 
-// PipelineListener 监听流水线事件执行
-type PipelineListener struct {
+// WorkflowListener 监听流水线事件执行
+type WorkflowListener struct {
 	pusher logger.Pusher
 	ctx    context.Context
 }
 
 // getRunningNodes 获取当前正在运行的节点
-func getRunningNodes(p dag.Pipeline) []string {
+func getRunningNodes(p dag.Workflow) []string {
 	graph := p.GetGraph()
 	nodes := graph.Nodes()
 	var runningNodes []string
@@ -38,7 +38,7 @@ func getRunningNodes(p dag.Pipeline) []string {
 }
 
 // handleInputRequest 处理输入请求
-func (l *PipelineListener) handleInputRequest(nodeID string, node dag.Node, inputRequest *core.InputRequestInfo) {
+func (l *WorkflowListener) handleInputRequest(nodeID string, node dag.Node, inputRequest *core.InputRequestInfo) {
 	// 显示提示信息
 	fmt.Printf("\n[输入请求] %s\n", nodeID)
 	fmt.Printf("  步骤: %s\n", inputRequest.StepName)
@@ -60,12 +60,12 @@ func (l *PipelineListener) handleInputRequest(nodeID string, node dag.Node, inpu
 	}
 }
 
-func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
+func (l *WorkflowListener) Handle(p dag.Workflow, event dag.Event) {
 	switch event {
-	case dag.PipelineInit:
+	case dag.WorkflowInit:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
-				Pipeline: p.Id(),
+				Workflow: p.Id(),
 				Level:    logger.LevelInfo,
 				Message:  "流水线初始化",
 			})
@@ -74,20 +74,20 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 		fmt.Printf("  流水线: %s\n", p.Id())
 		fmt.Printf("  状态:   初始化\n")
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	case dag.PipelineStart:
+	case dag.WorkflowStart:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
-				Pipeline: p.Id(),
+				Workflow: p.Id(),
 				Level:    logger.LevelInfo,
 				Message:  "流水线开始执行",
 			})
 		}
 		fmt.Printf("  状态:   执行中\n")
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	case dag.PipelineFinish:
+	case dag.WorkflowFinish:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
-				Pipeline: p.Id(),
+				Workflow: p.Id(),
 				Level:    logger.LevelInfo,
 				Message:  fmt.Sprintf("流水线执行完成，状态: %s", p.Status()),
 			})
@@ -95,14 +95,14 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 		fmt.Printf("  状态:   %s\n", p.Status())
 		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	case dag.PipelineExecutorPrepare:
+	case dag.WorkflowExecutorPrepare:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
 				Message: "执行器准备中",
 			})
 		}
-	case dag.PipelineNodeStart:
+	case dag.WorkflowNodeStart:
 		// 获取正在运行的节点
 		runningNodes := getRunningNodes(p)
 		if len(runningNodes) > 0 {
@@ -111,7 +111,7 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 				fmt.Printf("▶ 节点执行: %s\n", nodeID)
 				if l.pusher != nil {
 					l.pusher.Push(l.ctx, logger.Entry{
-						Pipeline: p.Id(),
+						Workflow: p.Id(),
 						Node:     nodeID,
 						Level:    logger.LevelInfo,
 						Message:  "节点开始执行",
@@ -119,7 +119,7 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 				}
 			}
 		}
-	case dag.PipelineNodeFinish:
+	case dag.WorkflowNodeFinish:
 		fmt.Printf("\n")
 		// 获取所有节点状态
 		graph := p.GetGraph()
@@ -130,7 +130,7 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 				fmt.Printf("✓ 节点完成: %s\n", comptedNode)
 				if l.pusher != nil {
 					l.pusher.Push(l.ctx, logger.Entry{
-						Pipeline: p.Id(),
+						Workflow: p.Id(),
 						Node:     comptedNode,
 						Level:    logger.LevelInfo,
 						Message:  "节点执行完成",
@@ -140,7 +140,7 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 				fmt.Printf("✗ 节点失败: %s\n", comptedNode)
 				if l.pusher != nil {
 					l.pusher.Push(l.ctx, logger.Entry{
-						Pipeline: p.Id(),
+						Workflow: p.Id(),
 						Node:     comptedNode,
 						Level:    logger.LevelError,
 						Message:  "节点执行失败",
@@ -148,7 +148,7 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 				}
 			}
 		}
-	case dag.PipelinePaused:
+	case dag.WorkflowPaused:
 		// 处理输入请求
 		graph := p.GetGraph()
 		nodes := graph.Nodes()
@@ -163,20 +163,20 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 	}
 }
 
-func (l *PipelineListener) Events() []dag.Event {
+func (l *WorkflowListener) Events() []dag.Event {
 	return []dag.Event{
-		dag.PipelineInit,
-		dag.PipelineStart,
-		dag.PipelineFinish,
-		dag.PipelineExecutorPrepare,
-		dag.PipelineNodeStart,
-		dag.PipelineNodeFinish,
-		dag.PipelinePaused,
+		dag.WorkflowInit,
+		dag.WorkflowStart,
+		dag.WorkflowFinish,
+		dag.WorkflowExecutorPrepare,
+		dag.WorkflowNodeStart,
+		dag.WorkflowNodeFinish,
+		dag.WorkflowPaused,
 	}
 }
 
-// runPipeline 运行指定的流水线
-func runPipeline(configPath string) error {
+// runWorkflow 运行指定的流水线
+func runWorkflow(configPath string) error {
 	fmt.Println("\n=== 运行工作流 ===")
 	fmt.Printf("配置文件: %s\n", configPath)
 	fmt.Println("----------------------------------------")
@@ -192,7 +192,7 @@ func runPipeline(configPath string) error {
 	runtime.SetPusher(consolePusher)
 
 	// 创建监听器
-	listener := &PipelineListener{
+	listener := &WorkflowListener{
 		pusher: consolePusher,
 		ctx:    ctx,
 	}
@@ -205,29 +205,29 @@ func runPipeline(configPath string) error {
 	configYAML := string(configData)
 
 	// 生成流水线 ID
-	pipelineID := fmt.Sprintf("workflow-%s-%s",
+	workflowID := fmt.Sprintf("workflow-%s-%s",
 		strings.TrimSuffix(filepath.Base(configPath), ".yaml"),
 		time.Now().Format("20060102150405"))
 
-	fmt.Printf("Pipeline ID: %s\n", pipelineID)
+	fmt.Printf("Workflow ID: %s\n", workflowID)
 	fmt.Println("----------------------------------------")
 
 	// 运行流水线 (异步)
-	pipeline, err := runtime.RunAsync(ctx, pipelineID, configYAML, listener)
+	workflow, err := runtime.RunAsync(ctx, workflowID, configYAML, listener)
 	if err != nil {
 		return fmt.Errorf("流水线启动失败: %w", err)
 	}
 
 	// 等待流水线完成
-	<-pipeline.Done()
+	<-workflow.Done()
 
 	fmt.Println("----------------------------------------")
 	fmt.Println("流水线执行完成!")
-	fmt.Printf("Pipeline ID: %s\n", pipeline.Id())
-	fmt.Printf("最终状态: %s\n", pipeline.Status())
+	fmt.Printf("Workflow ID: %s\n", workflow.Id())
+	fmt.Printf("最终状态: %s\n", workflow.Status())
 
 	// 打印节点状态
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	nodes := graph.Nodes()
 	fmt.Println("\n节点状态:")
 	for name, node := range nodes {
@@ -240,7 +240,7 @@ func runPipeline(configPath string) error {
 	}
 
 	// 打印元数据（如果有）
-	metadata := pipeline.Metadata()
+	metadata := workflow.Metadata()
 	if len(metadata) > 0 {
 		fmt.Println("\n元数据:")
 		for k, v := range metadata {
@@ -252,7 +252,7 @@ func runPipeline(configPath string) error {
 }
 
 func main() {
-	fmt.Println("=== PipelineX 工作流运行器 ===")
+	fmt.Println("=== WorkflowX 工作流运行器 ===")
 	fmt.Println()
 
 	// 解析命令行参数
@@ -287,7 +287,7 @@ func main() {
 	}
 
 	// 运行工作流
-	err = runPipeline(configPath)
+	err = runWorkflow(configPath)
 	if err != nil {
 		fmt.Printf("\n错误: %v\n", err)
 		os.Exit(1)

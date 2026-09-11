@@ -1,6 +1,6 @@
 # 执行器系统
 
-本文档介绍 Pipelinex 的执行器架构：Executor 接口、Provider 工厂模式，以及 Local、Docker、Kubernetes 三种执行后端。
+本文档介绍 Workflowx 的执行器架构：Executor 接口、Provider 工厂模式，以及 Local、Docker、Kubernetes 三种执行后端。
 
 ## 核心接口
 
@@ -295,7 +295,7 @@ config:
 ```go
 info := exec.GetRuntimeInfo()
 // map[string]any{
-//     "podName":   "pipeline-xxx",
+//     "podName":   "workflow-xxx",
 //     "namespace": "default",
 //     "image":     "golang:1.21",
 // }
@@ -664,7 +664,7 @@ config:
 ```go
 info := exec.GetRuntimeInfo()
 // map[string]any{
-//     "podName":   "pipeline-xxx",
+//     "podName":   "workflow-xxx",
 //     "namespace": "default",
 //     "image":     "golang:1.21",
 // }

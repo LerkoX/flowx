@@ -238,8 +238,8 @@ func TestDGAGraph_EntryExitNodes(t *testing.T) {
 	}
 }
 
-// TestCyclicPipeline_MaxIterations 测试循环最大迭代限制
-func TestCyclicPipeline_MaxIterations(t *testing.T) {
+// TestCyclicWorkflow_MaxIterations 测试循环最大迭代限制
+func TestCyclicWorkflow_MaxIterations(t *testing.T) {
 	ctx := context.Background()
 
 	graph := NewDGAGraph()
@@ -252,10 +252,10 @@ func TestCyclicPipeline_MaxIterations(t *testing.T) {
 	// 条件永远为 true 的回边（死循环）
 	graph.AddEdge(NewConditionalEdge(nodeB, nodeA, "true"))
 
-	// 创建 Pipeline 并设置小迭代上限
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetMaxLoopIterations(3)
+	// 创建 Workflow 并设置小迭代上限
+	workflow := NewWorkflow(ctx).(*WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetMaxLoopIterations(3)
 
 	// 创建执行器提供者
 	execProvider := provider.NewProvider()
@@ -263,9 +263,9 @@ func TestCyclicPipeline_MaxIterations(t *testing.T) {
 		Type:   "local",
 		Config: map[string]interface{}{},
 	})
-	pipeline.SetExecutorProvider(execProvider)
+	workflow.SetExecutorProvider(execProvider)
 
-	err := pipeline.Run(ctx)
+	err := workflow.Run(ctx)
 	if err == nil {
 		t.Error("Expected error for exceeding max iterations")
 	}
@@ -278,8 +278,8 @@ type nodeStartRecorder struct {
 	starts []string
 }
 
-func (r *nodeStartRecorder) Handle(p Pipeline, event Event) {
-	if event != PipelineNodeStart {
+func (r *nodeStartRecorder) Handle(p Workflow, event Event) {
+	if event != WorkflowNodeStart {
 		return
 	}
 	node := p.CurrentNode()
@@ -292,13 +292,13 @@ func (r *nodeStartRecorder) Handle(p Pipeline, event Event) {
 }
 
 func (r *nodeStartRecorder) Events() []Event {
-	return []Event{PipelineNodeStart}
+	return []Event{WorkflowNodeStart}
 }
 
-// TestCyclicPipeline_ExitNodesRunAfterLoop 验证循环出口下游节点推迟到循环结束后执行
+// TestCyclicWorkflow_ExitNodesRunAfterLoop 验证循环出口下游节点推迟到循环结束后执行
 // 图：A -> B -> C -(回边 {{ iteration < 3 }})-> A，C -> D
 // 预期执行顺序：A B C A B C A B C D（循环体执行 3 次，D 仅在循环退出后执行一次）
-func TestCyclicPipeline_ExitNodesRunAfterLoop(t *testing.T) {
+func TestCyclicWorkflow_ExitNodesRunAfterLoop(t *testing.T) {
 	ctx := context.Background()
 
 	graph := NewDGAGraph()
@@ -316,22 +316,22 @@ func TestCyclicPipeline_ExitNodesRunAfterLoop(t *testing.T) {
 	graph.AddEdge(NewConditionalEdge(nodeC, nodeA, "{{ iteration < 3 }}"))
 	graph.AddEdge(NewDGAEdge(nodeC, nodeD))
 
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetMaxLoopIterations(10)
+	workflow := NewWorkflow(ctx).(*WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetMaxLoopIterations(10)
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{
 		Type:   "local",
 		Config: map[string]interface{}{},
 	})
-	pipeline.SetExecutorProvider(execProvider)
+	workflow.SetExecutorProvider(execProvider)
 
 	recorder := &nodeStartRecorder{}
-	pipeline.Listening(recorder)
+	workflow.Listening(recorder)
 
-	if err := pipeline.Run(ctx); err != nil {
-		t.Fatalf("Pipeline run failed: %v", err)
+	if err := workflow.Run(ctx); err != nil {
+		t.Fatalf("Workflow run failed: %v", err)
 	}
 
 	recorder.mu.Lock()
@@ -600,10 +600,10 @@ func TestDGAGraph_TraversalSteps_WithEntryNodes(t *testing.T) {
 	}
 }
 
-// TestCyclicPipeline_BackEdgeWithDottedMetadataKeys 复现续跑场景（studio 执行 96）：
+// TestCyclicWorkflow_BackEdgeWithDottedMetadataKeys 复现续跑场景（studio 执行 96）：
 // LoadExecution 注入的历史 metadata 为扁平点键（NodeId.key），Run 启动时把 store
 // 全量加载进求值上下文；回边条件评估不应因 pongo2 非法键校验而失败
-func TestCyclicPipeline_BackEdgeWithDottedMetadataKeys(t *testing.T) {
+func TestCyclicWorkflow_BackEdgeWithDottedMetadataKeys(t *testing.T) {
 	ctx := context.Background()
 
 	graph := NewDGAGraph()
@@ -614,9 +614,9 @@ func TestCyclicPipeline_BackEdgeWithDottedMetadataKeys(t *testing.T) {
 	graph.AddEdge(NewDGAEdge(nodeA, nodeB))
 	graph.AddEdge(NewConditionalEdge(nodeB, nodeA, "{{ iteration < 3 }}"))
 
-	pipeline := NewPipeline(ctx).(*PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetMaxLoopIterations(10)
+	workflow := NewWorkflow(ctx).(*WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetMaxLoopIterations(10)
 
 	// 模拟续跑注入：含扁平点键的历史 metadata
 	store, err := metadata.NewInConfigMetadataStore(core.MetadataConfig{
@@ -629,20 +629,20 @@ func TestCyclicPipeline_BackEdgeWithDottedMetadataKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create metadata store: %v", err)
 	}
-	pipeline.SetMetadata(store)
+	workflow.SetMetadata(store)
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{
 		Type:   "local",
 		Config: map[string]interface{}{},
 	})
-	pipeline.SetExecutorProvider(execProvider)
+	workflow.SetExecutorProvider(execProvider)
 
 	recorder := &nodeStartRecorder{}
-	pipeline.Listening(recorder)
+	workflow.Listening(recorder)
 
-	if err := pipeline.Run(ctx); err != nil {
-		t.Fatalf("Pipeline run with dotted metadata keys failed: %v", err)
+	if err := workflow.Run(ctx); err != nil {
+		t.Fatalf("Workflow run with dotted metadata keys failed: %v", err)
 	}
 
 	// 循环体应执行 3 次：A B A B A B

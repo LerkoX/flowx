@@ -12,17 +12,17 @@ import (
 
 var (
 	//监听事件
-	PipelineInit                Event = core.EventPipelineInit                // 流水线初始化
-	PipelineStart               Event = core.EventPipelineStart               // 流水线开始执行
-	PipelineFinish              Event = core.EventPipelineFinish              // 流水线完成
-	PipelineExecutorPrepare     Event = core.EventPipelineExecutorPrepare     // 流水线执行器开始准备
-	PipelineExecutorPrepareDone Event = core.EventPipelineExecutorPrepareDone // 流水线执行器准备完毕
-	PipelineNodeStart           Event = core.EventPipelineNodeStart           // 节点开始
-	PipelineNodeFinish          Event = core.EventPipelineNodeFinish          // 节点完成
-	PipelineNodeFailed          Event = core.EventPipelineNodeFailed          // 节点执行失败
-	PipelinePaused              Event = core.EventPipelinePaused              // 流水线暂停
-	PipelineResumed             Event = core.EventPipelineResumed             // 流水线恢复
-	PipelineGraphModified       Event = core.EventPipelineGraphModified       // 图被修改
+	WorkflowInit                Event = core.EventWorkflowInit                // 流水线初始化
+	WorkflowStart               Event = core.EventWorkflowStart               // 流水线开始执行
+	WorkflowFinish              Event = core.EventWorkflowFinish              // 流水线完成
+	WorkflowExecutorPrepare     Event = core.EventWorkflowExecutorPrepare     // 流水线执行器开始准备
+	WorkflowExecutorPrepareDone Event = core.EventWorkflowExecutorPrepareDone // 流水线执行器准备完毕
+	WorkflowNodeStart           Event = core.EventWorkflowNodeStart           // 节点开始
+	WorkflowNodeFinish          Event = core.EventWorkflowNodeFinish          // 节点完成
+	WorkflowNodeFailed          Event = core.EventWorkflowNodeFailed          // 节点执行失败
+	WorkflowPaused              Event = core.EventWorkflowPaused              // 流水线暂停
+	WorkflowResumed             Event = core.EventWorkflowResumed             // 流水线恢复
+	WorkflowGraphModified       Event = core.EventWorkflowGraphModified       // 图被修改
 )
 
 type TraversalFn func(ctx context.Context, node Node) error
@@ -69,16 +69,16 @@ type Event string
 // 这样我们就能再外部监听Event
 type Listener interface {
 	// 处理对应的事件将事件发生的对应的流水线和对应的事件作为参数传入
-	Handle(p Pipeline, event Event)
+	Handle(p Workflow, event Event)
 	// 获取当前注册的Event
 	Events() []Event
 }
 
-// PipelineListeningFn 流水线监听函数
-type ListeningFn func(p Pipeline)
+// WorkflowListeningFn 流水线监听函数
+type ListeningFn func(p Workflow)
 type Metadata map[string]core.FieldItem
 
-type Pipeline interface {
+type Workflow interface {
 	//ID 流水线的id
 	Id() string
 	//GetGraph 返回图结构

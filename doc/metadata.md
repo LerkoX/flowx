@@ -17,16 +17,16 @@ type MetadataStore interface {
 
 ```go
 type MetadataStoreFactory interface {
-    Create(config MetadataConfig, pipelineId string) (MetadataStore, error)    // 根据配置创建存储，pipelineId 用于数据隔离
+    Create(config MetadataConfig, workflowId string) (MetadataStore, error)    // 根据配置创建存储，workflowId 用于数据隔离
 }
 ```
 
 默认实现：`DefaultMetadataStoreFactory`，根据 `MetadataConfig.Type` 选择后端。
 
-**pipelineId 隔离机制：**
-- **HTTP**：通过 `X-Pipeline-ID` 请求头传递
-- **Redis**：Key 前缀为 `flowx/{pipelineId}/{key}`
-- **in-config**：不依赖 pipelineId
+**workflowId 隔离机制：**
+- **HTTP**：通过 `X-Workflow-ID` 请求头传递
+- **Redis**：Key 前缀为 `flowx/{workflowId}/{key}`
+- **in-config**：不依赖 workflowId
 
 ## InConfigMetadataStore
 
@@ -56,7 +56,7 @@ factory := NewMetadataStoreFactory()
 store, _ := factory.Create(MetadataConfig{
     Type: "in-config",
     Data: map[string]any{"key1": "value1"},
-}, "pipeline-001")
+}, "workflow-001")
 
 store.Set(ctx, "key2", "value2")
 val, _ := store.Get(ctx, "key1")  // "value1"
@@ -100,7 +100,7 @@ Metadate:
 
 除自定义 headers 外，HTTP Store 会自动设置以下请求头：
 - `Content-Type: application/json`
-- `X-Pipeline-ID: {pipelineId}`（当 pipelineId 不为空时）
+- `X-Workflow-ID: {workflowId}`（当 workflowId 不为空时）
 
 ### 特点
 
@@ -139,18 +139,18 @@ Metadate:
 
 - 使用 `go-redis/v9` 客户端
 - 支持持久化存储
-- **Pipeline 隔离**：不同流水线的数据通过 key 前缀隔离，格式为 `flowx/{pipelineId}/{key}`
+- **Workflow 隔离**：不同流水线的数据通过 key 前缀隔离，格式为 `flowx/{workflowId}/{key}`
 - 适合分布式场景
 - `Close()` 关闭 Redis 连接
 
-### Pipeline 隔离示例
+### Workflow 隔离示例
 
 ```yaml
-# pipeline-001 写入 key="mykey"
-# 实际存储的 Redis key: flowx/pipeline-001/mykey
+# workflow-001 写入 key="mykey"
+# 实际存储的 Redis key: flowx/workflow-001/mykey
 
-# pipeline-002 写入同名 key="mykey"
-# 实际存储的 Redis key: flowx/pipeline-002/mykey
+# workflow-002 写入同名 key="mykey"
+# 实际存储的 Redis key: flowx/workflow-002/mykey
 # 两者互不干扰
 ```
 
@@ -252,4 +252,4 @@ func (s *InConfigMetadataStore) Keys() []string             // 获取所有键
 - **InConfig**：使用 `sync.RWMutex` 保护内部 map
 - **HTTP**：依赖 HTTP 服务端实现并发控制
 - **Redis**：依赖 Redis 服务端实现并发控制
-- 多个 Pipeline 可以安全地并发访问同一个 Store 实例
+- 多个 Workflow 可以安全地并发访问同一个 Store 实例

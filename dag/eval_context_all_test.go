@@ -22,30 +22,30 @@ func TestDGAEvaluationContext_All_Basic(t *testing.T) {
 	}
 }
 
-func TestDGAEvaluationContext_All_WithPipeline(t *testing.T) {
+func TestDGAEvaluationContext_All_WithWorkflow(t *testing.T) {
 	graph := NewDGAGraph()
-	pipeline := NewPipeline(nil)
-	pipeline.(*PipelineImpl).SetGraph(graph)
-	pipeline.(*PipelineImpl).setId("pipeline-123")
+	workflow := NewWorkflow(nil)
+	workflow.(*WorkflowImpl).SetGraph(graph)
+	workflow.(*WorkflowImpl).setId("workflow-123")
 
-	ctx := NewEvaluationContext().WithPipeline(pipeline)
+	ctx := NewEvaluationContext().WithWorkflow(workflow)
 
 	all := ctx.All()
 
-	if all["pipelineId"] != "pipeline-123" {
-		t.Errorf("All()[\"pipelineId\"] = %v, want pipeline-123", all["pipelineId"])
+	if all["workflowId"] != "workflow-123" {
+		t.Errorf("All()[\"workflowId\"] = %v, want workflow-123", all["workflowId"])
 	}
 	// Status is empty string by default (PENDING is only set during run)
-	if _, exists := all["pipelineStatus"]; exists {
-		t.Logf("pipelineStatus present: %v", all["pipelineStatus"])
+	if _, exists := all["workflowStatus"]; exists {
+		t.Logf("workflowStatus present: %v", all["workflowStatus"])
 	}
 }
 
-func TestDGAEvaluationContext_All_WithPipelineAndParam(t *testing.T) {
+func TestDGAEvaluationContext_All_WithWorkflowAndParam(t *testing.T) {
 	graph := NewDGAGraph()
-	pipeline := NewPipeline(nil)
-	pipeline.(*PipelineImpl).SetGraph(graph)
-	pipeline.(*PipelineImpl).setId("pipeline-param-test")
+	workflow := NewWorkflow(nil)
+	workflow.(*WorkflowImpl).SetGraph(graph)
+	workflow.(*WorkflowImpl).setId("workflow-param-test")
 
 	// Set param using FieldItem
 	param := map[string]interface{}{
@@ -54,9 +54,9 @@ func TestDGAEvaluationContext_All_WithPipelineAndParam(t *testing.T) {
 		"replicas": 3,
 		"enabled":   true,
 	}
-	pipeline.(*PipelineImpl).SetParam(param)
+	workflow.(*WorkflowImpl).SetParam(param)
 
-	ctx := NewEvaluationContext().WithPipeline(pipeline)
+	ctx := NewEvaluationContext().WithWorkflow(workflow)
 
 	all := ctx.All()
 
@@ -89,31 +89,31 @@ func TestDGAEvaluationContext_All_WithPipelineAndParam(t *testing.T) {
 	}
 }
 
-func TestDGAEvaluationContext_All_WithPipelineAndMetadata(t *testing.T) {
+func TestDGAEvaluationContext_All_WithWorkflowAndMetadata(t *testing.T) {
 	graph := NewDGAGraph()
-	pipeline := NewPipeline(nil)
-	pipeline.(*PipelineImpl).SetGraph(graph)
-	pipeline.(*PipelineImpl).setId("pipeline-meta-test")
+	workflow := NewWorkflow(nil)
+	workflow.(*WorkflowImpl).SetGraph(graph)
+	workflow.(*WorkflowImpl).setId("workflow-meta-test")
 
 	// Set param
 	param := map[string]interface{}{
 		"projectName": "myapp",
 	}
-	pipeline.(*PipelineImpl).SetParam(param)
+	workflow.(*WorkflowImpl).SetParam(param)
 
 	// Simulate setting metadata (using internal metadata map)
-	// Note: In real usage, metadata is set through pipeline operations
-	pipelineImpl := pipeline.(*PipelineImpl)
-	pipelineImpl.mu.Lock()
-	pipelineImpl.metadata = Metadata{
+	// Note: In real usage, metadata is set through workflow operations
+	workflowImpl := workflow.(*WorkflowImpl)
+	workflowImpl.mu.Lock()
+	workflowImpl.metadata = Metadata{
 		"Build.buildId":    core.FieldItem{Value: "12345", SrcNode: "Build"},
 		"Build.status":      core.FieldItem{Value: "success", SrcNode: "Build"},
 		"Deploy.namespace":  core.FieldItem{Value: "prod", SrcNode: "Deploy"},
 		"standaloneKey":    core.FieldItem{Value: "standalone", SrcNode: ""},
 	}
-	pipelineImpl.mu.Unlock()
+	workflowImpl.mu.Unlock()
 
-	ctx := NewEvaluationContext().WithPipeline(pipeline)
+	ctx := NewEvaluationContext().WithWorkflow(workflow)
 
 	all := ctx.All()
 
@@ -148,31 +148,31 @@ func TestDGAEvaluationContext_All_MultipleSources(t *testing.T) {
 	graph := NewDGAGraph()
 	node := NewDGANode("test-node", "RUNNING")
 	graph.AddVertex(node)
-	pipeline := NewPipeline(nil)
-	pipeline.(*PipelineImpl).SetGraph(graph)
-	pipeline.(*PipelineImpl).setId("pipeline-multi-test")
+	workflow := NewWorkflow(nil)
+	workflow.(*WorkflowImpl).SetGraph(graph)
+	workflow.(*WorkflowImpl).setId("workflow-multi-test")
 
 	// Set param
 	param := map[string]interface{}{
 		"env": "staging",
 	}
-	pipeline.(*PipelineImpl).SetParam(param)
+	workflow.(*WorkflowImpl).SetParam(param)
 
 	// Set metadata
-	pipelineImpl := pipeline.(*PipelineImpl)
-	pipelineImpl.mu.Lock()
-	pipelineImpl.metadata = Metadata{
+	workflowImpl := workflow.(*WorkflowImpl)
+	workflowImpl.mu.Lock()
+	workflowImpl.metadata = Metadata{
 		"Node1.value": core.FieldItem{Value: "test-value", SrcNode: "Node1"},
 	}
-	pipelineImpl.mu.Unlock()
+	workflowImpl.mu.Unlock()
 
-	ctx := NewEvaluationContext().WithNode(node).WithPipeline(pipeline).WithIteration(5)
+	ctx := NewEvaluationContext().WithNode(node).WithWorkflow(workflow).WithIteration(5)
 
 	all := ctx.All()
 
 	// Verify all sources are present
-	if all["pipelineId"] != "pipeline-multi-test" {
-		t.Errorf("pipelineId = %v, want pipeline-multi-test", all["pipelineId"])
+	if all["workflowId"] != "workflow-multi-test" {
+		t.Errorf("workflowId = %v, want workflow-multi-test", all["workflowId"])
 	}
 	if all["nodeId"] != "test-node" {
 		t.Errorf("nodeId = %v, want test-node", all["nodeId"])
@@ -207,27 +207,27 @@ func TestDGAEvaluationContext_WithNode_Immutability(t *testing.T) {
 	}
 }
 
-func TestDGAEvaluationContext_WithPipeline_Immutability(t *testing.T) {
+func TestDGAEvaluationContext_WithWorkflow_Immutability(t *testing.T) {
 	original := NewEvaluationContext()
 	original.(*DGAEvaluationContext).data = map[string]any{"custom": "value"}
 
 	graph := NewDGAGraph()
-	pipeline := NewPipeline(nil)
-	pipeline.(*PipelineImpl).SetGraph(graph)
-	pipeline.(*PipelineImpl).setId("p1")
+	workflow := NewWorkflow(nil)
+	workflow.(*WorkflowImpl).SetGraph(graph)
+	workflow.(*WorkflowImpl).setId("p1")
 
-	modified := original.WithPipeline(pipeline)
+	modified := original.WithWorkflow(workflow)
 
-	// Original should not have pipeline data
+	// Original should not have workflow data
 	allOrig := original.All()
-	if _, exists := allOrig["pipelineId"]; exists {
-		t.Error("Original context should not have pipelineId")
+	if _, exists := allOrig["workflowId"]; exists {
+		t.Error("Original context should not have workflowId")
 	}
 
-	// Modified should have pipeline data
+	// Modified should have workflow data
 	allMod := modified.All()
-	if allMod["pipelineId"] != "p1" {
-		t.Errorf("Modified context pipelineId = %v, want p1", allMod["pipelineId"])
+	if allMod["workflowId"] != "p1" {
+		t.Errorf("Modified context workflowId = %v, want p1", allMod["workflowId"])
 	}
 
 	// Original data should be preserved
@@ -283,18 +283,18 @@ func TestDGAEvaluationContext_WithIteration_Chained(t *testing.T) {
 	}
 }
 
-func TestDGAEvaluationContext_NilPipeline(t *testing.T) {
+func TestDGAEvaluationContext_NilWorkflow(t *testing.T) {
 	ctx := NewEvaluationContext()
-	// Don't set pipeline, leave it nil
+	// Don't set workflow, leave it nil
 
 	all := ctx.All()
 
-	// Should not panic and should not have pipeline-related keys
-	if _, exists := all["pipelineId"]; exists {
-		t.Error("Nil pipeline should not add pipelineId to All()")
+	// Should not panic and should not have workflow-related keys
+	if _, exists := all["workflowId"]; exists {
+		t.Error("Nil workflow should not add workflowId to All()")
 	}
-	if _, exists := all["pipelineStatus"]; exists {
-		t.Error("Nil pipeline should not add pipelineStatus to All()")
+	if _, exists := all["workflowStatus"]; exists {
+		t.Error("Nil workflow should not add workflowStatus to All()")
 	}
 }
 
@@ -313,8 +313,8 @@ func TestDGAEvaluationContext_NilNode(t *testing.T) {
 	}
 }
 
-// Helper function to set pipeline ID for testing
-func (p *PipelineImpl) setId(id string) {
+// Helper function to set workflow ID for testing
+func (p *WorkflowImpl) setId(id string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.id = id

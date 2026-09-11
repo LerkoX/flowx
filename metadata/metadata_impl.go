@@ -95,12 +95,12 @@ type HTTPMetadataStore struct {
 	url        string
 	method     string
 	headers    map[string]string
-	pipelineId string
+	workflowId string
 	client     *http.Client
 }
 
 // NewHTTPMetadataStore 创建基于HTTP的元数据存储
-func NewHTTPMetadataStore(config core.MetadataConfig, pipelineId string) (*HTTPMetadataStore, error) {
+func NewHTTPMetadataStore(config core.MetadataConfig, workflowId string) (*HTTPMetadataStore, error) {
 	cfg := core.HTTPMetadataConfig{}
 
 	// 解析配置
@@ -136,7 +136,7 @@ func NewHTTPMetadataStore(config core.MetadataConfig, pipelineId string) (*HTTPM
 		url:        cfg.URL,
 		method:     cfg.Method,
 		headers:    cfg.Headers,
-		pipelineId: pipelineId,
+		workflowId: workflowId,
 		client: &http.Client{
 			Timeout: timeout,
 		},
@@ -152,8 +152,8 @@ func (s *HTTPMetadataStore) Get(ctx context.Context, key string) (string, error)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if s.pipelineId != "" {
-		req.Header.Set("X-Pipeline-ID", s.pipelineId)
+	if s.workflowId != "" {
+		req.Header.Set("X-Workflow-ID", s.workflowId)
 	}
 	for k, v := range s.headers {
 		req.Header.Set(k, v)
@@ -191,8 +191,8 @@ func (s *HTTPMetadataStore) Set(ctx context.Context, key string, value string) e
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if s.pipelineId != "" {
-		req.Header.Set("X-Pipeline-ID", s.pipelineId)
+	if s.workflowId != "" {
+		req.Header.Set("X-Workflow-ID", s.workflowId)
 	}
 	for k, v := range s.headers {
 		req.Header.Set(k, v)
@@ -220,8 +220,8 @@ func (s *HTTPMetadataStore) Delete(ctx context.Context, key string) error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if s.pipelineId != "" {
-		req.Header.Set("X-Pipeline-ID", s.pipelineId)
+	if s.workflowId != "" {
+		req.Header.Set("X-Workflow-ID", s.workflowId)
 	}
 	for k, v := range s.headers {
 		req.Header.Set(k, v)
@@ -248,11 +248,11 @@ func (s *HTTPMetadataStore) Close() error {
 // RedisMetadataStore Redis 元数据存储
 type RedisMetadataStore struct {
 	client     *redis.Client
-	pipelineId string
+	workflowId string
 }
 
 // NewRedisMetadataStore 创建基于Redis的元数据存储
-func NewRedisMetadataStore(config core.MetadataConfig, pipelineId string) (*RedisMetadataStore, error) {
+func NewRedisMetadataStore(config core.MetadataConfig, workflowId string) (*RedisMetadataStore, error) {
 	cfg := core.RedisMetadataConfig{}
 
 	// 解析配置
@@ -307,15 +307,15 @@ func NewRedisMetadataStore(config core.MetadataConfig, pipelineId string) (*Redi
 		DB:       cfg.DB,
 	})
 
-	return &RedisMetadataStore{client: client, pipelineId: pipelineId}, nil
+	return &RedisMetadataStore{client: client, workflowId: workflowId}, nil
 }
 
-// buildRedisKey 构建带前缀的 Redis key，格式: flowx/{pipelineId}/{key}
+// buildRedisKey 构建带前缀的 Redis key，格式: flowx/{workflowId}/{key}
 func (s *RedisMetadataStore) buildRedisKey(key string) string {
-	if s.pipelineId == "" {
+	if s.workflowId == "" {
 		return key
 	}
-	return fmt.Sprintf("flowx/%s/%s", s.pipelineId, key)
+	return fmt.Sprintf("flowx/%s/%s", s.workflowId, key)
 }
 
 // Get 从Redis获取元数据
@@ -364,15 +364,15 @@ func NewMetadataStoreFactory() MetadataStoreFactory {
 	return &DefaultMetadataStoreFactory{}
 }
 
-// Create 根据配置类型创建对应的MetadataStore实例，pipelineId用于隔离不同流水线的数据
-func (f *DefaultMetadataStoreFactory) Create(config core.MetadataConfig, pipelineId string) (MetadataStore, error) {
+// Create 根据配置类型创建对应的MetadataStore实例，workflowId用于隔离不同流水线的数据
+func (f *DefaultMetadataStoreFactory) Create(config core.MetadataConfig, workflowId string) (MetadataStore, error) {
 	switch config.Type {
 	case "in-config":
 		return NewInConfigMetadataStore(config)
 	case "http":
-		return NewHTTPMetadataStore(config, pipelineId)
+		return NewHTTPMetadataStore(config, workflowId)
 	case "redis":
-		return NewRedisMetadataStore(config, pipelineId)
+		return NewRedisMetadataStore(config, workflowId)
 	default:
 		return nil, fmt.Errorf("unsupported metadata store type: %s", config.Type)
 	}

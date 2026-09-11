@@ -1,5 +1,5 @@
 Version: "1.0"
-Name: file-processing-pipeline
+Name: file-processing-workflow
 
 Metadate:
   type: in-config

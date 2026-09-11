@@ -1,5 +1,5 @@
 Version: "1.0"
-Name: data-collection-pipeline
+Name: data-collection-workflow
 
 Metadate:
   type: in-config

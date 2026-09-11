@@ -165,7 +165,7 @@
             <div class="sidebar-title">更多文档</div>
             <a href="quickstart.html">快速开始</a>
             <a href="configuration.html">配置参考</a>
-            <a href="pipeline.html">流水线核心</a>
+            <a href="workflow.html">流水线核心</a>
             <a href="executors.html">执行器系统</a>
             <a href="node.html">节点与步骤</a>
             <a href="edge.html">条件边与循环</a>
@@ -182,7 +182,7 @@
         <p>本文档介绍元数据存储（MetadataStore）接口及其三种实现：in-config（内存）、Redis、HTTP。</p>
 
         <h2 id="overview">概述</h2>
-        <p>MetadataStore 是 FlowX 中用于在节点间传递数据的键值存储接口。每个流水线实例拥有独立的存储空间（通过 <code>pipelineId</code> 隔离）。</p>
+        <p>MetadataStore 是 FlowX 中用于在节点间传递数据的键值存储接口。每个流水线实例拥有独立的存储空间（通过 <code>workflowId</code> 隔离）。</p>
 
         <pre><code class="language-go">type MetadataStore interface {
     Get(ctx context.Context, key string) (string, error)    // 获取值
@@ -191,11 +191,11 @@
     Close() error                                           // 关闭连接
 }</code></pre>
 
-        <p><strong>pipelineId 隔离机制</strong>：</p>
+        <p><strong>workflowId 隔离机制</strong>：</p>
         <ul>
-            <li><strong>HTTP</strong>：通过 <code>X-Pipeline-ID</code> 请求头传递</li>
-            <li><strong>Redis</strong>：Key 前缀为 <code>flowx/{pipelineId}/{key}</code></li>
-            <li><strong>in-config</strong>：不依赖 pipelineId</li>
+            <li><strong>HTTP</strong>：通过 <code>X-Workflow-ID</code> 请求头传递</li>
+            <li><strong>Redis</strong>：Key 前缀为 <code>flowx/{workflowId}/{key}</code></li>
+            <li><strong>in-config</strong>：不依赖 workflowId</li>
         </ul>
 
         <h2 id="in-config">InConfigMetadataStore</h2>
@@ -221,7 +221,7 @@
 store, _ := factory.Create(MetadataConfig{
     Type: "in-config",
     Data: map[string]any{"key1": "value1"},
-}, "pipeline-001")
+}, "workflow-001")
 
 store.Set(ctx, "key2", "value2")
 val, _ := store.Get(ctx, "key1")  // "value1"
@@ -257,12 +257,12 @@ func (s *InConfigMetadataStore) Keys() []string             // 获取所有键</
             </tbody>
         </table>
 
-        <h3>Pipeline 隔离示例</h3>
-        <pre><code class="language-yaml"># pipeline-001 写入 key="mykey"
-# 实际存储的 Redis key: flowx/pipeline-001/mykey
+        <h3>Workflow 隔离示例</h3>
+        <pre><code class="language-yaml"># workflow-001 写入 key="mykey"
+# 实际存储的 Redis key: flowx/workflow-001/mykey
 
-# pipeline-002 写入同名 key="mykey"
-# 实际存储的 Redis key: flowx/pipeline-002/mykey
+# workflow-002 写入同名 key="mykey"
+# 实际存储的 Redis key: flowx/workflow-002/mykey
 # 两者互不干扰</code></pre>
 
         <h2 id="http">HTTPMetadataStore</h2>
@@ -299,7 +299,7 @@ func (s *InConfigMetadataStore) Keys() []string             // 获取所有键</
         <p>除自定义 headers 外，HTTP Store 会自动设置以下请求头：</p>
         <ul>
             <li><code>Content-Type: application/json</code></li>
-            <li><code>X-Pipeline-ID: {pipelineId}</code>（当 pipelineId 不为空时）</li>
+            <li><code>X-Workflow-ID: {workflowId}</code>（当 workflowId 不为空时）</li>
         </ul>
 
         <h2 id="dataflow">数据流</h2>
@@ -371,7 +371,7 @@ Nodes:
             <li><strong>InConfig</strong>：使用 <code>sync.RWMutex</code> 保护内部 map</li>
             <li><strong>HTTP</strong>：依赖 HTTP 服务端实现并发控制</li>
             <li><strong>Redis</strong>：依赖 Redis 服务端实现并发控制</li>
-            <li>多个 Pipeline 可以安全地并发访问同一个 Store 实例</li>
+            <li>多个 Workflow 可以安全地并发访问同一个 Store 实例</li>
         </ul>
     </article>
 </div>

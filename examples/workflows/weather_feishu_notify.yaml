@@ -1,5 +1,5 @@
 Version: "1.0"
-Name: shenzhen-weather-notify-pipeline
+Name: shenzhen-weather-notify-workflow
 
 Metadate:
   type: in-config

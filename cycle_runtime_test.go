@@ -8,24 +8,24 @@ import (
 	"github.com/LerkoX/flowx/dag"
 )
 
-// TestCyclicPipeline_Execution 测试循环流水线的实际执行
-func TestCyclicPipeline_Execution(t *testing.T) {
+// TestCyclicWorkflow_Execution 测试循环流水线的实际执行
+func TestCyclicWorkflow_Execution(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 	config := loadTestConfig(t, "cyclic_loop.yaml")
 	listener := NewRecordingListener()
 
-	pipeline, err := runtime.RunSync(ctx, "cyclic-test", config, listener)
+	workflow, err := runtime.RunSync(ctx, "cyclic-test", config, listener)
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != core.StatusSuccess {
-		t.Errorf("Expected SUCCESS, got %s", pipeline.Status())
+	if workflow.Status() != core.StatusSuccess {
+		t.Errorf("Expected SUCCESS, got %s", workflow.Status())
 	}
 
 	// 验证节点都完成了
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	for _, nodeID := range []string{"A", "B", "C", "D"} {
 		node, ok := graph.GetNode(nodeID)
 		if !ok {
@@ -43,22 +43,22 @@ func TestCyclicPipeline_Execution(t *testing.T) {
 	}
 }
 
-// TestAcyclicPipeline_NoRegression 测试无环图不受循环支持影响
-func TestAcyclicPipeline_NoRegression(t *testing.T) {
+// TestAcyclicWorkflow_NoRegression 测试无环图不受循环支持影响
+func TestAcyclicWorkflow_NoRegression(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
-	config := loadTestConfig(t, "sync_pipeline.yaml")
+	config := loadTestConfig(t, "sync_workflow.yaml")
 
-	pipeline, err := runtime.RunSync(ctx, "acyclic-regression-test", config, NewRecordingListener())
+	workflow, err := runtime.RunSync(ctx, "acyclic-regression-test", config, NewRecordingListener())
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	if pipeline.Status() != core.StatusSuccess {
-		t.Errorf("Expected SUCCESS, got %s", pipeline.Status())
+	if workflow.Status() != core.StatusSuccess {
+		t.Errorf("Expected SUCCESS, got %s", workflow.Status())
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	dgaGraph, ok := graph.(*dag.DGAGraph)
 	if !ok {
 		t.Fatal("Graph should be DGAGraph")

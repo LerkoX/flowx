@@ -72,7 +72,7 @@ FlowX Studio 提供节点注册中心功能，支持通过 `flowx.json` 文件�
 │  - 流水线生命周期管理                                      │
 │  - 快照与恢复                                             │
 ├─────────────────────────────────────────────────────────┤
-│                   Pipeline（流水线）                       │
+│                   Workflow（流水线）                       │
 │  - DAG 图遍历（BFS，统一支持有环/无环）                      │
 │  - 循环执行（条件回边 + iteration 计数器）                    │
 │  - 暂停/恢复                                              │
@@ -109,8 +109,8 @@ flowx/
 │   ├── field.go          # FieldItem 定义
 │   └── uuid.go           # UUID 工具函数
 ├── dag/                  # DAG 流水线核心
-│   ├── pipeline.go       # Pipeline 接口定义
-│   ├── pipeline_impl.go  # Pipeline + DAG 图实现
+│   ├── workflow.go       # Workflow 接口定义
+│   ├── workflow_impl.go  # Workflow + DAG 图实现
 │   ├── node.go           # Node 接口定义
 │   ├── node_impl.go      # Node 实现
 │   ├── edge.go           # Edge 接口定义
@@ -165,7 +165,7 @@ func main() {
     // 2. 准备 YAML 配置
     configYAML := `
 Version: "1.0"
-Name: hello-pipeline
+Name: hello-workflow
 
 Executors:
   local:
@@ -183,7 +183,7 @@ Nodes:
     executor: local
     steps:
       - name: greet
-        run: echo "Hello, Pipelinex!"
+        run: echo "Hello, Workflowx!"
 `
 
     // 3. 同步执行
@@ -194,7 +194,7 @@ Nodes:
 
     // 4. 等待完成
     <-p.Done()
-    fmt.Println("Pipeline status:", p.Status())
+    fmt.Println("Workflow status:", p.Status())
 }
 ```
 
@@ -206,23 +206,23 @@ type MyListener struct{}
 
 func (l *MyListener) Events() []flowx.Event {
     return []flowx.Event{
-        flowx.EventPipelineNodeStart,
-        flowx.EventPipelineNodeFinish,
+        flowx.EventWorkflowNodeStart,
+        flowx.EventWorkflowNodeFinish,
     }
 }
 
-func (l *MyListener) Handle(p flowx.Pipeline, event flowx.Event) {
-    fmt.Printf("Event: %s, Pipeline: %s\n", event, p.Id())
+func (l *MyListener) Handle(p flowx.Workflow, event flowx.Event) {
+    fmt.Printf("Event: %s, Workflow: %s\n", event, p.Id())
 }
 
 listener := &MyListener{}
-p, _ := rt.RunSync(ctx, "pipeline-001", configYAML, listener)
+p, _ := rt.RunSync(ctx, "workflow-001", configYAML, listener)
 ```
 
 ## 相关文档
 
 - [配置参考](configuration.md) - 完整 YAML 配置字段说明
-- [流水线核心](pipeline.md) - DAG 图结构与生命周期
+- [流水线核心](workflow.md) - DAG 图结构与生命周期
 - [节点与步骤](node.md) - 节点配置与多步骤执行
 - [执行器系统](executor.md) - Local/Docker/Kubernetes 执行器
 - [条件边](edge.md) - 条件表达式与分支控制

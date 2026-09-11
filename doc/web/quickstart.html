@@ -160,7 +160,7 @@
         <div class="sidebar-group">
             <div class="sidebar-title">快速开始</div>
             <a href="#install" class="active">安装</a>
-            <a href="#first-pipeline">第一个流水线</a>
+            <a href="#first-workflow">第一个流水线</a>
             <a href="#understanding-config">理解配置</a>
             <a href="#run-it">运行</a>
             <a href="#next-steps">下一步</a>
@@ -168,7 +168,7 @@
         <div class="sidebar-group">
             <div class="sidebar-title">更多文档</div>
             <a href="configuration.html">配置参考</a>
-            <a href="pipeline.html">流水线核心</a>
+            <a href="workflow.html">流水线核心</a>
             <a href="executors.html">执行器系统</a>
             <a href="node.html">节点与步骤</a>
             <a href="edge.html">条件边与循环</a>
@@ -198,7 +198,7 @@
         </div>
 
         <!-- Step 2 -->
-        <div class="step-row" id="first-pipeline">
+        <div class="step-row" id="first-workflow">
             <span class="step-badge">2</span>
             <div class="step-content">
                 <h3>创建第一个流水线</h3>
@@ -224,7 +224,7 @@ func main() {
     // 2. 准备 YAML 配置
     configYAML := `
 Version: "1.0"
-Name: hello-pipeline
+Name: hello-workflow
 
 Executors:
   local:
@@ -253,7 +253,7 @@ Nodes:
 
     // 4. 等待完成并输出状态
     <-p.Done()
-    fmt.Println("Pipeline status:", p.Status())
+    fmt.Println("Workflow status:", p.Status())
 }</code></pre>
             </div>
         </div>
@@ -291,7 +291,7 @@ Nodes:
                 <pre><code class="language-bash">go run main.go</code></pre>
                 <p>预期输出：</p>
                 <pre><code class="language-plaintext">Hello, FlowX!
-Pipeline status: SUCCESS</code></pre>
+Workflow status: SUCCESS</code></pre>
                 <p>恭喜你！你的第一个 FlowX 流水线已经成功运行。</p>
             </div>
         </div>
@@ -302,7 +302,7 @@ Pipeline status: SUCCESS</code></pre>
 
         <ul>
             <li><strong><a href="configuration.html">配置参考</a></strong> — 了解所有 YAML 配置字段的详细说明</li>
-            <li><strong><a href="pipeline.html">流水线核心</a></strong> — 理解 DAG 图结构、BFS 遍历和并发执行</li>
+            <li><strong><a href="workflow.html">流水线核心</a></strong> — 理解 DAG 图结构、BFS 遍历和并发执行</li>
             <li><strong><a href="executors.html">执行器系统</a></strong> — 学习 Local、Docker、K8s 三种执行环境</li>
             <li><strong><a href="node.html">节点与步骤</a></strong> — 掌握多步骤节点和输出提取</li>
             <li><strong><a href="examples.html">工作流示例</a></strong> — 查看完整的实战示例（CI/CD、ETL、文件处理等）</li>
@@ -319,7 +319,7 @@ rt.SetPusher(pusher)</code></pre>
         <p></p>
         <ul>
             <li><code>RunSync</code>：阻塞当前 goroutine，直到流水线完成</li>
-            <li><code>RunAsync</code>：在后台 goroutine 执行，立即返回 <code>Pipeline</code> 实例，通过 <code><-p.Done()</code> 等待完成</li>
+            <li><code>RunAsync</code>：在后台 goroutine 执行，立即返回 <code>Workflow</code> 实例，通过 <code><-p.Done()</code> 等待完成</li>
         </ul>
 
         <h3>Q: 流水线 ID 可以重复吗？</h3>

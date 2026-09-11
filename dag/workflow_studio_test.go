@@ -11,8 +11,8 @@ import (
 
 // TestCurrentNode_InitialState 测试初始状态 CurrentNode 返回 nil
 func TestCurrentNode_InitialState(t *testing.T) {
-	pipeline := NewPipeline(context.Background())
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(context.Background())
+	impl := workflow.(*WorkflowImpl)
 
 	node := impl.CurrentNode()
 	if node != nil {
@@ -22,8 +22,8 @@ func TestCurrentNode_InitialState(t *testing.T) {
 
 // TestCurrentNode_SetAndGet 测试设置和获取当前节点
 func TestCurrentNode_SetAndGet(t *testing.T) {
-	pipeline := NewPipeline(context.Background())
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(context.Background())
+	impl := workflow.(*WorkflowImpl)
 
 	// 创建一个测试节点
 	testNode := NewDGANode("test-node", core.StatusRunning)
@@ -55,8 +55,8 @@ func TestCurrentNode_SetAndGet(t *testing.T) {
 
 // TestCurrentNode_ConcurrentAccess 测试 CurrentNode 的并发安全性
 func TestCurrentNode_ConcurrentAccess(t *testing.T) {
-	pipeline := NewPipeline(context.Background())
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(context.Background())
+	impl := workflow.(*WorkflowImpl)
 
 	testNode := NewDGANode("concurrent-node", core.StatusRunning)
 
@@ -88,47 +88,47 @@ func TestCurrentNode_ConcurrentAccess(t *testing.T) {
 	<-done
 }
 
-// TestPipelineNodeFailed_Event 测试节点失败时触发 PipelineNodeFailed 事件
-func TestPipelineNodeFailed_Event(t *testing.T) {
+// TestWorkflowNodeFailed_Event 测试节点失败时触发 WorkflowNodeFailed 事件
+func TestWorkflowNodeFailed_Event(t *testing.T) {
 	// 创建一个事件监听器来捕获事件
 	eventCollector := &testEventCollector{}
 	listener := &testEventListener{
 		collector: eventCollector,
 	}
 
-	pipeline := NewPipeline(context.Background())
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(context.Background())
+	impl := workflow.(*WorkflowImpl)
 	impl.Listening(listener)
 
-	// 验证 PipelineNodeFailed 事件常量已定义
-	if PipelineNodeFailed != core.EventPipelineNodeFailed {
-		t.Errorf("PipelineNodeFailed event mismatch: expected %s, got %s",
-			core.EventPipelineNodeFailed, PipelineNodeFailed)
+	// 验证 WorkflowNodeFailed 事件常量已定义
+	if WorkflowNodeFailed != core.EventWorkflowNodeFailed {
+		t.Errorf("WorkflowNodeFailed event mismatch: expected %s, got %s",
+			core.EventWorkflowNodeFailed, WorkflowNodeFailed)
 	}
 
-	// 手动触发 PipelineNodeFailed 事件
-	impl.NotifyEvent(PipelineNodeFailed)
+	// 手动触发 WorkflowNodeFailed 事件
+	impl.NotifyEvent(WorkflowNodeFailed)
 
 	// 验证监听器收到了事件
 	time.Sleep(50 * time.Millisecond) // 给事件处理一点时间
 
 	found := false
 	for _, event := range eventCollector.events {
-		if event == PipelineNodeFailed {
+		if event == WorkflowNodeFailed {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("Expected PipelineNodeFailed event to be received by listener")
+		t.Errorf("Expected WorkflowNodeFailed event to be received by listener")
 	}
 }
 
 // TestCurrentNode_DuringExecution 测试节点执行过程中 CurrentNode 的设置和清理
 func TestCurrentNode_DuringExecution(t *testing.T) {
 	ctx := context.Background()
-	pipeline := NewPipeline(ctx)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(ctx)
+	impl := workflow.(*WorkflowImpl)
 
 	// 创建一个测试节点
 	testNode := NewDGANodeWithConfig("execution-node", core.StatusRunning, "test-executor", "", nil, nil)
@@ -174,7 +174,7 @@ type testEventListener struct {
 	collector *testEventCollector
 }
 
-func (l *testEventListener) Handle(p Pipeline, event Event) {
+func (l *testEventListener) Handle(p Workflow, event Event) {
 	if l.collector != nil {
 		l.collector.mu.Lock()
 		l.collector.events = append(l.collector.events, event)
@@ -184,27 +184,27 @@ func (l *testEventListener) Handle(p Pipeline, event Event) {
 
 func (l *testEventListener) Events() []Event {
 	return []Event{
-		PipelineNodeStart,
-		PipelineNodeFinish,
-		PipelineNodeFailed,
+		WorkflowNodeStart,
+		WorkflowNodeFinish,
+		WorkflowNodeFailed,
 	}
 }
 
 // 确保 testEventListener 实现了 Listener 接口
 var _ Listener = (*testEventListener)(nil)
 
-// TestPipelineNodeFailed_ConstantValue 测试 PipelineNodeFailed 常量值
-func TestPipelineNodeFailed_ConstantValue(t *testing.T) {
-	expected := Event("pipeline-node-failed")
-	if PipelineNodeFailed != expected {
-		t.Errorf("PipelineNodeFailed constant mismatch: expected %v, got %v", expected, PipelineNodeFailed)
+// TestWorkflowNodeFailed_ConstantValue 测试 WorkflowNodeFailed 常量值
+func TestWorkflowNodeFailed_ConstantValue(t *testing.T) {
+	expected := Event("workflow-node-failed")
+	if WorkflowNodeFailed != expected {
+		t.Errorf("WorkflowNodeFailed constant mismatch: expected %v, got %v", expected, WorkflowNodeFailed)
 	}
 }
 
 // TestCurrentNode_ThreadSafety 测试 CurrentNode 在多个 goroutine 中的线程安全性
 func TestCurrentNode_ThreadSafety(t *testing.T) {
-	pipeline := NewPipeline(context.Background())
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(context.Background())
+	impl := workflow.(*WorkflowImpl)
 
 	node1 := NewDGANode("node-1", core.StatusRunning)
 	node2 := NewDGANode("node-2", core.StatusRunning)

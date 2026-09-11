@@ -5,7 +5,7 @@
 ```mermaid
 flowchart TD
     subgraph runtime_interface["Runtime接口"]
-    A[Get] --> |id| B[返回Pipeline]
+    A[Get] --> |id| B[返回Workflow]
     A --> C[RunAsync] --> |ctx,id,config,listener| D[异步执行]
     A --> E[RunSync] --> |ctx,id,config,listener| F[同步执行]
     A --> G[Cancel] --> |ctx,id| H[取消流水线]
@@ -23,9 +23,9 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph runtime_impl["RuntimeImpl"]
-    A[RuntimeImpl] --> B[pipelines<br/>map string Pipeline]
-    A --> C[pipelineIds<br/>map string bool]
-    A --> D[pipelineConfigs<br/>map string PipelineConfig]
+    A[RuntimeImpl] --> B[workflows<br/>map string Workflow]
+    A --> C[workflowIds<br/>map string bool]
+    A --> D[workflowConfigs<br/>map string WorkflowConfig]
     A --> E[mu<br/>sync.RWMutex]
     A --> F[ctx<br/>context.Context]
     A --> G[cancel<br/>context.CancelFunc]
@@ -51,7 +51,7 @@ flowchart TD
 
     I --> J{render成功?}
     J -->|否| K[Unlock<br/>return err]
-    J -->|是| L[NewPipeline<br/>创建流水线]
+    J -->|是| L[NewWorkflow<br/>创建流水线]
 
     L --> M[SetTemplateEngine]
     M --> N[SetPusher]
@@ -69,11 +69,11 @@ flowchart TD
     W --> V
     V -->|完成| X[SetExecutorProvider]
 
-    X --> Y[存储pipeline<br/>标记ID已用<br/>存储config]
-    Y --> Z[异步goroutine<br/>执行pipeline.Run]
+    X --> Y[存储workflow<br/>标记ID已用<br/>存储config]
+    Y --> Z[异步goroutine<br/>执行workflow.Run]
 
     Z --> AA[Unlock]
-    AA --> AB[return pipeline]
+    AA --> AB[return workflow]
 ```
 
 ## renderConfig 配置渲染
@@ -189,7 +189,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[ModifyGraph] --> B[获取pipeline<br/>和config]
+    A[ModifyGraph] --> B[获取workflow<br/>和config]
     B --> C{可修改?}
     C -->|否| D[return err]
     C -->|是| E[快照当前状态<br/>用于回滚]
@@ -223,7 +223,7 @@ flowchart TD
     Y --> Z{有环?}
     Z -->|无条件环| AA[rollback<br/>return err]
     Z -->|无环或条件环| AB[更新config.Nodes]
-    AB --> AC[触发事件<br/>PipelineGraphModified]
+    AB --> AC[触发事件<br/>WorkflowGraphModified]
     AC --> Z2[return nil]
 ```
 
@@ -231,7 +231,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[UpdateConfig] --> B[获取pipeline<br/>和oldConfig]
+    A[UpdateConfig] --> B[获取workflow<br/>和oldConfig]
     B --> C{可修改?}
     C -->|否| D[return err]
     C -->|是| E[parse新配置]
@@ -289,11 +289,11 @@ flowchart TD
     D --> E{ctx.Done?}
     E -->|是| Z[return]
     E -->|否| F{定时器触发}
-    F --> G[cleanup<br/>CompletedPipelines]
+    F --> G[cleanup<br/>CompletedWorkflows]
 
     G --> H[Lock mu]
-    H --> I{遍历pipelines}
-    I --> J{pipeline.Done?}
+    H --> I{遍历workflows}
+    I --> J{workflow.Done?}
     J -->|是| K[delete<br/>清理记录]
     J -->|否| L[跳过]
     K --> I
@@ -306,10 +306,10 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[ExportConfig] --> B[Lock RLock]
-    B --> C[获取pipeline<br/>和config]
+    B --> C[获取workflow<br/>和config]
     C --> D{都存在?}
     D -->|否| E[Unlock<br/>return err]
-    D -->|是| F[NewPipeline<br/>Snapshotter]
+    D -->|是| F[NewWorkflow<br/>Snapshotter]
 
     F --> G[TakeSnapshot<br/>生成带状态配置]
     G --> H{成功?}

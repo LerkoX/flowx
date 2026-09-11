@@ -17,7 +17,7 @@ const (
 
 // Entry 单条日志
 type Entry struct {
-	Pipeline  string    `json:"pipeline"`
+	Workflow  string    `json:"workflow"`
 	BuildID   string    `json:"buildId"`
 	Node      string    `json:"node"`
 	Step      string    `json:"step"`

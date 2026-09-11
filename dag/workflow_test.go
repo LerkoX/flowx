@@ -102,7 +102,7 @@ func TestDGA_MultipleStartNodes(t *testing.T) {
 	}
 }
 
-func TestPipeline_Run(t *testing.T) {
+func TestWorkflow_Run(t *testing.T) {
 	dgaGraph := NewDGAGraph()
 	node1 := NewDGANode("a", "RUNNING")
 	node2 := NewDGANode("b", "UNKNOWN")
@@ -124,10 +124,10 @@ func TestPipeline_Run(t *testing.T) {
 		}
 	}
 	ctx := context.Background()
-	pipeline := NewPipeline(ctx)
-	pipeline.SetGraph(dgaGraph)
+	workflow := NewWorkflow(ctx)
+	workflow.SetGraph(dgaGraph)
 	// 收集遍历过程中访问的节点
-	err := pipeline.Run(ctx)
+	err := workflow.Run(ctx)
 	if err != nil {
 		t.Error(err)
 	}

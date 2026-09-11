@@ -6,8 +6,8 @@
 
 | 配置文件 | 测试用例 | 测试功能 |
 |---------|---------|---------|
-| `sync_pipeline.yaml` | `TestRuntimeImpl_RunSync` | 测试同步执行流水线，执行完成后自动清理 |
-| `async_pipeline.yaml` | `TestRuntimeImpl_RunAsync` | 测试异步执行流水线，流水线保持在 Runtime 中 |
+| `sync_workflow.yaml` | `TestRuntimeImpl_RunSync` | 测试同步执行流水线，执行完成后自动清理 |
+| `async_workflow.yaml` | `TestRuntimeImpl_RunAsync` | 测试异步执行流水线，流水线保持在 Runtime 中 |
 | `invalid_config.yaml` | `TestRuntimeImpl_RunSync_InvalidConfig` | 测试无效 YAML 配置的错误处理 |
 | `single_node.yaml` | `TestRuntimeImpl_RunSync_DuplicateID` | 测试重复 ID 检测，相同 ID 的流水线不能重复执行 |
 | `long_running.yaml` | `TestRuntimeImpl_Cancel` | 测试流水线取消功能，取消长时间运行的流水线 |
@@ -41,11 +41,11 @@
 
 | 配置文件 | 测试用例 | 测试功能 |
 |---------|---------|---------|
-| `comprehensive_sync.yaml` | `TestComprehensivePipelineExecution/同步执行流水线` | 综合测试同步流水线执行和事件监听 |
-| `comprehensive_async.yaml` | `TestComprehensivePipelineExecution/异步执行流水线` | 综合测试异步流水线执行和流水线存储 |
-| `comprehensive_param_render.yaml` | `TestComprehensivePipelineExecution/Param模板渲染` | 综合测试 Param 模板渲染功能 |
-| `comprehensive_metadata.yaml` | `TestComprehensivePipelineExecution/Metadata创建和渲染` | 综合测试 Metadata 创建、参数引用和渲染 |
-| `comprehensive_dag.yaml` | `TestComprehensivePipelineExecution/多节点DAG执行` | 综合测试多节点 DAG 执行和验证事件触发 |
+| `comprehensive_sync.yaml` | `TestComprehensiveWorkflowExecution/同步执行流水线` | 综合测试同步流水线执行和事件监听 |
+| `comprehensive_async.yaml` | `TestComprehensiveWorkflowExecution/异步执行流水线` | 综合测试异步流水线执行和流水线存储 |
+| `comprehensive_param_render.yaml` | `TestComprehensiveWorkflowExecution/Param模板渲染` | 综合测试 Param 模板渲染功能 |
+| `comprehensive_metadata.yaml` | `TestComprehensiveWorkflowExecution/Metadata创建和渲染` | 综合测试 Metadata 创建、参数引用和渲染 |
+| `comprehensive_dag.yaml` | `TestComprehensiveWorkflowExecution/多节点DAG执行` | 综合测试多节点 DAG 执行和验证事件触发 |
 
 ## 条件边测试
 
@@ -75,14 +75,14 @@
 
 | 配置文件 | 测试用例 | 测试功能 |
 |---------|---------|---------|
-| `parallel_template.yaml` | `TestComprehensivePipelineExecution/并行执行` | 模板文件，用于格式化生成多个并发流水线配置 |
+| `parallel_template.yaml` | `TestComprehensiveWorkflowExecution/并行执行` | 模板文件，用于格式化生成多个并发流水线配置 |
 
 ## 配置文件说明
 
-### sync_pipeline.yaml
+### sync_workflow.yaml
 简单的双节点串行流水线，用于测试同步执行。
 
-### async_pipeline.yaml
+### async_workflow.yaml
 双节点串行流水线，用于测试异步执行。
 
 ### invalid_config.yaml

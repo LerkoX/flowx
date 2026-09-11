@@ -43,7 +43,7 @@ type EvaluationContext interface {
     Get(key string) (any, bool)                      // 查找值
     All() map[string]any                             // 获取完整上下文
     WithNode(node Node) EvaluationContext            // 附加节点信息（返回新实例）
-    WithPipeline(pipeline Pipeline) EvaluationContext // 附加流水线信息（返回新实例）
+    WithWorkflow(workflow Workflow) EvaluationContext // 附加流水线信息（返回新实例）
     WithParams(params map[string]any) EvaluationContext // 附加参数（返回新实例）
     WithIteration(iteration int) EvaluationContext   // 附加迭代计数器（返回新实例）
     Iteration() int                                  // 获取当前迭代计数器值
@@ -57,7 +57,7 @@ type EvaluationContext interface {
 | 来源 | 键 | 说明 |
 |------|-----|------|
 | 节点 | `nodeId`, `nodeStatus` | 当前遍历的节点信息 |
-| 流水线 | `pipelineId`, `pipelineStatus` | 流水线实例信息 |
+| 流水线 | `workflowId`, `workflowStatus` | 流水线实例信息 |
 | 参数 | `Param.xxx` | 配置中定义的全局参数 |
 | 参数 | 直接键名 | Param 的键同时作为顶层键暴露 |
 | 元数据 | 展开的嵌套结构 | Metadata 中的数据，点分隔键展开为嵌套对象 |
@@ -69,7 +69,7 @@ type EvaluationContext interface {
 
 ### 不可变性
 
-`WithNode`、`WithPipeline`、`WithParams`、`WithIteration` 返回新的实例，不修改原始上下文。
+`WithNode`、`WithWorkflow`、`WithParams`、`WithIteration` 返回新的实例，不修改原始上下文。
 
 ```go
 ctx := NewEvaluationContext()
@@ -181,7 +181,7 @@ Deploy      (被剪枝)
 
 ```yaml
 Version: "1.0"
-Name: conditional-pipeline
+Name: conditional-workflow
 
 Param:
   env: "production"

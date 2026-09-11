@@ -43,15 +43,15 @@ flowchart TD
     end
 ```
 
-## Pipeline.Run 完整执行流程
+## Workflow.Run 完整执行流程
 
 ```mermaid
 flowchart TD
-    A[Pipeline.Run] --> B[创建context<br/>设置cancelFunc]
+    A[Workflow.Run] --> B[创建context<br/>设置cancelFunc]
     B --> C[status = RUNNING]
     C --> D[defer cleanup<br/>关闭doneChan<br/>取消context<br/>清理executors]
 
-    D --> E[NotifyEvent<br/>PipelineStart]
+    D --> E[NotifyEvent<br/>WorkflowStart]
     E --> F[创建EvaluationContext]
     F --> G{有MetadataStore?}
     G -->|是| H[加载metadata<br/>到evalCtx]
@@ -65,7 +65,7 @@ flowchart TD
     K --> M{执行结果}
     M -->|成功| N[status = SUCCESS]
     M -->|失败| O[status = FAILED]
-    N --> P[NotifyEvent<br/>PipelineFinish]
+    N --> P[NotifyEvent<br/>WorkflowFinish]
     O --> P
     L --> P
 ```
@@ -88,7 +88,7 @@ flowchart TD
     I -->|是| J[检查pauseChan]
     J --> K{收到暂停信号?}
     K -->|是| L[保存currentLevel<br/>status = PAUSED]
-    L --> M[NotifyEvent<br/>PipelinePaused]
+    L --> M[NotifyEvent<br/>WorkflowPaused]
     M --> N[等待resumeChan]
 
     N --> O[收到恢复信号]
@@ -133,18 +133,18 @@ flowchart TD
     A[executeNodeWithLifecycle] --> B{ctx.Done?}
     B -->|是| C[return ctx.Err]
     B -->|否| D{shouldSkipNode?}
-    D -->|是| E[打印跳过日志<br/>NotifyEvent<br/>PipelineNodeFinish<br/>return nil]
+    D -->|是| E[打印跳过日志<br/>NotifyEvent<br/>WorkflowNodeFinish<br/>return nil]
 
-    D -->|否| F[NotifyEvent<br/>PipelineNodeStart]
+    D -->|否| F[NotifyEvent<br/>WorkflowNodeStart]
     F --> G[打印执行日志]
 
     G --> H{有executor?}
-    H -->|无| I[打印警告<br/>NotifyEvent<br/>PipelineNodeFinish<br/>return nil]
+    H -->|无| I[打印警告<br/>NotifyEvent<br/>WorkflowNodeFinish<br/>return nil]
 
     H -->|有| J[getOrCreateExecutor<br/>获取或创建executor]
     J --> K[executeNode]
     K --> L{执行结果}
-    L -->|成功| M[NotifyEvent<br/>PipelineNodeFinish<br/>return nil]
+    L -->|成功| M[NotifyEvent<br/>WorkflowNodeFinish<br/>return nil]
     L -->|失败| N[return err]
 ```
 
@@ -234,7 +234,7 @@ flowchart TD
     D --> E[设置InputRequest<br/>StepName<br/>Prompt<br/>Type]
     E --> F[node.Set<br/>RuntimeStatus]
 
-    F --> G[NotifyEvent<br/>PipelinePaused]
+    F --> G[NotifyEvent<br/>WorkflowPaused]
     G --> H[等待外部输入<br/>InputChan接收数据]
     H --> I[继续处理]
 ```
@@ -319,16 +319,16 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph event_types["事件类型"]
-    A[PipelineInit]
-    B[PipelineStart]
-    C[PipelineFinish]
-    D[PipelineNodeStart]
-    E[PipelineNodeFinish]
-    F[PipelinePaused]
-    G[PipelineResumed]
-    H[PipelineGraphModified]
-    I[PipelineCancelled]
-    J[PipelineStatusUpdate]
+    A[WorkflowInit]
+    B[WorkflowStart]
+    C[WorkflowFinish]
+    D[WorkflowNodeStart]
+    E[WorkflowNodeFinish]
+    F[WorkflowPaused]
+    G[WorkflowResumed]
+    H[WorkflowGraphModified]
+    I[WorkflowCancelled]
+    J[WorkflowStatusUpdate]
     end
 
     A --> K[Listener.Handle]
@@ -348,7 +348,7 @@ flowchart LR
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING
-    PENDING --> RUNNING: Pipeline.Run
+    PENDING --> RUNNING: Workflow.Run
 
     RUNNING --> PAUSED: Pause请求<br/>输入请求
     PAUSED --> RUNNING: Resume
@@ -371,7 +371,7 @@ stateDiagram-v2
 
 ```mermaid
 sequenceDiagram
-    participant P as Pipeline
+    participant P as Workflow
     participant T as runLevelByLevel
     participant PC as pauseChan
     participant RC as resumeChan
@@ -384,7 +384,7 @@ sequenceDiagram
     T->>T: 检测到暂停信号
     T->>T: 保存currentLevel
     T->>T: status = PAUSED
-    T->>L: NotifyEvent(PipelinePaused)
+    T->>L: NotifyEvent(WorkflowPaused)
     T->>T: 等待resumeChan
 
     Note over T: 外部处理输入/恢复
@@ -393,7 +393,7 @@ sequenceDiagram
     T->>T: 检测到恢复信号
     T->>T: status = RUNNING
     T->>T: 重置pause/resumeChan
-    T->>L: NotifyEvent(PipelineResumed)
+    T->>L: NotifyEvent(WorkflowResumed)
     T->>T: 重新计算层级
     T->>T: 继续执行
 ```

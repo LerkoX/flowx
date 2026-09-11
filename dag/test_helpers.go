@@ -2,22 +2,22 @@ package dag
 
 import "github.com/LerkoX/flowx/core"
 
-// SetStatusForTest sets the pipeline status for testing purposes.
+// SetStatusForTest sets the workflow status for testing purposes.
 // This is intentionally exported to allow integration tests in other packages
-// to set up specific pipeline states without modifying the production API.
-func (p *PipelineImpl) SetStatusForTest(status string) {
+// to set up specific workflow states without modifying the production API.
+func (p *WorkflowImpl) SetStatusForTest(status string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.status = status
 }
 
 // DoneChanForTest returns the doneChan for testing purposes.
-func (p *PipelineImpl) DoneChanForTest() chan struct{} {
+func (p *WorkflowImpl) DoneChanForTest() chan struct{} {
 	return p.doneChan
 }
 
-// SetParamForTest sets the pipeline param for testing purposes.
-func (p *PipelineImpl) SetParamForTest(param map[string]interface{}) {
+// SetParamForTest sets the workflow param for testing purposes.
+func (p *WorkflowImpl) SetParamForTest(param map[string]interface{}) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.param = make(map[string]core.FieldItem)
@@ -26,8 +26,8 @@ func (p *PipelineImpl) SetParamForTest(param map[string]interface{}) {
 	}
 }
 
-// ParamForTest returns the pipeline param for testing purposes.
-func (p *PipelineImpl) ParamForTest() map[string]core.FieldItem {
+// ParamForTest returns the workflow param for testing purposes.
+func (p *WorkflowImpl) ParamForTest() map[string]core.FieldItem {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.param

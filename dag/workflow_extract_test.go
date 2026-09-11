@@ -7,10 +7,10 @@ import (
 	"github.com/LerkoX/flowx/executor"
 )
 
-func TestPipeline_OutputExtraction(t *testing.T) {
-	// 创建测试用的 pipeline
-	pipeline := &PipelineImpl{
-		id:        "test-pipeline",
+func TestWorkflow_OutputExtraction(t *testing.T) {
+	// 创建测试用的 workflow
+	workflow := &WorkflowImpl{
+		id:        "test-workflow",
 		executors: make(map[string]executor.Executor),
 		metadata:  make(Metadata),
 	}
@@ -38,7 +38,7 @@ status: "success"` + "\n```\n"
 	}
 
 	// 创建提取器
-	extractor, err := pipeline.createExtractor(extractConfig)
+	extractor, err := workflow.createExtractor(extractConfig)
 	if err != nil {
 		t.Fatalf("Failed to create extractor: %v", err)
 	}
@@ -71,10 +71,10 @@ status: "success"` + "\n```\n"
 	}
 }
 
-func TestPipeline_OutputExtraction_Regex(t *testing.T) {
+func TestWorkflow_OutputExtraction_Regex(t *testing.T) {
 	// 测试正则表达式提取
-	pipeline := &PipelineImpl{
-		id:        "test-pipeline",
+	workflow := &WorkflowImpl{
+		id:        "test-workflow",
 		executors: make(map[string]executor.Executor),
 		metadata:  make(Metadata),
 	}
@@ -102,7 +102,7 @@ All tests completed
 		t.Fatal("Expected extract config")
 	}
 
-	extractor, err := pipeline.createExtractor(extractConfig)
+	extractor, err := workflow.createExtractor(extractConfig)
 	if err != nil {
 		t.Fatalf("Failed to create extractor: %v", err)
 	}
@@ -126,7 +126,7 @@ All tests completed
 }
 
 func TestCreateExtractor_InvalidConfig(t *testing.T) {
-	pipeline := &PipelineImpl{}
+	workflow := &WorkflowImpl{}
 
 	testCases := []struct {
 		name        string
@@ -171,7 +171,7 @@ func TestCreateExtractor_InvalidConfig(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			extractor, err := pipeline.createExtractor(tc.config)
+			extractor, err := workflow.createExtractor(tc.config)
 			if tc.expectError {
 				if err == nil {
 					t.Error("Expected error but got none")

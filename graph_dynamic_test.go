@@ -210,7 +210,7 @@ func TestRuntimeImpl_PauseResume(t *testing.T) {
 	listener := NewRecordingListener()
 
 	// 异步运行流水线
-	pipeline, err := runtime.RunAsync(ctx, "pause-test", config, listener)
+	workflow, err := runtime.RunAsync(ctx, "pause-test", config, listener)
 	if err != nil {
 		t.Fatalf("RunAsync failed: %v", err)
 	}
@@ -219,70 +219,70 @@ func TestRuntimeImpl_PauseResume(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// 尝试暂停
-	err = pipeline.Pause()
+	err = workflow.Pause()
 	if err != nil {
 		// 流水线可能已经执行完毕（太快了），跳过暂停测试
-		t.Logf("Pipeline already finished, skipping pause test: %v", err)
+		t.Logf("Workflow already finished, skipping pause test: %v", err)
 		return
 	}
 
 	// 验证状态
 	time.Sleep(200 * time.Millisecond)
-	if pipeline.Status() != core.StatusPaused {
-		t.Logf("Pipeline status: %s (expected PAUSED)", pipeline.Status())
+	if workflow.Status() != core.StatusPaused {
+		t.Logf("Workflow status: %s (expected PAUSED)", workflow.Status())
 	}
 
 	// 验证可修改
-	if !pipeline.IsModifiable() {
-		t.Error("Pipeline should be modifiable when paused")
+	if !workflow.IsModifiable() {
+		t.Error("Workflow should be modifiable when paused")
 	}
 
 	// 恢复
-	if err := pipeline.Resume(ctx); err != nil {
+	if err := workflow.Resume(ctx); err != nil {
 		t.Fatalf("Resume failed: %v", err)
 	}
 
 	// 等待完成
 	select {
-	case <-pipeline.Done():
+	case <-workflow.Done():
 	case <-time.After(5 * time.Second):
-		t.Fatal("Pipeline did not complete after resume")
+		t.Fatal("Workflow did not complete after resume")
 	}
 
-	if pipeline.Status() != core.StatusSuccess {
-		t.Errorf("Expected SUCCESS, got %s", pipeline.Status())
+	if workflow.Status() != core.StatusSuccess {
+		t.Errorf("Expected SUCCESS, got %s", workflow.Status())
 	}
 }
 
-// TestPipelineImpl_IsModifiable 测试不同状态下的 IsModifiable
-func TestPipelineImpl_IsModifiable(t *testing.T) {
+// TestWorkflowImpl_IsModifiable 测试不同状态下的 IsModifiable
+func TestWorkflowImpl_IsModifiable(t *testing.T) {
 	ctx := context.Background()
 	runtime := NewRuntime(ctx)
 	config := loadTestConfig(t, "dynamic_modify.yaml")
 
 	// 运行完成的流水线应该可修改
-	pipeline, err := runtime.RunSync(ctx, "ismod-test", config, NewRecordingListener())
+	workflow, err := runtime.RunSync(ctx, "ismod-test", config, NewRecordingListener())
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
 	// SUCCESS 状态应该可修改（完成后可以追加节点）
-	if !pipeline.IsModifiable() {
-		t.Error("SUCCESS pipeline should be modifiable")
+	if !workflow.IsModifiable() {
+		t.Error("SUCCESS workflow should be modifiable")
 	}
 
-	// PAUSED 状态测试：直接操作 Pipeline 对象
+	// PAUSED 状态测试：直接操作 Workflow 对象
 	// 先验证 FAILED 状态
 	// 取消一个运行中的流水线
 	config2 := loadTestConfig(t, "dynamic_modify.yaml")
-	pipeline2, err2 := runtime.RunAsync(ctx, "ismod-test2", config2, NewRecordingListener())
+	workflow2, err2 := runtime.RunAsync(ctx, "ismod-test2", config2, NewRecordingListener())
 	if err2 != nil {
 		t.Fatalf("RunAsync failed: %v", err2)
 	}
-	pipeline2.Cancel()
+	workflow2.Cancel()
 	time.Sleep(100 * time.Millisecond)
-	if !pipeline2.IsModifiable() {
-		t.Error("CANCELLED pipeline should be modifiable")
+	if !workflow2.IsModifiable() {
+		t.Error("CANCELLED workflow should be modifiable")
 	}
 }
 
@@ -293,12 +293,12 @@ func TestGraph_DirectModification(t *testing.T) {
 	runtime := NewRuntime(ctx)
 	config := loadTestConfig(t, "dynamic_modify.yaml")
 
-	pipeline, err := runtime.RunSync(ctx, "direct-modify", config, NewRecordingListener())
+	workflow, err := runtime.RunSync(ctx, "direct-modify", config, NewRecordingListener())
 	if err != nil {
 		t.Fatalf("RunSync failed: %v", err)
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 
 	// 验证初始结构：A -> B -> C
 	if _, ok := graph.GetNode("C"); !ok {

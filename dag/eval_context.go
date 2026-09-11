@@ -8,7 +8,7 @@ import (
 type DGAEvaluationContext struct {
 	data      map[string]any
 	node      Node
-	pipeline  Pipeline
+	workflow  Workflow
 	iteration int
 }
 
@@ -94,15 +94,15 @@ func (c *DGAEvaluationContext) All() map[string]any {
 	result["iteration"] = c.iteration
 
 	// 添加流水线相关数据
-	if c.pipeline != nil {
-		result["pipelineId"] = c.pipeline.Id()
-		result["pipelineStatus"] = c.pipeline.Status()
+	if c.workflow != nil {
+		result["workflowId"] = c.workflow.Id()
+		result["workflowStatus"] = c.workflow.Status()
 
 		// 将 Param 添加到上下文中，使其可以直接访问
-		if pipelineImpl, ok := c.pipeline.(*PipelineImpl); ok {
-			if len(pipelineImpl.param) > 0 {
+		if workflowImpl, ok := c.workflow.(*WorkflowImpl); ok {
+			if len(workflowImpl.param) > 0 {
 				paramValues := make(map[string]any)
-				for k, v := range pipelineImpl.param {
+				for k, v := range workflowImpl.param {
 					val := core.GetValue(v.Value)
 					result[k] = val
 					paramValues[k] = val
@@ -113,7 +113,7 @@ func (c *DGAEvaluationContext) All() map[string]any {
 		}
 
 		// 添加 metadata，并将 "NodeID.key" 格式转换为嵌套结构
-		if metadata := c.pipeline.Metadata(); metadata != nil {
+		if metadata := c.workflow.Metadata(); metadata != nil {
 			for k, v := range metadata {
 				putContextValue(result, k, core.GetValue(v.Value))
 			}
@@ -154,7 +154,7 @@ func (c *DGAEvaluationContext) WithNode(node Node) EvaluationContext {
 	newCtx := &DGAEvaluationContext{
 		data:      make(map[string]any),
 		node:      node,
-		pipeline:  c.pipeline,
+		workflow:  c.workflow,
 		iteration: c.iteration,
 	}
 	for k, v := range c.data {
@@ -163,12 +163,12 @@ func (c *DGAEvaluationContext) WithNode(node Node) EvaluationContext {
 	return newCtx
 }
 
-// WithPipeline 设置流水线并返回新的上下文（链式调用）
-func (c *DGAEvaluationContext) WithPipeline(pipeline Pipeline) EvaluationContext {
+// WithWorkflow 设置流水线并返回新的上下文（链式调用）
+func (c *DGAEvaluationContext) WithWorkflow(workflow Workflow) EvaluationContext {
 	newCtx := &DGAEvaluationContext{
 		data:      make(map[string]any),
 		node:      c.node,
-		pipeline:  pipeline,
+		workflow:  workflow,
 		iteration: c.iteration,
 	}
 	for k, v := range c.data {
@@ -182,7 +182,7 @@ func (c *DGAEvaluationContext) WithParams(params map[string]any) EvaluationConte
 	newCtx := &DGAEvaluationContext{
 		data:      make(map[string]any),
 		node:      c.node,
-		pipeline:  c.pipeline,
+		workflow:  c.workflow,
 		iteration: c.iteration,
 	}
 	for k, v := range c.data {
@@ -199,7 +199,7 @@ func (c *DGAEvaluationContext) WithIteration(iteration int) EvaluationContext {
 	newCtx := &DGAEvaluationContext{
 		data:      make(map[string]any),
 		node:      c.node,
-		pipeline:  c.pipeline,
+		workflow:  c.workflow,
 		iteration: iteration,
 	}
 	for k, v := range c.data {

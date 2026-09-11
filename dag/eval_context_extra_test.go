@@ -36,11 +36,11 @@ func TestDGAEvaluationContext_Iteration_InAll(t *testing.T) {
 	}
 }
 
-func TestDGAEvaluationContext_All_WithIterationAndPipeline(t *testing.T) {
+func TestDGAEvaluationContext_All_WithIterationAndWorkflow(t *testing.T) {
 	graph := NewDGAGraph()
-	pipeline := NewPipeline(nil)
-	pipeline.(*PipelineImpl).SetGraph(graph)
-	ctx := NewEvaluationContext().WithPipeline(pipeline).WithIteration(3)
+	workflow := NewWorkflow(nil)
+	workflow.(*WorkflowImpl).SetGraph(graph)
+	ctx := NewEvaluationContext().WithWorkflow(workflow).WithIteration(3)
 
 	all := ctx.All()
 	if all["iteration"] != 3 {

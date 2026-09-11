@@ -1,10 +1,10 @@
-# PipelineX 示例程序
+# WorkflowX 示例程序
 
-这是一个基础的 PipelineX 使用示例，展示了如何创建和执行一个简单的流水线。
+这是一个基础的 WorkflowX 使用示例，展示了如何创建和执行一个简单的流水线。
 
 ## 功能说明
 
-此示例演示了 PipelineX 的以下核心功能：
+此示例演示了 WorkflowX 的以下核心功能：
 - 使用 Local 执行器运行本地命令
 - 定义流水线图结构（DAG）
 - 多步骤节点执行
@@ -38,13 +38,13 @@ go build -o flowx-demo main.go
 runtime := flowx.NewRuntime(ctx)
 
 // 2. 定义事件监听器
-listener := &PipelineListener{}
+listener := &WorkflowListener{}
 
 // 3. 定义流水线配置 (YAML 格式)
 configYAML := `...`
 
 // 4. 执行流水线
-pipeline, err := runtime.RunSync(ctx, pipelineID, configYAML, listener)
+workflow, err := runtime.RunSync(ctx, workflowID, configYAML, listener)
 ```
 
 ## 扩展建议

@@ -1,6 +1,6 @@
 # Kubernetes Executor
 
-Kubernetes Executor 使用 [Kubernetes Go SDK (client-go)](https://github.com/kubernetes/client-go) 实现了在 Kubernetes Pod 中执行 Pipeline 节点的功能。
+Kubernetes Executor 使用 [Kubernetes Go SDK (client-go)](https://github.com/kubernetes/client-go) 实现了在 Kubernetes Pod 中执行 Workflow 节点的功能。
 
 ## 功能特性
 
@@ -34,10 +34,10 @@ Executors:
   k8s:
     type: kubernetes
     config:
-      namespace: pipeline               # 可选：命名空间（默认 default）
+      namespace: workflow               # 可选：命名空间（默认 default）
       image: alpine:latest              # 可选：默认镜像
       workdir: /workspace               # 可选：工作目录
-      serviceAccount: pipeline-sa       # 可选：ServiceAccount
+      serviceAccount: workflow-sa       # 可选：ServiceAccount
       podReadyTimeout: 120              # 可选：Pod 就绪等待超时时间（秒，默认 60）
       tty: true                         # 可选：启用 TTY 模式
       ttyWidth: 120                     # 可选：TTY 终端宽度（默认 80）
@@ -114,7 +114,7 @@ func main() {
     executor.SetImage("golang:1.21-alpine")
     executor.SetWorkdir("/workspace")
     executor.SetEnv("CGO_ENABLED", "0")
-    executor.SetNamespace("pipeline")
+    executor.SetNamespace("workflow")
 
     // 准备环境（创建 Pod）
     if err := executor.Prepare(ctx); err != nil {
@@ -159,10 +159,10 @@ bridge := kubernetes.NewKubernetesBridge()
 // 创建适配器并配置
 adapter := kubernetes.NewKubernetesAdapter()
 config := map[string]any{
-    "namespace": "pipeline",
+    "namespace": "workflow",
     "image": "golang:1.21-alpine",
     "workdir": "/app",
-    "serviceAccount": "pipeline-sa",
+    "serviceAccount": "workflow-sa",
     "configMaps": []map[string]any{
         {
             "name":      "my-config",
@@ -430,13 +430,13 @@ go test ./... -v
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: pipeline-executor
+  name: workflow-executor
   namespace: default
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: pipeline-executor
+  name: workflow-executor
   namespace: default
 rules:
 - apiGroups: [""]
@@ -449,14 +449,14 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: pipeline-executor
+  name: workflow-executor
   namespace: default
 subjects:
 - kind: ServiceAccount
-  name: pipeline-executor
+  name: workflow-executor
   namespace: default
 roleRef:
   kind: Role
-  name: pipeline-executor
+  name: workflow-executor
   apiGroup: rbac.authorization.k8s.io
 ```

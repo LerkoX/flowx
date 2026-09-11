@@ -11,42 +11,42 @@ import (
 	"github.com/LerkoX/flowx/logger"
 )
 
-// PipelineListener监听流水线事件执行
-type PipelineListener struct {
+// WorkflowListener监听流水线事件执行
+type WorkflowListener struct {
 	pusher logger.Pusher
 	ctx    context.Context
 }
 
-func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
+func (l *WorkflowListener) Handle(p dag.Workflow, event dag.Event) {
 	switch event {
-	case dag.PipelineInit:
+	case dag.WorkflowInit:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
-				Pipeline: p.Id(),
+				Workflow: p.Id(),
 				Level:    logger.LevelInfo,
 				Message:  "流水线初始化",
 			})
 		}
 		fmt.Printf("[事件] 流水线初始化: %s\n", p.Id())
-	case dag.PipelineStart:
+	case dag.WorkflowStart:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
-				Pipeline: p.Id(),
+				Workflow: p.Id(),
 				Level:    logger.LevelInfo,
 				Message:  "流水线开始执行",
 			})
 		}
 		fmt.Printf("[事件] 流水线开始执行: %s\n", p.Id())
-	case dag.PipelineFinish:
+	case dag.WorkflowFinish:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
-				Pipeline: p.Id(),
+				Workflow: p.Id(),
 				Level:    logger.LevelInfo,
 				Message:  fmt.Sprintf("流水线执行完成，状态: %s", p.Status()),
 			})
 		}
 		fmt.Printf("[事件] 流水线执行完成: %s, 状态: %s\n", p.Id(), p.Status())
-	case dag.PipelineExecutorPrepare:
+	case dag.WorkflowExecutorPrepare:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
@@ -54,7 +54,7 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 			})
 		}
 		fmt.Printf("[事件] 执行器准备中\n")
-	case dag.PipelineNodeStart:
+	case dag.WorkflowNodeStart:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
@@ -62,7 +62,7 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 			})
 		}
 		fmt.Printf("[事件] 节点开始执行\n")
-	case dag.PipelineNodeFinish:
+	case dag.WorkflowNodeFinish:
 		if l.pusher != nil {
 			l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
@@ -75,19 +75,19 @@ func (l *PipelineListener) Handle(p dag.Pipeline, event dag.Event) {
 	}
 }
 
-func (l *PipelineListener) Events() []dag.Event {
+func (l *WorkflowListener) Events() []dag.Event {
 	return []dag.Event{
-		dag.PipelineInit,
-		dag.PipelineStart,
-		dag.PipelineFinish,
-		dag.PipelineExecutorPrepare,
-		dag.PipelineNodeStart,
-		dag.PipelineNodeFinish,
+		dag.WorkflowInit,
+		dag.WorkflowStart,
+		dag.WorkflowFinish,
+		dag.WorkflowExecutorPrepare,
+		dag.WorkflowNodeStart,
+		dag.WorkflowNodeFinish,
 	}
 }
 
 func main() {
-	fmt.Println("=== PipelineX 基础示例 ===")
+	fmt.Println("=== WorkflowX 基础示例 ===")
 	fmt.Println()
 
 	// 创建上下文
@@ -101,7 +101,7 @@ func main() {
 	runtime.SetPusher(consolePusher)
 
 	// 创建监听器（带有日志推送器）
-	listener := &PipelineListener{
+	listener := &WorkflowListener{
 		pusher: consolePusher,
 		ctx:    ctx,
 	}
@@ -115,12 +115,12 @@ func main() {
 	configYAML := string(configData)
 
 	// 同步执行流水线
-	pipelineID := "demo-pipeline-" + time.Now().Format("20060102150405")
+	workflowID := "demo-workflow-" + time.Now().Format("20060102150405")
 
-	fmt.Printf("开始执行流水线: %s\n", pipelineID)
+	fmt.Printf("开始执行流水线: %s\n", workflowID)
 	fmt.Println("----------------------------------------")
 
-	pipeline, err := runtime.RunSync(ctx, pipelineID, configYAML, listener)
+	workflow, err := runtime.RunSync(ctx, workflowID, configYAML, listener)
 	if err != nil {
 		fmt.Printf("执行失败: %v\n", err)
 		os.Exit(1)
@@ -128,11 +128,11 @@ func main() {
 
 	fmt.Println("----------------------------------------")
 	fmt.Printf("流水线执行成功!\n")
-	fmt.Printf("Pipeline ID: %s\n", pipeline.Id())
-	fmt.Printf("最终状态: %s\n", pipeline.Status())
+	fmt.Printf("Workflow ID: %s\n", workflow.Id())
+	fmt.Printf("最终状态: %s\n", workflow.Status())
 
 	// 打印节点状态
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	nodes := graph.Nodes()
 	fmt.Println("\n节点状态:")
 	for name, node := range nodes {
@@ -145,7 +145,7 @@ func main() {
 	}
 
 	// 打印元数据（如果有）
-	metadata := pipeline.Metadata()
+	metadata := workflow.Metadata()
 	if len(metadata) > 0 {
 		fmt.Println("\n元数据:")
 		for k, v := range metadata {

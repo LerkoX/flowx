@@ -78,9 +78,9 @@
 | `TestDGAEvaluationContext_All_MultipleTypes` | `All()` 处理混合类型（string、int、bool、float、nil） |
 | `TestDGAEvaluationContext_Chaining_Multiple` | 多次 `WithParams` 和 `WithNode` 的复杂链式调用 |
 | `TestDGAEvaluationContext_EmptyKey` | 空字符串 key 正常工作 |
-| `TestDGAEvaluationContext_WithPipeline` | `WithPipeline` 添加 pipelineId 并保留现有参数 |
+| `TestDGAEvaluationContext_WithWorkflow` | `WithWorkflow` 添加 workflowId 并保留现有参数 |
 | `TestConvertBoolToString` | 布尔到字符串转换的表驱动测试（多种输入类型） |
-| `TestDGAEvaluationContext_WithPipeline_DoesNotModifyOriginal` | `WithPipeline` 不修改原始上下文 |
+| `TestDGAEvaluationContext_WithWorkflow_DoesNotModifyOriginal` | `WithWorkflow` 不修改原始上下文 |
 
 ### dag/eval_context_extra_test.go
 
@@ -94,11 +94,11 @@
 | `TestDGAEvaluationContext_WithIteration` | `WithIteration` 设置迭代值 |
 | `TestDGAEvaluationContext_WithIteration_DoesNotModifyOriginal` | `WithIteration` 不可变性验证 |
 | `TestDGAEvaluationContext_Iteration_InAll` | `All()` 包含迭代值 |
-| `TestDGAEvaluationContext_All_WithIterationAndPipeline` | `All()` 同时包含 iteration 和 pipelineId |
+| `TestDGAEvaluationContext_All_WithIterationAndWorkflow` | `All()` 同时包含 iteration 和 workflowId |
 | `TestLastIndexOf` | `lastIndexOf` 字符串查找的表驱动测试 |
 | `TestLastIndexOfByte` | `lastIndexOfByte` 单字节查找的表驱动测试 |
 
-### dag/pipeline_test.go
+### dag/workflow_test.go
 
 **包名**: `dag`
 **测试函数数**: 3
@@ -108,7 +108,7 @@
 |---------|------|
 | `TestDGA_BFS` | 验证菱形图的 BFS 遍历按正确顺序访问节点 |
 | `TestDGA_MultipleStartNodes` | 多个根节点（A、B）都被访问 |
-| `TestPipeline_Run` | 菱形图流水线执行完成无错误 |
+| `TestWorkflow_Run` | 菱形图流水线执行完成无错误 |
 
 ### dag/cycle_test.go
 
@@ -124,9 +124,9 @@
 | `TestDGAGraph_LoopNodeSet` | 通过 BFS 计算循环节点集合 |
 | `TestDGAGraph_TraversalSteps_CyclicGraph` | 循环图 BFS 层级计算（4 层） |
 | `TestDGAGraph_EntryExitNodes` | 入口/出口节点追踪 |
-| `TestCyclicPipeline_Execution` | 从 `cyclic_loop.yaml` 执行循环流水线 |
-| `TestCyclicPipeline_MaxIterations` | 最大迭代次数限制防止无限循环 |
-| `TestAcyclicPipeline_NoRegression` | 无环流水线仍正常工作 |
+| `TestCyclicWorkflow_Execution` | 从 `cyclic_loop.yaml` 执行循环流水线 |
+| `TestCyclicWorkflow_MaxIterations` | 最大迭代次数限制防止无限循环 |
+| `TestAcyclicWorkflow_NoRegression` | 无环流水线仍正常工作 |
 | `TestDGAGraph_Traversal_CyclicGraph` | 遍历回调访问循环图中的所有节点 |
 | `TestDGAGraph_Traversal_CyclicGraph_VisitOrder` | 循环图 BFS 层级访问顺序 |
 | `TestDGAGraph_Traversal_AcyclicUnchanged` | 无环图遍历行为不变 |
@@ -168,7 +168,7 @@
 | `TestDGAGraph_IncomingOutgoingEdges` | 入边和出边查询 |
 | `TestDGAGraph_TraversalSteps` | BFS 层级计算：Level 0=A，Level 1=[B,C]，Level 2=D |
 | `TestRuntimeImpl_PauseResume` | 运行中流水线的暂停/恢复生命周期 |
-| `TestPipelineImpl_IsModifiable` | SUCCESS 和 CANCELLED 流水线的可修改性 |
+| `TestWorkflowImpl_IsModifiable` | SUCCESS 和 CANCELLED 流水线的可修改性 |
 | `TestGraph_DirectModification` | 完成后的直接修改：删除 C，添加 D/E 及边 |
 | `TestGraph_RemoveAndReplace` | 替换未执行的节点 D 为 F 和 G |
 | `TestGraph_CycleDetection` | 添加 B→A 后的循环检测 |
@@ -197,7 +197,7 @@
 | `TestModifyGraph_RollbackOnEdgeError` | 边添加失败时回滚图修改 |
 | `TestModifyGraph_ComplexModification` | 组合操作：删除边 + 添加节点 + 添加边 |
 
-### dag/pipeline_extra_test.go
+### dag/workflow_extra_test.go
 
 **包名**: `dag`
 **测试函数数**: 14
@@ -205,20 +205,20 @@
 
 | 测试函数 | 说明 |
 |---------|------|
-| `TestPipelineImpl_Pause_NotRunning` | 暂停未运行的流水线返回错误 |
-| `TestPipelineImpl_Pause_Running` | 暂停运行中的流水线关闭 `pauseChan` |
-| `TestPipelineImpl_Resume_NotPaused` | 恢复未暂停的流水线返回错误 |
-| `TestPipelineImpl_Resume_Paused` | 恢复已暂停的流水线关闭 `resumeChan` |
-| `TestPipelineImpl_IsModifiable_Extra` | 表驱动验证 CANCELLED 和 SUCCESS 状态 |
-| `TestPipelineImpl_Notify_WithListeningFn` | `Notify()` 调用监听函数 |
-| `TestPipelineImpl_Notify_WithListener` | `Notify()` 调用 listener 的 `Handle` 并记录事件 |
-| `TestPipelineImpl_Notify_WithBoth` | `Notify()` 同时调用函数和 listener |
-| `TestPipelineImpl_HandleInputRequest_NilEvent` | nil 事件不 panic |
-| `TestPipelineImpl_HandleInputRequest_NilRequest` | nil 请求不 panic |
-| `TestPipelineImpl_HandleInputRequest_NilRuntimeStatus` | nil runtimeStatus 不 panic |
-| `TestPipelineImpl_HandleInputRequest_Valid` | 有效输入请求设置节点为 PAUSED 并存储请求 |
+| `TestWorkflowImpl_Pause_NotRunning` | 暂停未运行的流水线返回错误 |
+| `TestWorkflowImpl_Pause_Running` | 暂停运行中的流水线关闭 `pauseChan` |
+| `TestWorkflowImpl_Resume_NotPaused` | 恢复未暂停的流水线返回错误 |
+| `TestWorkflowImpl_Resume_Paused` | 恢复已暂停的流水线关闭 `resumeChan` |
+| `TestWorkflowImpl_IsModifiable_Extra` | 表驱动验证 CANCELLED 和 SUCCESS 状态 |
+| `TestWorkflowImpl_Notify_WithListeningFn` | `Notify()` 调用监听函数 |
+| `TestWorkflowImpl_Notify_WithListener` | `Notify()` 调用 listener 的 `Handle` 并记录事件 |
+| `TestWorkflowImpl_Notify_WithBoth` | `Notify()` 同时调用函数和 listener |
+| `TestWorkflowImpl_HandleInputRequest_NilEvent` | nil 事件不 panic |
+| `TestWorkflowImpl_HandleInputRequest_NilRequest` | nil 请求不 panic |
+| `TestWorkflowImpl_HandleInputRequest_NilRuntimeStatus` | nil runtimeStatus 不 panic |
+| `TestWorkflowImpl_HandleInputRequest_Valid` | 有效输入请求设置节点为 PAUSED 并存储请求 |
 | `TestGetStepStatusString` | 步骤状态查找的表驱动测试 |
-| `TestPipelineImpl_MakeTraversalFn` | `makeTraversalFn` 创建有效遍历函数并执行节点 |
+| `TestWorkflowImpl_MakeTraversalFn` | `makeTraversalFn` 创建有效遍历函数并执行节点 |
 
 ### runtime_test.go
 
@@ -242,7 +242,7 @@
 | `TestRuntimeImpl_Ctx` | Runtime 上下文可取消 |
 | `TestRuntimeImpl_StopBackground` | 停止后台处理取消上下文 |
 | `TestRuntimeImpl_ConcurrentAccess` | 10 个并发异步流水线启动成功 |
-| `TestRuntimeImpl_MultiPipelineConcurrency` | 5 个并发流水线，数据传递、元数据验证、事件计数 |
+| `TestRuntimeImpl_MultiWorkflowConcurrency` | 5 个并发流水线，数据传递、元数据验证、事件计数 |
 | `TestParseGraphEdges_BasicStateDiagram` | 基本状态图解析创建 3 个节点 |
 | `TestParseGraphEdges_ComplexDiagram` | 复杂图（并行路径）创建 5 个节点 |
 | `TestParseGraphEdges_EmptyGraph` | 空图仍从配置创建节点 |
@@ -266,7 +266,7 @@
 | `TestRuntimeImpl_ConditionalEdge_Metadata` | 基于 Metadata 的条件边路由 |
 | `TestRuntimeImpl_ConditionalEdge_Complex` | 复杂条件边组合 |
 | `TestRuntimeImpl_ConditionalEdge_MultiCondition` | 多条件边和数值比较 |
-| `TestComprehensivePipelineExecution` | 综合测试：同步/异步执行、Param 渲染、Metadata、多节点 DAG |
+| `TestComprehensiveWorkflowExecution` | 综合测试：同步/异步执行、Param 渲染、Metadata、多节点 DAG |
 | `TestRuntimeImpl_ExportConfig` | 导出流水线配置为 YAML |
 | `TestRuntimeImpl_ExportConfig_NotFound` | 导出不存在的流水线返回错误 |
 
@@ -283,9 +283,9 @@
 | `TestRuntimeImpl_SetTemplateEngine_Nil` | 设置 nil 引擎返回默认 Pongo2 |
 | `TestRuntimeImpl_Pause_NotFound` | 暂停不存在的流水线返回错误 |
 | `TestRuntimeImpl_Resume_NotFound` | 恢复不存在的流水线返回错误 |
-| `TestRuntimeImpl_CleanupCompletedPipelines` | 已完成的流水线被清理，运行中的不清理 |
-| `TestSetPipelineParam` | `SetPipelineParam` 设置 param map |
-| `TestSetPipelineParam_NonPipelineImpl` | nil 不 panic |
+| `TestRuntimeImpl_CleanupCompletedWorkflows` | 已完成的流水线被清理，运行中的不清理 |
+| `TestSetWorkflowParam` | `SetWorkflowParam` 设置 param map |
+| `TestSetWorkflowParam_NonWorkflowImpl` | nil 不 panic |
 | `TestValidateImmutableFields_NoChanges` | 相同配置通过验证 |
 | `TestValidateImmutableFields_VersionChanged` | Version 不可变 |
 | `TestValidateImmutableFields_NameChanged` | Name 不可变 |
@@ -323,10 +323,10 @@
 | `TestPongo2TemplateEngine_Validate_Valid` | 有效表达式通过验证 |
 | `TestPongo2TemplateEngine_Validate_Invalid` | 无效表达式验证失败 |
 | `TestPongo2TemplateEngine_Validate_Empty` | 空字符串通过验证 |
-| `TestPongo2TemplateEngine_EvaluateBool_WithPipelineData` | 使用 pipeline 级数据求值 |
+| `TestPongo2TemplateEngine_EvaluateBool_WithWorkflowData` | 使用 workflow 级数据求值 |
 | `TestPongo2TemplateEngine_EvaluateBool_WithNodeData` | 使用节点级数据求值 |
 
-### dag/pipeline_metadata_test.go
+### dag/workflow_metadata_test.go
 
 **包名**: `dag`
 **测试函数数**: 3
@@ -338,7 +338,7 @@
 | `TestInConfigMetadataStore_Delete` | Delete 移除 key 且不影响其他 key |
 | `TestExtractOutput_Basic` | 从输出中解析 `flowx-yaml` codec block 并存储到流水线元数据 |
 
-### dag/pipeline_extract_test.go
+### dag/workflow_extract_test.go
 
 **包名**: `dag`
 **测试函数数**: 3
@@ -346,8 +346,8 @@
 
 | 测试函数 | 说明 |
 |---------|------|
-| `TestPipeline_OutputExtraction` | 从输出中提取 codec block（buildId、version、status） |
-| `TestPipeline_OutputExtraction_Regex` | 从输出中用正则提取（coverage、testsPassed） |
+| `TestWorkflow_OutputExtraction` | 从输出中提取 codec block（buildId、version、status） |
+| `TestWorkflow_OutputExtraction_Regex` | 从输出中用正则提取（coverage、testsPassed） |
 | `TestCreateExtractor_InvalidConfig` | nil 配置、无效 type、不支持 type、无 pattern 的正则、无效正则的表驱动测试 |
 
 ### dag/extractor_test.go
@@ -374,15 +374,15 @@
 
 | 测试函数 | 说明 |
 |---------|------|
-| `TestPipelineSnapshotter_ToYAML_BasicConfig` | 基本配置的 YAML 序列化 |
-| `TestPipelineSnapshotter_ToYAML_EmptyConfig` | 空配置序列化为非空 YAML |
-| `TestPipelineSnapshotter_FromYAML_BasicConfig` | YAML 反序列化产生正确配置 |
-| `TestPipelineSnapshotter_FromYAML_RoundTrip` | ToYAML → FromYAML 往返保留 Name |
-| `TestPipelineSnapshotter_FromYAML_InvalidYAML` | 无效 YAML 返回错误 |
-| `TestPipelineSnapshotter_TakeSnapshot_SimplePipeline` | 快照包含运行时状态 |
-| `TestPipelineSnapshotter_TakeSnapshot_NilRuntimeStatus` | 未启动节点的快照 runtimeStatus 为 nil |
-| `TestPipelineSnapshotter_TakeSnapshot_DeepCopy` | 快照为深拷贝（修改原对象不影响快照） |
-| `TestPipelineSnapshotter_TakeSnapshot_WithSteps` | 快照保留步骤 ID |
+| `TestWorkflowSnapshotter_ToYAML_BasicConfig` | 基本配置的 YAML 序列化 |
+| `TestWorkflowSnapshotter_ToYAML_EmptyConfig` | 空配置序列化为非空 YAML |
+| `TestWorkflowSnapshotter_FromYAML_BasicConfig` | YAML 反序列化产生正确配置 |
+| `TestWorkflowSnapshotter_FromYAML_RoundTrip` | ToYAML → FromYAML 往返保留 Name |
+| `TestWorkflowSnapshotter_FromYAML_InvalidYAML` | 无效 YAML 返回错误 |
+| `TestWorkflowSnapshotter_TakeSnapshot_SimpleWorkflow` | 快照包含运行时状态 |
+| `TestWorkflowSnapshotter_TakeSnapshot_NilRuntimeStatus` | 未启动节点的快照 runtimeStatus 为 nil |
+| `TestWorkflowSnapshotter_TakeSnapshot_DeepCopy` | 快照为深拷贝（修改原对象不影响快照） |
+| `TestWorkflowSnapshotter_TakeSnapshot_WithSteps` | 快照保留步骤 ID |
 
 ### dag/boolean_conversion_test.go
 
@@ -435,8 +435,8 @@
 
 | 测试函数 | 说明 |
 |---------|------|
-| `TestCyclicPipeline_Execution` | 从 `cyclic_loop.yaml` 执行循环流水线 |
-| `TestAcyclicPipeline_NoRegression` | 无环流水线仍正常工作 |
+| `TestCyclicWorkflow_Execution` | 从 `cyclic_loop.yaml` 执行循环流水线 |
+| `TestAcyclicWorkflow_NoRegression` | 无环流水线仍正常工作 |
 
 ### dag/build_render_context_test.go
 
@@ -466,22 +466,22 @@
 | 测试函数 | 说明 |
 |---------|------|
 | `TestDGAEvaluationContext_All_Basic` | 基本 All() 调用 |
-| `TestDGAEvaluationContext_All_WithPipeline` | 带 Pipeline 的 All() |
-| `TestDGAEvaluationContext_All_WithPipelineAndParam` | 同时带 Pipeline 和 Param |
-| `TestDGAEvaluationContext_All_WithPipelineAndMetadata` | 同时带 Pipeline 和 Metadata |
+| `TestDGAEvaluationContext_All_WithWorkflow` | 带 Workflow 的 All() |
+| `TestDGAEvaluationContext_All_WithWorkflowAndParam` | 同时带 Workflow 和 Param |
+| `TestDGAEvaluationContext_All_WithWorkflowAndMetadata` | 同时带 Workflow 和 Metadata |
 | `TestDGAEvaluationContext_All_MultipleSources` | 多数据源组合 |
 | `TestDGAEvaluationContext_WithNode_Immutability` | WithNode 不修改原始上下文 |
-| `TestDGAEvaluationContext_WithPipeline_Immutability` | WithPipeline 不修改原始上下文 |
+| `TestDGAEvaluationContext_WithWorkflow_Immutability` | WithWorkflow 不修改原始上下文 |
 | `TestDGAEvaluationContext_WithParams` | WithParams 链式调用 |
 | `TestDGAEvaluationContext_WithIteration_Chained` | WithIteration 链式调用 |
-| `TestDGAEvaluationContext_NilPipeline` | nil Pipeline 处理 |
+| `TestDGAEvaluationContext_NilWorkflow` | nil Workflow 处理 |
 | `TestDGAEvaluationContext_NilNode` | nil Node 处理 |
 
-### dag/pipeline_impl_execution_test.go
+### dag/workflow_impl_execution_test.go
 
 **包名**: `dag`
 **测试函数数**: 14
-**功能概述**: Pipeline 执行引擎与渲染
+**功能概述**: Workflow 执行引擎与渲染
 
 | 测试函数 | 说明 |
 |---------|------|
@@ -500,7 +500,7 @@
 | `TestHandleInputRequest_EmptyRequest` | 空请求处理 |
 | `TestCancel` | 流水线取消功能 |
 
-### dag/pipeline_impl_graph_test.go
+### dag/workflow_impl_graph_test.go
 
 **包名**: `dag`
 **测试函数数**: 12
@@ -519,13 +519,13 @@
 | `TestDGANode_Get` | 获取节点属性 |
 | `TestDGANode_Set` | 设置节点属性 |
 | `TestDGANode_GetStepRuntimeStatus` | 获取步骤运行时状态 |
-| `TestDGANode_PipelineId` | 获取流水线 ID |
+| `TestDGANode_WorkflowId` | 获取流水线 ID |
 
-### dag/pipeline_impl_snapshot_test.go
+### dag/workflow_impl_snapshot_test.go
 
 **包名**: `dag`
 **测试函数数**: 14
-**功能概述**: Pipeline 快照序列化与事件通知
+**功能概述**: Workflow 快照序列化与事件通知
 
 | 测试函数 | 说明 |
 |---------|------|
@@ -555,7 +555,7 @@
 | 测试函数 | 说明 |
 |---------|------|
 | `TestLevel_Constants` | 验证日志级别字符串常量：debug、info、warn、error |
-| `TestEntry_Fields` | 验证 Entry 结构字段赋值（Pipeline、BuildID、Node、Step、Timestamp、Level、Message、Output） |
+| `TestEntry_Fields` | 验证 Entry 结构字段赋值（Workflow、BuildID、Node、Step、Timestamp、Level、Message、Output） |
 
 ### logger/console_pusher_test.go
 
@@ -775,8 +775,8 @@
 
 | 配置文件 | 对应测试 | 功能 |
 |---------|---------|------|
-| `sync_pipeline.yaml` | `TestRuntimeImpl_RunSync` | 同步执行流水线，执行完成后自动清理 |
-| `async_pipeline.yaml` | `TestRuntimeImpl_RunAsync` | 异步执行流水线，流水线保持在 Runtime 中 |
+| `sync_workflow.yaml` | `TestRuntimeImpl_RunSync` | 同步执行流水线，执行完成后自动清理 |
+| `async_workflow.yaml` | `TestRuntimeImpl_RunAsync` | 异步执行流水线，流水线保持在 Runtime 中 |
 | `invalid_config.yaml` | `TestRuntimeImpl_RunSync_InvalidConfig` | 无效 YAML 配置的错误处理 |
 | `single_node.yaml` | `TestRuntimeImpl_RunSync_DuplicateID` | 重复 ID 检测 |
 | `long_running.yaml` | `TestRuntimeImpl_Cancel` | 流水线取消功能 |
@@ -799,7 +799,7 @@
 | `conditional_edge_metadata.yaml` | `TestRuntimeImpl_ConditionalEdge_Metadata` | 基于 Metadata 条件的边 |
 | `conditional_edge_complex.yaml` | `TestRuntimeImpl_ConditionalEdge_Complex` | 复杂条件边组合 |
 | `conditional_edge_multi_cond.yaml` | `TestRuntimeImpl_ConditionalEdge_MultiCondition` | 多条件边逻辑 |
-| `cyclic_loop.yaml` | `TestCyclicPipeline_Execution` | 循环流水线执行 |
+| `cyclic_loop.yaml` | `TestCyclicWorkflow_Execution` | 循环流水线执行 |
 | `dynamic_modify.yaml` | 图动态修改测试 | UpdateConfig 动态修改 |
 
 ## 运行测试

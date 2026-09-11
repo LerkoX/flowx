@@ -18,9 +18,9 @@ var _ Runtime = (*RuntimeImpl)(nil)
 
 // RuntimeImpl Runtime接口的实现
 type RuntimeImpl struct {
-	pipelines       map[string]dag.Pipeline      // 存储所有流水线
-	pipelineIds     map[string]bool          // 跟踪所有使用过的流水线ID
-	pipelineConfigs map[string]*core.PipelineConfig // 存储原始配置用于导出
+	workflows       map[string]dag.Workflow      // 存储所有流水线
+	workflowIds     map[string]bool          // 跟踪所有使用过的流水线ID
+	workflowConfigs map[string]*core.WorkflowConfig // 存储原始配置用于导出
 	mu              sync.RWMutex             // 读写锁
 	ctx             context.Context          // 上下文
 	cancel          context.CancelFunc       // 取消函数
@@ -174,7 +174,7 @@ func (r *RuntimeImpl) renderMetadata(metadataData map[string]core.FieldItem, par
 }
 
 // renderConfig 渲染配置中所有引用 Param 的地方（配置阶段）
-func (r *RuntimeImpl) renderConfig(config *core.PipelineConfig) error {
+func (r *RuntimeImpl) renderConfig(config *core.WorkflowConfig) error {
 	// 将 Param 从 map[string]interface{} 转换为 map[string]FieldItem
 	paramFieldItem := make(map[string]core.FieldItem)
 	for k, v := range config.Param {
@@ -230,9 +230,9 @@ func (r *RuntimeImpl) renderConfig(config *core.PipelineConfig) error {
 func NewRuntime(ctx context.Context) Runtime {
 	ctx, cancel := context.WithCancel(ctx)
 	return &RuntimeImpl{
-		pipelines:       make(map[string]dag.Pipeline),
-		pipelineIds:     make(map[string]bool),
-		pipelineConfigs: make(map[string]*core.PipelineConfig),
+		workflows:       make(map[string]dag.Workflow),
+		workflowIds:     make(map[string]bool),
+		workflowConfigs: make(map[string]*core.WorkflowConfig),
 		ctx:             ctx,
 		cancel:          cancel,
 		doneChan:        make(chan struct{}),
@@ -242,15 +242,15 @@ func NewRuntime(ctx context.Context) Runtime {
 }
 
 // Get 获取流水线状态
-func (r *RuntimeImpl) Get(id string) (dag.Pipeline, error) {
+func (r *RuntimeImpl) Get(id string) (dag.Workflow, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	pipeline, exists := r.pipelines[id]
+	workflow, exists := r.workflows[id]
 	if !exists {
-		return nil, fmt.Errorf("pipeline with id %s not found", id)
+		return nil, fmt.Errorf("workflow with id %s not found", id)
 	}
-	return pipeline, nil
+	return workflow, nil
 }
 
 // Cancel 取消运行中的流水线
@@ -258,13 +258,13 @@ func (r *RuntimeImpl) Cancel(ctx context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	pipeline, exists := r.pipelines[id]
+	workflow, exists := r.workflows[id]
 	if !exists {
-		return fmt.Errorf("pipeline with id %s not found", id)
+		return fmt.Errorf("workflow with id %s not found", id)
 	}
 
 	// 调用流水线的Cancel方法
-	if p, ok := pipeline.(*dag.PipelineImpl); ok {
+	if p, ok := workflow.(*dag.WorkflowImpl); ok {
 		p.Cancel()
 	}
 
@@ -272,8 +272,8 @@ func (r *RuntimeImpl) Cancel(ctx context.Context, id string) error {
 }
 
 // RunAsync 执行异步流水线（完成后实例即从 Runtime 删除）
-func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
-	pipeline, err := r.preparePipeline(ctx, id, config, listener)
+func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error) {
+	workflow, err := r.prepareWorkflow(ctx, id, config, listener)
 	if err != nil {
 		return nil, err
 	}
@@ -282,36 +282,36 @@ func (r *RuntimeImpl) RunAsync(ctx context.Context, id string, config string, li
 	go func() {
 		defer func() {
 			r.mu.Lock()
-			delete(r.pipelines, id)
+			delete(r.workflows, id)
 			r.mu.Unlock()
 		}()
 
-		if err := pipeline.Run(ctx); err != nil {
-			fmt.Printf("dag.Pipeline %s execution failed: %v\n", id, err)
+		if err := workflow.Run(ctx); err != nil {
+			fmt.Printf("dag.Workflow %s execution failed: %v\n", id, err)
 		}
 	}()
 
-	return pipeline, nil
+	return workflow, nil
 }
 
-// LoadPipeline 加载流水线配置但不运行。
+// LoadWorkflow 加载流水线配置但不运行。
 // 配置中携带的节点运行时状态（ExportConfig 导出的快照 YAML）会被恢复，
 // 并据节点状态推导流水线状态（FAILED > STOPPED > SUCCESS），使实例处于可修改状态；
 // 之后可通过 ModifyGraph/UpdateConfig 修改图，用 Rerun 继续运行（已终结节点跳过）。
 // 不再使用时调用 Rm(id) 释放。
-func (r *RuntimeImpl) LoadPipeline(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
-	pipeline, err := r.preparePipeline(ctx, id, config, listener)
+func (r *RuntimeImpl) LoadWorkflow(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error) {
+	workflow, err := r.prepareWorkflow(ctx, id, config, listener)
 	if err != nil {
 		return nil, err
 	}
-	if impl, ok := pipeline.(*dag.PipelineImpl); ok {
+	if impl, ok := workflow.(*dag.WorkflowImpl); ok {
 		impl.DeriveStatusFromNodes()
 	}
-	return pipeline, nil
+	return workflow, nil
 }
 
-// preparePipeline 解析配置、构建图（含运行时状态恢复）、注册实例，但不启动执行
-func (r *RuntimeImpl) preparePipeline(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
+// prepareWorkflow 解析配置、构建图（含运行时状态恢复）、注册实例，但不启动执行
+func (r *RuntimeImpl) prepareWorkflow(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error) {
 	// 提前获取 templateEngine，避免在持有写锁时调用 GetTemplateEngine 导致死锁
 	templateEngine := r.GetTemplateEngine()
 
@@ -319,67 +319,67 @@ func (r *RuntimeImpl) preparePipeline(ctx context.Context, id string, config str
 	defer r.mu.Unlock()
 
 	// 检查是否已存在相同ID的流水线
-	if _, exists := r.pipelineIds[id]; exists {
-		return nil, fmt.Errorf("pipeline with id %s already exists", id)
+	if _, exists := r.workflowIds[id]; exists {
+		return nil, fmt.Errorf("workflow with id %s already exists", id)
 	}
 
 	// 解析配置
-	pipelineConfig, err := r.parseConfig(config)
+	workflowConfig, err := r.parseConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
 	// 统一渲染配置中所有引用 Param 的地方
-	if err := r.renderConfig(pipelineConfig); err != nil {
+	if err := r.renderConfig(workflowConfig); err != nil {
 		return nil, fmt.Errorf("failed to render config: %w", err)
 	}
 
 	// 创建流水线
-	pipeline := dag.NewPipeline(ctx)
-	pipeline.SetTemplateEngine(templateEngine)
-	pipeline.SetPusher(r.pusher)
-	pipeline.SetPusher(r.pusher)
+	workflow := dag.NewWorkflow(ctx)
+	workflow.SetTemplateEngine(templateEngine)
+	workflow.SetPusher(r.pusher)
+	workflow.SetPusher(r.pusher)
 
 	// 设置监听器
 	if listener != nil {
-		pipeline.Listening(listener)
+		workflow.Listening(listener)
 	}
 
 	// 构建图结构
-	graph := r.buildGraph(pipelineConfig)
-	pipeline.SetGraph(graph)
+	graph := r.buildGraph(workflowConfig)
+	workflow.SetGraph(graph)
 
 	// 设置渲染后的 param 值
-	if len(pipelineConfig.Param) > 0 {
-		pipeline.(*dag.PipelineImpl).SetParam(pipelineConfig.Param)
+	if len(workflowConfig.Param) > 0 {
+		workflow.(*dag.WorkflowImpl).SetParam(workflowConfig.Param)
 	}
 
 	// 设置循环图最大迭代次数
-	if pipelineConfig.MaxLoopIterations > 0 {
-		pipeline.(*dag.PipelineImpl).SetMaxLoopIterations(pipelineConfig.MaxLoopIterations)
+	if workflowConfig.MaxLoopIterations > 0 {
+		workflow.(*dag.WorkflowImpl).SetMaxLoopIterations(workflowConfig.MaxLoopIterations)
 	}
 
 	// 设置metadata
-	if err := r.setupMetadata(ctx, pipeline, pipelineConfig); err != nil {
+	if err := r.setupMetadata(ctx, workflow, workflowConfig); err != nil {
 		return nil, fmt.Errorf("failed to setup metadata: %w", err)
 	}
 
 	// 创建并配置执行器提供者
 	execProvider := provider.NewProvider()
-	for name, execConfig := range pipelineConfig.Executors {
+	for name, execConfig := range workflowConfig.Executors {
 		execProvider.RegisterExecutor(name, provider.ExecutorConfig{
 			Type:   execConfig.Type,
 			Config: execConfig.Config,
 		})
 	}
-	pipeline.SetExecutorProvider(execProvider)
+	workflow.SetExecutorProvider(execProvider)
 
 	// 存储流水线并标记ID为已使用
-	r.pipelines[id] = pipeline
-	r.pipelineIds[id] = true
-	r.pipelineConfigs[id] = pipelineConfig
+	r.workflows[id] = workflow
+	r.workflowIds[id] = true
+	r.workflowConfigs[id] = workflowConfig
 
-	return pipeline, nil
+	return workflow, nil
 }
 
 // Rerun 重新运行已完成且被保留的流水线（配合 RunAsyncRetained 使用）。
@@ -387,103 +387,103 @@ func (r *RuntimeImpl) preparePipeline(ctx context.Context, id string, config str
 // 仅执行新增或尚未运行的节点；通常先通过 ModifyGraph/UpdateConfig 修改图。
 func (r *RuntimeImpl) Rerun(ctx context.Context, id string) error {
 	r.mu.RLock()
-	pipeline, exists := r.pipelines[id]
+	workflow, exists := r.workflows[id]
 	r.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("pipeline with id %s not found (not retained or already removed)", id)
+		return fmt.Errorf("workflow with id %s not found (not retained or already removed)", id)
 	}
-	if !pipeline.IsModifiable() {
-		return core.ErrPipelineRunning
+	if !workflow.IsModifiable() {
+		return core.ErrWorkflowRunning
 	}
 
 	go func() {
-		if err := pipeline.Run(ctx); err != nil {
-			fmt.Printf("dag.Pipeline %s re-run failed: %v\n", id, err)
+		if err := workflow.Run(ctx); err != nil {
+			fmt.Printf("dag.Workflow %s re-run failed: %v\n", id, err)
 		}
 	}()
 	return nil
 }
 
 // RunSync 执行同步流水线
-func (r *RuntimeImpl) RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error) {
+func (r *RuntimeImpl) RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error) {
 	// 检查是否已存在相同ID的流水线
 	r.mu.Lock()
-	if _, exists := r.pipelineIds[id]; exists {
+	if _, exists := r.workflowIds[id]; exists {
 		r.mu.Unlock()
-		return nil, fmt.Errorf("pipeline with id %s already exists", id)
+		return nil, fmt.Errorf("workflow with id %s already exists", id)
 	}
-	r.pipelineIds[id] = true
+	r.workflowIds[id] = true
 	r.mu.Unlock()
 
 	// 解析配置
-	pipelineConfig, err := r.parseConfig(config)
+	workflowConfig, err := r.parseConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
 	// 统一渲染配置中所有引用 Param 的地方
-	if err := r.renderConfig(pipelineConfig); err != nil {
+	if err := r.renderConfig(workflowConfig); err != nil {
 		return nil, fmt.Errorf("failed to render config: %w", err)
 	}
 
 	// 创建流水线
-	pipeline := dag.NewPipeline(ctx)
-	pipeline.SetTemplateEngine(r.GetTemplateEngine())
-	pipeline.SetPusher(r.pusher)
-	pipeline.SetPusher(r.pusher)
+	workflow := dag.NewWorkflow(ctx)
+	workflow.SetTemplateEngine(r.GetTemplateEngine())
+	workflow.SetPusher(r.pusher)
+	workflow.SetPusher(r.pusher)
 
 	// 设置监听器
 	if listener != nil {
-		pipeline.Listening(listener)
+		workflow.Listening(listener)
 	}
 
 	// 构建图结构
-	graph := r.buildGraph(pipelineConfig)
-	pipeline.SetGraph(graph)
+	graph := r.buildGraph(workflowConfig)
+	workflow.SetGraph(graph)
 
 	// 设置渲染后的 param 值
-	if len(pipelineConfig.Param) > 0 {
-		pipeline.(*dag.PipelineImpl).SetParam(pipelineConfig.Param)
+	if len(workflowConfig.Param) > 0 {
+		workflow.(*dag.WorkflowImpl).SetParam(workflowConfig.Param)
 	}
 
 	// 设置循环图最大迭代次数
-	if pipelineConfig.MaxLoopIterations > 0 {
-		pipeline.(*dag.PipelineImpl).SetMaxLoopIterations(pipelineConfig.MaxLoopIterations)
+	if workflowConfig.MaxLoopIterations > 0 {
+		workflow.(*dag.WorkflowImpl).SetMaxLoopIterations(workflowConfig.MaxLoopIterations)
 	}
 
 	// 设置metadata
-	if err := r.setupMetadata(ctx, pipeline, pipelineConfig); err != nil {
+	if err := r.setupMetadata(ctx, workflow, workflowConfig); err != nil {
 		return nil, fmt.Errorf("failed to setup metadata: %w", err)
 	}
 
 	// 创建并配置执行器提供者
 	execProvider := provider.NewProvider()
-	for name, execConfig := range pipelineConfig.Executors {
+	for name, execConfig := range workflowConfig.Executors {
 		execProvider.RegisterExecutor(name, provider.ExecutorConfig{
 			Type:   execConfig.Type,
 			Config: execConfig.Config,
 		})
 	}
-	pipeline.SetExecutorProvider(execProvider)
+	workflow.SetExecutorProvider(execProvider)
 
 	// 存储流水线
 	r.mu.Lock()
-	r.pipelines[id] = pipeline
-	r.pipelineConfigs[id] = pipelineConfig
+	r.workflows[id] = workflow
+	r.workflowConfigs[id] = workflowConfig
 	r.mu.Unlock()
 
-	err = pipeline.Run(ctx)
+	err = workflow.Run(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("pipeline execution failed: %w", err)
+		return nil, fmt.Errorf("workflow execution failed: %w", err)
 	}
 
 	// 清理已完成的流水线，但保留ID记录
 	r.mu.Lock()
-	delete(r.pipelines, id)
+	delete(r.workflows, id)
 	r.mu.Unlock()
 
-	return pipeline, nil
+	return workflow, nil
 }
 
 // Rm 移除流水线记录
@@ -491,9 +491,9 @@ func (r *RuntimeImpl) Rm(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	delete(r.pipelines, id)
-	delete(r.pipelineConfigs, id)
-	delete(r.pipelineIds, id)
+	delete(r.workflows, id)
+	delete(r.workflowConfigs, id)
+	delete(r.workflowIds, id)
 }
 
 // Done runtime已经执行完成
@@ -548,22 +548,22 @@ func (r *RuntimeImpl) StartBackground() {
 				return
 			case <-ticker.C:
 				// 定期清理已完成的流水线
-				r.cleanupCompletedPipelines()
+				r.cleanupCompletedWorkflows()
 			}
 		}
 	}()
 }
 
-// cleanupCompletedPipelines 清理已完成的流水线
-func (r *RuntimeImpl) cleanupCompletedPipelines() {
+// cleanupCompletedWorkflows 清理已完成的流水线
+func (r *RuntimeImpl) cleanupCompletedWorkflows() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for id, pipeline := range r.pipelines {
+	for id, workflow := range r.workflows {
 		select {
-		case <-pipeline.Done():
+		case <-workflow.Done():
 			// 流水线已完成，可以清理
-			delete(r.pipelines, id)
+			delete(r.workflows, id)
 		default:
 			// 流水线仍在运行
 		}
@@ -603,21 +603,21 @@ func (r *RuntimeImpl) GetTemplateEngine() template.TemplateEngine {
 // 返回包含当前运行时状态的 YAML 格式配置字符串
 func (r *RuntimeImpl) ExportConfig(id string) (string, error) {
 	r.mu.RLock()
-	pipeline, exists := r.pipelines[id]
-	config, configExists := r.pipelineConfigs[id]
+	workflow, exists := r.workflows[id]
+	config, configExists := r.workflowConfigs[id]
 	r.mu.RUnlock()
 
 	if !exists {
-		return "", fmt.Errorf("pipeline with id %s not found", id)
+		return "", fmt.Errorf("workflow with id %s not found", id)
 	}
 
 	if !configExists {
-		return "", fmt.Errorf("config for pipeline %s not found", id)
+		return "", fmt.Errorf("config for workflow %s not found", id)
 	}
 
 	// 使用 Snapshotter 生成带状态的配置
-	snapshotter := dag.NewPipelineSnapshotter()
-	snapshotConfig, err := snapshotter.TakeSnapshot(pipeline, config)
+	snapshotter := dag.NewWorkflowSnapshotter()
+	snapshotConfig, err := snapshotter.TakeSnapshot(workflow, config)
 	if err != nil {
 		return "", fmt.Errorf("failed to take snapshot: %w", err)
 	}
@@ -631,13 +631,13 @@ func (r *RuntimeImpl) ExportConfig(id string) (string, error) {
 	return yamlStr, nil
 }
 
-// ListPipelines 列出所有活跃的流水线ID
-func (r *RuntimeImpl) ListPipelines() []string {
+// ListWorkflows 列出所有活跃的流水线ID
+func (r *RuntimeImpl) ListWorkflows() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	result := make([]string, 0, len(r.pipelines))
-	for id := range r.pipelines {
+	result := make([]string, 0, len(r.workflows))
+	for id := range r.workflows {
 		result = append(result, id)
 	}
 	return result
@@ -646,25 +646,25 @@ func (r *RuntimeImpl) ListPipelines() []string {
 // Pause 暂停运行中的流水线
 func (r *RuntimeImpl) Pause(ctx context.Context, id string) error {
 	r.mu.RLock()
-	pipeline, exists := r.pipelines[id]
+	workflow, exists := r.workflows[id]
 	r.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("pipeline with id %s not found", id)
+		return fmt.Errorf("workflow with id %s not found", id)
 	}
 
-	return pipeline.Pause()
+	return workflow.Pause()
 }
 
 // Resume 恢复暂停或停止的流水线
 func (r *RuntimeImpl) Resume(ctx context.Context, id string) error {
 	r.mu.RLock()
-	pipeline, exists := r.pipelines[id]
+	workflow, exists := r.workflows[id]
 	r.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("pipeline with id %s not found", id)
+		return fmt.Errorf("workflow with id %s not found", id)
 	}
 
-	return pipeline.Resume(ctx)
+	return workflow.Resume(ctx)
 }

@@ -231,7 +231,7 @@
     <h2 class="section-title">核心特性</h2>
     <p class="section-subtitle">FlowX 提供完整的流水线执行能力，从简单的本地脚本到复杂的分布式部署</p>
     <div class="features-grid">
-        <a href="pipeline.html" class="feature-card">
+        <a href="workflow.html" class="feature-card">
             <div class="feature-icon">&#127757;</div>
             <h3>DAG 工作流编排</h3>
             <p>使用 Mermaid stateDiagram-v2 语法定义有向无环图，支持条件边和循环回边，自动并行执行无依赖节点</p>
@@ -255,7 +255,7 @@
             <p>通过 codec-block（flowx-yaml）或正则表达式从命令输出提取结构化数据，自动在节点间传递</p>
             <span class="learn-more">查看详情 &rarr;</span>
         </a>
-        <a href="pipeline.html" class="feature-card">
+        <a href="workflow.html" class="feature-card">
             <div class="feature-icon">&#9209;</div>
             <h3>暂停与动态修改</h3>
             <p>流水线可在任意层级暂停，暂停期间可安全添加/删除节点和边，恢复后继续执行</p>
@@ -270,7 +270,7 @@
         <a href="metadata.html" class="feature-card">
             <div class="feature-icon">&#128230;</div>
             <h3>元数据存储</h3>
-            <p>支持 in-config（内存）、Redis、HTTP 三种后端，自动按 pipelineId 隔离数据</p>
+            <p>支持 in-config（内存）、Redis、HTTP 三种后端，自动按 workflowId 隔离数据</p>
             <span class="learn-more">查看详情 &rarr;</span>
         </a>
         <a href="events.html" class="feature-card">
@@ -312,7 +312,7 @@ func main() {
 
     config := `
 Version: "1.0"
-Name: hello-pipeline
+Name: hello-workflow
 
 Executors:
   local:
@@ -361,7 +361,7 @@ Nodes:
             <p>完整 YAML 配置字段说明：Version、Param、Executors、Graph、Nodes 等</p>
             <span class="tag">核心参考</span>
         </a>
-        <a href="pipeline.html" class="doc-card">
+        <a href="workflow.html" class="doc-card">
             <h3>&#127757; 流水线核心</h3>
             <p>DAG 图结构、BFS 遍历算法、循环执行、暂停恢复、动态图修改</p>
             <span class="tag">核心概念</span>

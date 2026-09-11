@@ -7,7 +7,7 @@
 ```go
 type Node interface {
     Id() string                                        // 节点唯一标识
-    PipelineId() string                                // 所属 Pipeline ID
+    WorkflowId() string                                // 所属 Workflow ID
     Status() string                                    // 节点状态
     Get(key string) string                             // 读取属性
     Set(key string, value any)                         // 写入属性
@@ -157,12 +157,12 @@ type ExecutorRuntimeInfo struct {
 
 ### 提取器内部实现
 
-输出提取由 Pipeline 内部方法 `extractOutput()` 处理，通过 `createExtractor()` 根据配置创建对应的提取器：
+输出提取由 Workflow 内部方法 `extractOutput()` 处理，通过 `createExtractor()` 根据配置创建对应的提取器：
 
 ```go
-// PipelineImpl 内部方法（非公开 API）
-func (p *PipelineImpl) extractOutput(ctx context.Context, node Node, stepResult *StepResult, fullOutput string) error
-func (p *PipelineImpl) createExtractor(extractConfig interface{}) (OutputExtractor, error)
+// WorkflowImpl 内部方法（非公开 API）
+func (p *WorkflowImpl) extractOutput(ctx context.Context, node Node, stepResult *StepResult, fullOutput string) error
+func (p *WorkflowImpl) createExtractor(extractConfig interface{}) (OutputExtractor, error)
 ```
 
 提取器接口（内部使用）：

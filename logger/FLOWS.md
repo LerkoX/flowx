@@ -13,7 +13,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[Entry] --> B[Pipeline<br/>流水线ID]
+    A[Entry] --> B[Workflow<br/>流水线ID]
     A --> C[BuildID<br/>构建ID]
     A --> D[Node<br/>节点名称]
     A --> E[Step<br/>步骤名称]
@@ -60,12 +60,12 @@ flowchart TD
 ```mermaid
 flowchart LR
     subgraph output_example["输出示例"]
-    A[日志格式示例<br/>timestamp level pipeline node step message]
+    A[日志格式示例<br/>timestamp level workflow node step message]
     end
 
     A --> B[时间戳]
     A --> C[级别]
-    A --> D[PipelineID]
+    A --> D[WorkflowID]
     A --> E[NodeID]
     A --> F[StepID]
     A --> G[消息内容]
@@ -75,7 +75,7 @@ flowchart LR
 
 ```mermaid
 sequenceDiagram
-    participant P as Pipeline
+    participant P as Workflow
     participant E as Executor
     participant PP as Pusher
     participant C as Console

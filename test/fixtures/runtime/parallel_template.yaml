@@ -1,5 +1,5 @@
 Param:
-  pipelineId: "%d"
+  workflowId: "%d"
 Executors:
   local:
     type: local
@@ -13,4 +13,4 @@ Nodes:
     executor: local
     steps:
       - name: step1
-        run: "echo 'Pipeline %d'"
+        run: "echo 'Workflow %d'"
