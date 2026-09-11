@@ -1,6 +1,6 @@
 # Docker Executor
 
-Docker Executor 使用 [Docker Go SDK](https://github.com/docker/docker/client) 实现了在 Docker 容器中执行 Pipeline 节点的功能。
+Docker Executor 使用 [Docker Go SDK](https://github.com/docker/docker/client) 实现了在 Docker 容器中执行 Workflow 节点的功能。
 
 ## 功能特性
 

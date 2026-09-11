@@ -249,7 +249,7 @@
             <div class="sidebar-title">更多文档</div>
             <a href="quickstart.html">快速开始</a>
             <a href="configuration.html">配置参考</a>
-            <a href="pipeline.html">流水线核心</a>
+            <a href="workflow.html">流水线核心</a>
             <a href="node.html">节点与步骤</a>
             <a href="edge.html">条件边与循环</a>
             <a href="template.html">模板引擎</a>
@@ -424,7 +424,7 @@
     type: kubernetes
     config:
       namespace: default
-      serviceAccount: pipeline-sa
+      serviceAccount: workflow-sa
       resources:
         cpu: "1000m"
         memory: "2Gi"
@@ -466,7 +466,7 @@ exec, err := provider.GetExecutor(ctx, "docker")</code></pre>
         <p>每个执行器在流水线中的生命周期如下：</p>
 
         <pre class="mermaid">flowchart TD
-    Start([Pipeline 启动]) --> Prepare[Executor.Prepare]
+    Start([Workflow 启动]) --> Prepare[Executor.Prepare]
     Prepare --> Transfer[Executor.Transfer
     执行命令]
     Transfer --> Output[实时流式输出]
@@ -474,7 +474,7 @@ exec, err := provider.GetExecutor(ctx, "docker")</code></pre>
     More -->|是| Transfer
     More -->|否| Destruction[Executor.Destruction
     清理环境]
-    Destruction --> End([Pipeline 完成])
+    Destruction --> End([Workflow 完成])
 
     subgraph Local["Local 执行器"]
         L1[关闭 Shell 进程]
@@ -495,7 +495,7 @@ exec, err := provider.GetExecutor(ctx, "docker")</code></pre>
     style Destruction fill:#fee2e2,stroke:#ef4444
     style End fill:#dcfce7,stroke:#10b981</pre>
 
-        <pre><code class="language-plaintext">1. Pipeline 启动
+        <pre><code class="language-plaintext">1. Workflow 启动
    └── 为每个节点创建/复用执行器
        └── Executor.Prepare() 初始化环境
 
@@ -503,7 +503,7 @@ exec, err := provider.GetExecutor(ctx, "docker")</code></pre>
    └── Executor.Transfer() 执行命令
        └── 实时流式输出到日志
 
-3. Pipeline 完成或取消
+3. Workflow 完成或取消
    └── Executor.Destruction() 清理环境
        └── Local: 关闭 Shell 进程
        └── Docker: 停止并删除容器

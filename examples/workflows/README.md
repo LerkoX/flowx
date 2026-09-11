@@ -1,4 +1,4 @@
-# Pipelinex 本地工作流示例
+# Workflowx 本地工作流示例
 
 本目录包含使用 flowx 流水线库的本地工作流配置示例。
 
@@ -151,12 +151,12 @@ Executors:
 
 **运行结果示例**：
 ```
-=== PipelineX 工作流运行器 ===
+=== WorkflowX 工作流运行器 ===
 
 === 运行工作流 ===
 配置文件: docker_build_example.yaml
 ----------------------------------------
-Pipeline ID: workflow-docker_build_example-20260403215715
+Workflow ID: workflow-docker_build_example-20260403215715
 ----------------------------------------
   状态:   执行中
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -268,14 +268,14 @@ func main() {
     runtime := flowx.NewRuntime(ctx)
 
     // 运行流水线
-    pipelineID := "my-pipeline"
-    pipeline, err := runtime.RunSync(ctx, pipelineID, string(configData), nil)
+    workflowID := "my-workflow"
+    workflow, err := runtime.RunSync(ctx, workflowID, string(configData), nil)
     if err != nil {
         fmt.Printf("流水线执行失败: %v\n", err)
         os.Exit(1)
     }
 
-    fmt.Printf("流水线 %s 执行完成！状态: %s\n", pipeline.ID(), pipeline.Status())
+    fmt.Printf("流水线 %s 执行完成！状态: %s\n", workflow.ID(), workflow.Status())
 }
 ```
 

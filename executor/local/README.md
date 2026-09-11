@@ -1,6 +1,6 @@
 # Local Executor
 
-Local Executor 实现了在本地机器上直接执行 Pipeline 节点的功能，无需额外的容器或远程环境。
+Local Executor 实现了在本地机器上直接执行 Workflow 节点的功能，无需额外的容器或远程环境。
 
 ## 功能特性
 

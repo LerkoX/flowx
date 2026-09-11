@@ -14,11 +14,11 @@ import (
 )
 
 // Run 执行流水线
-func (p *PipelineImpl) Run(ctx context.Context) error {
+func (p *WorkflowImpl) Run(ctx context.Context) error {
 	p.mu.Lock()
 	if p.status == core.StatusRunning {
 		p.mu.Unlock()
-		return fmt.Errorf("%w: pipeline is already running", core.ErrInvalidState)
+		return fmt.Errorf("%w: workflow is already running", core.ErrInvalidState)
 	}
 	// 重新创建 doneChan，支持多次 Run
 	if p.doneChan == nil {
@@ -50,10 +50,10 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 	}()
 
 	// 通知流水线开始
-	p.NotifyEvent(PipelineStart)
+	p.NotifyEvent(WorkflowStart)
 
 	// 创建求值上下文
-	evalCtx := NewEvaluationContext().WithPipeline(p)
+	evalCtx := NewEvaluationContext().WithWorkflow(p)
 
 	// 如果有元数据存储，加载数据到求值上下文
 	if p.metadataStore != nil {
@@ -83,7 +83,7 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 			p.status = core.StatusSuccess
 			p.mu.Unlock()
 		}
-		p.NotifyEvent(PipelineFinish)
+		p.NotifyEvent(WorkflowFinish)
 		return err
 	}
 
@@ -93,7 +93,7 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 		p.mu.Lock()
 		p.status = core.StatusFailed
 		p.mu.Unlock()
-		p.NotifyEvent(PipelineFinish)
+		p.NotifyEvent(WorkflowFinish)
 		return err
 	}
 
@@ -101,7 +101,7 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 	p.mu.Lock()
 	p.status = core.StatusSuccess
 	p.mu.Unlock()
-	p.NotifyEvent(PipelineFinish)
+	p.NotifyEvent(WorkflowFinish)
 	return nil
 }
 
@@ -109,7 +109,7 @@ func (p *PipelineImpl) Run(ctx context.Context) error {
 // 无环图：执行完所有层级后直接返回
 // 有环图：每轮迭代执行循环体并评估回边条件，满足则重置循环节点继续迭代；
 // 循环出口下游节点（回边 source 之后的非循环体节点）推迟到循环退出后再执行
-func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, evalCtx EvaluationContext, startLevel int) error {
+func (p *WorkflowImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, evalCtx EvaluationContext, startLevel int) error {
 	iteration := 0
 	p.mu.RLock()
 	maxIter := p.maxLoopIter
@@ -179,7 +179,7 @@ func (p *PipelineImpl) runLevelByLevel(ctx context.Context, dgaGraph *DGAGraph, 
 
 // executeLevels 逐层执行 BFS 层级计划
 // exclude 非空时从层级计划中排除指定节点（用于循环迭代期间推迟循环出口下游节点）
-func (p *PipelineImpl) executeLevels(ctx context.Context, dgaGraph *DGAGraph, evalCtx EvaluationContext, startLevel int, exclude map[string]bool) error {
+func (p *WorkflowImpl) executeLevels(ctx context.Context, dgaGraph *DGAGraph, evalCtx EvaluationContext, startLevel int, exclude map[string]bool) error {
 	// 计算初始层级
 	levels := filterLevels(dgaGraph.TraversalSteps(evalCtx), exclude)
 	if len(levels) == 0 {
@@ -197,7 +197,7 @@ func (p *PipelineImpl) executeLevels(ctx context.Context, dgaGraph *DGAGraph, ev
 			p.mu.Lock()
 			p.currentLevel = levelIdx
 			p.mu.Unlock()
-			p.NotifyEvent(PipelinePaused)
+			p.NotifyEvent(WorkflowPaused)
 
 			// 等待恢复信号
 			p.pauseCond.Wait()
@@ -206,7 +206,7 @@ func (p *PipelineImpl) executeLevels(ctx context.Context, dgaGraph *DGAGraph, ev
 			p.mu.Lock()
 			p.status = core.StatusRunning
 			p.mu.Unlock()
-			p.NotifyEvent(PipelineResumed)
+			p.NotifyEvent(WorkflowResumed)
 
 			// 重新计算层级（图可能已被修改）
 			levels = filterLevels(dgaGraph.TraversalSteps(evalCtx), exclude)
@@ -287,7 +287,7 @@ func filterLevels(levels [][]string, exclude map[string]bool) [][]string {
 	return filtered
 }
 
-func (p *PipelineImpl) resetLoopNodes(dgaGraph *DGAGraph, loopNodes map[string]bool) {
+func (p *WorkflowImpl) resetLoopNodes(dgaGraph *DGAGraph, loopNodes map[string]bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -312,14 +312,14 @@ func (p *PipelineImpl) resetLoopNodes(dgaGraph *DGAGraph, loopNodes map[string]b
 }
 
 // makeTraversalFn 创建节点执行函数（兼容旧的 Traversal 调用方式）
-func (p *PipelineImpl) makeTraversalFn(ctx context.Context) TraversalFn {
+func (p *WorkflowImpl) makeTraversalFn(ctx context.Context) TraversalFn {
 	return func(ctx context.Context, node Node) error {
 		return p.executeNodeWithLifecycle(ctx, node)
 	}
 }
 
 // executeNodeWithLifecycle 执行节点的完整生命周期（跳过检查→通知→执行→通知）
-func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) error {
+func (p *WorkflowImpl) executeNodeWithLifecycle(ctx context.Context, node Node) error {
 	// 检查 context 是否已取消
 	select {
 	case <-ctx.Done():
@@ -330,7 +330,7 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	// 检查是否应该跳过此节点
 	if p.shouldSkipNode(node) {
 		fmt.Printf("Skipping node %s (status: %s)\n", node.Id(), node.GetRuntimeStatus().Status)
-		p.NotifyEventForNode(PipelineNodeFinish, node)
+		p.NotifyEventForNode(WorkflowNodeFinish, node)
 		return nil
 	}
 
@@ -340,14 +340,14 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	p.mu.Unlock()
 
 	// 通知节点开始
-	p.NotifyEventForNode(PipelineNodeStart, node)
+	p.NotifyEventForNode(WorkflowNodeStart, node)
 	fmt.Printf("Executing node: %s\n", node.Id())
 
 	// 获取节点的executor配置
 	executorName := node.GetExecutor()
 	if executorName == "" {
 		fmt.Printf("Node %s has no executor configured, skipping\n", node.Id())
-		p.NotifyEventForNode(PipelineNodeFinish, node)
+		p.NotifyEventForNode(WorkflowNodeFinish, node)
 		// 清理当前节点
 		p.mu.Lock()
 		p.currentNode = nil
@@ -369,8 +369,8 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	// 执行节点
 	if err := p.executeNode(ctx, node, exec); err != nil {
 		fmt.Printf("Node %s execution failed: %v\n", node.Id(), err)
-		// 节点执行失败时触发 PipelineNodeFailed 事件
-		p.NotifyEventForNode(PipelineNodeFailed, node)
+		// 节点执行失败时触发 WorkflowNodeFailed 事件
+		p.NotifyEventForNode(WorkflowNodeFailed, node)
 		// 清理当前节点
 		p.mu.Lock()
 		p.currentNode = nil
@@ -379,7 +379,7 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	}
 
 	// 通知节点完成
-	p.NotifyEventForNode(PipelineNodeFinish, node)
+	p.NotifyEventForNode(WorkflowNodeFinish, node)
 
 	// 清理当前节点
 	p.mu.Lock()
@@ -390,7 +390,7 @@ func (p *PipelineImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 }
 
 // executeNode 执行单个节点
-func (p *PipelineImpl) executeNode(ctx context.Context, node Node, exec executor.Executor) error {
+func (p *WorkflowImpl) executeNode(ctx context.Context, node Node, exec executor.Executor) error {
 	steps := node.GetSteps()
 	if len(steps) == 0 {
 		fmt.Printf("Node %s has no steps to execute\n", node.Id())
@@ -455,7 +455,7 @@ func (p *PipelineImpl) executeNode(ctx context.Context, node Node, exec executor
 }
 
 // initializeNodeRuntimeStatus 初始化节点运行时状态
-func (p *PipelineImpl) initializeNodeRuntimeStatus(node Node, exec executor.Executor) *core.NodeRuntimeStatus {
+func (p *WorkflowImpl) initializeNodeRuntimeStatus(node Node, exec executor.Executor) *core.NodeRuntimeStatus {
 	node.EnsureIds()
 	runtimeStatus := node.GetRuntimeStatus()
 	if runtimeStatus == nil {
@@ -483,7 +483,7 @@ func (p *PipelineImpl) initializeNodeRuntimeStatus(node Node, exec executor.Exec
 }
 
 // setupExecutorChannels 设置通道并启动 executor
-func (p *PipelineImpl) setupExecutorChannels(ctx context.Context, exec executor.Executor, steps []core.Step) (chan any, chan any, chan []byte) {
+func (p *WorkflowImpl) setupExecutorChannels(ctx context.Context, exec executor.Executor, steps []core.Step) (chan any, chan any, chan []byte) {
 	commandChan := make(chan any, len(steps))
 	resultChan := make(chan any, len(steps)*10)
 	inputChan := make(chan []byte, 100) // 输入通道，缓冲100条消息
@@ -505,7 +505,7 @@ func (p *PipelineImpl) setupExecutorChannels(ctx context.Context, exec executor.
 }
 
 // sendCommands 发送所有步骤命令
-func (p *PipelineImpl) sendCommands(ctx context.Context, node Node, commandChan chan any, steps []core.Step) {
+func (p *WorkflowImpl) sendCommands(ctx context.Context, node Node, commandChan chan any, steps []core.Step) {
 	defer close(commandChan)
 	for _, step := range steps {
 		select {
@@ -535,7 +535,7 @@ func (p *PipelineImpl) sendCommands(ctx context.Context, node Node, commandChan 
 }
 
 // shouldSkipStep 检查步骤是否应该跳过执行
-func (p *PipelineImpl) shouldSkipStep(node Node, stepName string) bool {
+func (p *WorkflowImpl) shouldSkipStep(node Node, stepName string) bool {
 	runtimeStatus := node.GetRuntimeStatus()
 	if runtimeStatus == nil {
 		return false
@@ -572,7 +572,7 @@ func getStepStatusString(node Node, stepName string) string {
 }
 
 // waitForResults 等待并处理所有结果
-func (p *PipelineImpl) waitForResults(ctx context.Context, node Node, exec executor.Executor, resultChan chan any, steps []core.Step) (error, string) {
+func (p *WorkflowImpl) waitForResults(ctx context.Context, node Node, exec executor.Executor, resultChan chan any, steps []core.Step) (error, string) {
 	var lastErr error
 	resultCount := 0
 	// 计算实际需要执行的步骤数量（不包括已完成的步骤）
@@ -611,7 +611,7 @@ func (p *PipelineImpl) waitForResults(ctx context.Context, node Node, exec execu
 }
 
 // handleCancellation 处理节点取消
-func (p *PipelineImpl) handleCancellation(ctx nodeContext) {
+func (p *WorkflowImpl) handleCancellation(ctx nodeContext) {
 	runtimeStatus := ctx.node.GetRuntimeStatus()
 	if runtimeStatus != nil {
 		runtimeStatus.Status = core.StatusCancelled
@@ -621,7 +621,7 @@ func (p *PipelineImpl) handleCancellation(ctx nodeContext) {
 }
 
 // handleResult 处理单个结果
-func (p *PipelineImpl) handleResult(ctx context.Context, node Node, _ executor.Executor, result any, resultCount int, steps []core.Step) resultHandler {
+func (p *WorkflowImpl) handleResult(ctx context.Context, node Node, _ executor.Executor, result any, resultCount int, steps []core.Step) resultHandler {
 	handler := resultHandler{count: resultCount}
 
 	switch v := result.(type) {
@@ -653,7 +653,7 @@ func (p *PipelineImpl) handleResult(ctx context.Context, node Node, _ executor.E
 		output := string(v)
 		if p.pusher != nil {
 			p.pusher.Push(ctx, logger.Entry{
-				Pipeline: p.Id(),
+				Workflow: p.Id(),
 				Node:     node.Id(),
 				Level:    logger.LevelInfo,
 				Message:  output,
@@ -674,7 +674,7 @@ func (p *PipelineImpl) handleResult(ctx context.Context, node Node, _ executor.E
 
 // handleInputRequest 处理输入请求
 // 当程序输出 {"flowx":"wait-input",...} 时被调用
-func (p *PipelineImpl) handleInputRequest(node Node, event *executor.InputRequestEvent) {
+func (p *WorkflowImpl) handleInputRequest(node Node, event *executor.InputRequestEvent) {
 	if event == nil || event.Request == nil {
 		return
 	}
@@ -694,7 +694,7 @@ func (p *PipelineImpl) handleInputRequest(node Node, event *executor.InputReques
 	node.SetRuntimeStatus(runtimeStatus)
 
 	// 触发暂停事件，通知监听器处理输入请求
-	p.NotifyEvent(PipelinePaused)
+	p.NotifyEvent(WorkflowPaused)
 }
 
 // resultHandler 处理结果的辅助结构
@@ -711,7 +711,7 @@ type nodeContext struct {
 }
 
 // updateStepRuntimeStatus 更新步骤运行时状态
-func (p *PipelineImpl) updateStepRuntimeStatus(node Node, step core.Step, result *executor.StepResult) {
+func (p *WorkflowImpl) updateStepRuntimeStatus(node Node, step core.Step, result *executor.StepResult) {
 	stepStatus := core.StepRuntimeStatus{
 		Id:     step.Id,
 		Name:   step.Name,
@@ -733,7 +733,7 @@ func (p *PipelineImpl) updateStepRuntimeStatus(node Node, step core.Step, result
 }
 
 // updateNodeFinalStatus 更新节点最终状态
-func (p *PipelineImpl) updateNodeFinalStatus(runtimeStatus *core.NodeRuntimeStatus, err error) {
+func (p *WorkflowImpl) updateNodeFinalStatus(runtimeStatus *core.NodeRuntimeStatus, err error) {
 	if err != nil {
 		runtimeStatus.Status = core.StatusFailed
 	} else {

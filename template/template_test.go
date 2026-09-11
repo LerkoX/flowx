@@ -257,22 +257,22 @@ func TestPongo2TemplateEngine_Validate_Empty(t *testing.T) {
 	}
 }
 
-func TestPongo2TemplateEngine_EvaluateBool_WithPipelineData(t *testing.T) {
+func TestPongo2TemplateEngine_EvaluateBool_WithWorkflowData(t *testing.T) {
 	engine := NewPongo2TemplateEngine()
 
-	// 创建模拟的 pipeline 数据
+	// 创建模拟的 workflow 数据
 	ctx := map[string]any{
-		"pipelineId":     "pipe-123",
-		"pipelineStatus": "RUNNING",
+		"workflowId":     "pipe-123",
+		"workflowStatus": "RUNNING",
 	}
 
-	result, err := engine.EvaluateBool("{{ pipelineStatus == 'RUNNING' }}", ctx)
+	result, err := engine.EvaluateBool("{{ workflowStatus == 'RUNNING' }}", ctx)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	if !result {
-		t.Error("Expected true for matching pipeline status")
+		t.Error("Expected true for matching workflow status")
 	}
 }
 

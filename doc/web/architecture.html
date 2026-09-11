@@ -238,7 +238,7 @@
             <div class="sidebar-title">更多文档</div>
             <a href="quickstart.html">快速开始</a>
             <a href="configuration.html">配置参考</a>
-            <a href="pipeline.html">流水线核心</a>
+            <a href="workflow.html">流水线核心</a>
             <a href="executors.html">执行器系统</a>
             <a href="node.html">节点与步骤</a>
             <a href="edge.html">条件边与循环</a>
@@ -260,22 +260,22 @@
         <pre class="mermaid">block-beta
     columns 3
     runtime["Runtime<br/>运行时管理"]:3
-    pipeline["Pipeline<br/>流水线引擎"]:3
+    workflow["Workflow<br/>流水线引擎"]:3
     node["Node<br/>节点与步骤"] edge["Edge<br/>条件边"] meta["MetadataStore<br/>元数据存储"]
     executor["Executor<br/>执行器系统"]:3
     template["Template Engine<br/>模板引擎"]:3
     logger["Logger<br/>日志系统"]:3
 
-    runtime --> pipeline
-    pipeline --> node
-    pipeline --> edge
-    pipeline --> meta
-    pipeline --> executor
-    pipeline --> template
-    pipeline --> logger
+    runtime --> workflow
+    workflow --> node
+    workflow --> edge
+    workflow --> meta
+    workflow --> executor
+    workflow --> template
+    workflow --> logger
 
     style runtime fill:#e0f2fe,stroke:#2563eb
-    style pipeline fill:#fef3c7,stroke:#f59e0b
+    style workflow fill:#fef3c7,stroke:#f59e0b
     style executor fill:#dcfce7,stroke:#10b981
     style node fill:#f3e8ff,stroke:#9333ea
     style edge fill:#f3e8ff,stroke:#9333ea
@@ -292,8 +292,8 @@
 │   ├── field.go          # FieldItem 定义
 │   └── uuid.go           # UUID 工具函数
 ├── dag/                  # DAG 流水线核心
-│   ├── pipeline.go       # Pipeline 接口定义
-│   ├── pipeline_impl.go  # Pipeline + DAG 图实现
+│   ├── workflow.go       # Workflow 接口定义
+│   ├── workflow_impl.go  # Workflow + DAG 图实现
 │   ├── node.go           # Node 接口定义
 │   ├── node_impl.go      # Node 实现
 │   ├── edge.go           # Edge 接口定义
@@ -326,10 +326,10 @@
 
         <h3>Runtime 接口</h3>
         <pre><code class="language-go">type Runtime interface {
-    Get(id string) (Pipeline, error)
+    Get(id string) (Workflow, error)
     Cancel(ctx context.Context, id string) error
-    RunAsync(ctx, id, configYAML string, listener Listener) (Pipeline, error)
-    RunSync(ctx, id, configYAML string, listener Listener) (Pipeline, error)
+    RunAsync(ctx, id, configYAML string, listener Listener) (Workflow, error)
+    RunSync(ctx, id, configYAML string, listener Listener) (Workflow, error)
     Rm(id string)
     Done() chan struct{}
     Notify(data any) error
@@ -346,8 +346,8 @@
     ModifyGraph(ctx context.Context, id string, modifications GraphModifications) error
 }</code></pre>
 
-        <h3>Pipeline 接口</h3>
-        <pre><code class="language-go">type Pipeline interface {
+        <h3>Workflow 接口</h3>
+        <pre><code class="language-go">type Workflow interface {
     Id() string
     GetGraph() Graph
     SetGraph(graph Graph)
@@ -383,17 +383,17 @@
         R2 --> R3[渲染 Metadata.data]
         R3 --> R4[构建 DAG 图]
         R4 --> R5[初始化元数据存储]
-        R5 --> R6[创建 Pipeline 实例]
-        R6 --> R7[执行 Pipeline.Run]
+        R5 --> R6[创建 Workflow 实例]
+        R6 --> R7[执行 Workflow.Run]
     end
 
-    subgraph PipelineRun["2. Pipeline.Run"]
-        P1[触发 PipelineStart 事件] --> P2[逐层 BFS 执行]
+    subgraph WorkflowRun["2. Workflow.Run"]
+        P1[触发 WorkflowStart 事件] --> P2[逐层 BFS 执行]
         P2 --> P3[并发执行当前层级节点]
         P3 --> P4[评估出边条件]
         P4 --> P5{回边条件?}
         P5 -->|true| P2
-        P5 -->|false| P6[触发 PipelineFinish 事件]
+        P5 -->|false| P6[触发 WorkflowFinish 事件]
         P6 --> P7[关闭 doneChan]
     end
 
@@ -408,7 +408,7 @@
     P3 --> N1
 
     style RuntimePhase fill:#e0f2fe,stroke:#2563eb
-    style PipelineRun fill:#fef3c7,stroke:#f59e0b
+    style WorkflowRun fill:#fef3c7,stroke:#f59e0b
     style NodeExec fill:#dcfce7,stroke:#10b981</pre>
     </article>
 </div>

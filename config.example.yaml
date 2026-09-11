@@ -1,5 +1,5 @@
 Version: "1.0"
-Name: my-pipeline
+Name: my-workflow
 
 Metadate:
   type: in-config
@@ -88,7 +88,7 @@ Executors:
     description: "本地执行器，用于执行Git操作等简单命令"
     config:
       shell: bash
-      workdir: /tmp/pipeline
+      workdir: /tmp/workflow
 
   docker:
     type: docker

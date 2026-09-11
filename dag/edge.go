@@ -20,7 +20,7 @@ type EvaluationContext interface {
 	Get(key string) (any, bool)
 	All() map[string]any
 	WithNode(node Node) EvaluationContext
-	WithPipeline(pipeline Pipeline) EvaluationContext
+	WithWorkflow(workflow Workflow) EvaluationContext
 	WithParams(params map[string]any) EvaluationContext
 	WithIteration(iteration int) EvaluationContext
 	Iteration() int

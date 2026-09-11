@@ -16,7 +16,7 @@ func TestRuntimeImpl_UpdateConfig_AddNodes(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
 
-	// 手动构建 pipeline（A 已执行，B 未执行）
+	// 手动构建 workflow（A 已执行，B 未执行）
 	graph := dag.NewDGAGraph()
 	nodeA := dag.NewDGANodeWithConfig("A", core.StatusSuccess, "local", "", []core.Step{{Name: "step1", Run: "echo A"}}, nil)
 	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
@@ -26,16 +26,16 @@ func TestRuntimeImpl_UpdateConfig_AddNodes(t *testing.T) {
 	graph.AddVertex(nodeB)
 	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeB))
 
-	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(core.StatusSuccess)
+	workflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetStatusForTest(core.StatusSuccess)
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
-	pipeline.SetExecutorProvider(execProvider)
+	workflow.SetExecutorProvider(execProvider)
 
-	rt.pipelines["update-add-test"] = pipeline
-	rt.pipelineConfigs["update-add-test"] = &core.PipelineConfig{
+	rt.workflows["update-add-test"] = workflow
+	rt.workflowConfigs["update-add-test"] = &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "update-test",
 		Executors: map[string]core.ExecutorConfig{
@@ -88,7 +88,7 @@ Nodes:
 		t.Fatalf("UpdateConfig failed: %v", err)
 	}
 
-	g := pipeline.GetGraph()
+	g := workflow.GetGraph()
 	_, ok := g.GetNode("C")
 	if !ok {
 		t.Error("Node C should be added to graph")
@@ -110,16 +110,16 @@ func TestRuntimeImpl_UpdateConfig_RemoveUnexecutedNode(t *testing.T) {
 	graph.AddVertex(nodeB)
 	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeB))
 
-	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(core.StatusSuccess)
+	workflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetStatusForTest(core.StatusSuccess)
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
-	pipeline.SetExecutorProvider(execProvider)
+	workflow.SetExecutorProvider(execProvider)
 
-	rt.pipelines["remove-unexec"] = pipeline
-	rt.pipelineConfigs["remove-unexec"] = &core.PipelineConfig{
+	rt.workflows["remove-unexec"] = workflow
+	rt.workflowConfigs["remove-unexec"] = &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Executors: map[string]core.ExecutorConfig{
@@ -154,7 +154,7 @@ Nodes:
 		t.Fatalf("UpdateConfig should succeed for removing unexecuted node, got: %v", err)
 	}
 
-	g := pipeline.GetGraph()
+	g := workflow.GetGraph()
 	if _, ok := g.GetNode("B"); ok {
 		t.Error("Node B should be removed")
 	}
@@ -171,12 +171,12 @@ func TestRuntimeImpl_UpdateConfig_RemoveExecutedNode(t *testing.T) {
 
 	graph.AddVertex(nodeA)
 
-	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(core.StatusSuccess)
+	workflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetStatusForTest(core.StatusSuccess)
 
-	rt.pipelines["remove-exec"] = pipeline
-	rt.pipelineConfigs["remove-exec"] = &core.PipelineConfig{
+	rt.workflows["remove-exec"] = workflow
+	rt.workflowConfigs["remove-exec"] = &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Executors: map[string]core.ExecutorConfig{
@@ -217,12 +217,12 @@ func TestRuntimeImpl_UpdateConfig_ModifyExecutedNode(t *testing.T) {
 
 	graph.AddVertex(nodeA)
 
-	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(core.StatusSuccess)
+	workflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetStatusForTest(core.StatusSuccess)
 
-	rt.pipelines["modify-exec"] = pipeline
-	rt.pipelineConfigs["modify-exec"] = &core.PipelineConfig{
+	rt.workflows["modify-exec"] = workflow
+	rt.workflowConfigs["modify-exec"] = &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Executors: map[string]core.ExecutorConfig{
@@ -269,12 +269,12 @@ func TestRuntimeImpl_UpdateConfig_ImmutableField(t *testing.T) {
 
 	graph.AddVertex(nodeA)
 
-	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(core.StatusSuccess)
+	workflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetStatusForTest(core.StatusSuccess)
 
-	rt.pipelines["immutable-test"] = pipeline
-	rt.pipelineConfigs["immutable-test"] = &core.PipelineConfig{
+	rt.workflows["immutable-test"] = workflow
+	rt.workflowConfigs["immutable-test"] = &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "original",
 		Executors: map[string]core.ExecutorConfig{
@@ -321,12 +321,12 @@ func TestRuntimeImpl_UpdateConfig_NoChanges(t *testing.T) {
 
 	graph.AddVertex(nodeA)
 
-	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(core.StatusSuccess)
+	workflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetStatusForTest(core.StatusSuccess)
 
-	rt.pipelines["nochange-test"] = pipeline
-	rt.pipelineConfigs["nochange-test"] = &core.PipelineConfig{
+	rt.workflows["nochange-test"] = workflow
+	rt.workflowConfigs["nochange-test"] = &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Executors: map[string]core.ExecutorConfig{
@@ -374,16 +374,16 @@ func TestRuntimeImpl_UpdateConfig_AddNodesWithDisplayName(t *testing.T) {
 	nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
 	graph.AddVertex(nodeA)
 
-	pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(core.StatusSuccess)
+	workflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetStatusForTest(core.StatusSuccess)
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
-	pipeline.SetExecutorProvider(execProvider)
+	workflow.SetExecutorProvider(execProvider)
 
-	rt.pipelines["update-display-name"] = pipeline
-	rt.pipelineConfigs["update-display-name"] = &core.PipelineConfig{
+	rt.workflows["update-display-name"] = workflow
+	rt.workflowConfigs["update-display-name"] = &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "update-display-name",
 		Executors: map[string]core.ExecutorConfig{
@@ -443,7 +443,7 @@ Nodes:
 		t.Fatalf("UpdateConfig failed: %v", err)
 	}
 
-	g := pipeline.GetGraph()
+	g := workflow.GetGraph()
 	// 三个节点应以各自 map key 为 ID 独立存在，而不是坍缩为「回声」
 	for _, id := range []string{"tail5", "tail6", "tail7"} {
 		if _, ok := g.GetNode(id); !ok {
@@ -455,7 +455,7 @@ Nodes:
 	}
 
 	// 存储配置的 Nodes 键也应为 map key
-	cfg := rt.pipelineConfigs["update-display-name"]
+	cfg := rt.workflowConfigs["update-display-name"]
 	for _, id := range []string{"tail5", "tail6", "tail7"} {
 		if _, ok := cfg.Nodes[id]; !ok {
 			t.Errorf("Stored config should contain node key %s", id)
@@ -475,17 +475,17 @@ func TestRuntimeImpl_UpdateConfig_AddExecutorAllowed(t *testing.T) {
 		nodeA.SetRuntimeStatus(&core.NodeRuntimeStatus{Status: core.StatusSuccess})
 		graph.AddVertex(nodeA)
 
-		pipeline := dag.NewPipeline(ctx).(*dag.PipelineImpl)
-		pipeline.SetGraph(graph)
-		pipeline.SetStatusForTest(core.StatusSuccess)
+		workflow := dag.NewWorkflow(ctx).(*dag.WorkflowImpl)
+		workflow.SetGraph(graph)
+		workflow.SetStatusForTest(core.StatusSuccess)
 
 		execProvider := provider.NewProvider()
 		execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]interface{}{}})
 		execProvider.RegisterExecutor("remote-docker", provider.ExecutorConfig{Type: "docker", Config: map[string]interface{}{"host": "ssh://remote"}})
-		pipeline.SetExecutorProvider(execProvider)
+		workflow.SetExecutorProvider(execProvider)
 
-		rt.pipelines[id] = pipeline
-		rt.pipelineConfigs[id] = &core.PipelineConfig{
+		rt.workflows[id] = workflow
+		rt.workflowConfigs[id] = &core.WorkflowConfig{
 			Version: "1.0",
 			Name:    "exec-add-test",
 			Executors: map[string]core.ExecutorConfig{

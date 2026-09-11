@@ -39,8 +39,8 @@ type InputRequestInfo struct {
 	Type     string `yaml:"type"`     // 输入类型: text/password/confirm
 }
 
-// PipelineConfig 流水线配置结构
-type PipelineConfig struct {
+// WorkflowConfig 流水线配置结构
+type WorkflowConfig struct {
 	Version           string                    `yaml:"Version"`
 	Name              string                    `yaml:"Name"`
 	Metadate          MetadataConfig            `yaml:"Metadate"`

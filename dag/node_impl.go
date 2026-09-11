@@ -13,7 +13,7 @@ type DGANode struct {
 	id            string
 	state         string
 	property      map[string]any
-	pipelineId    string
+	workflowId    string
 	executor      string
 	steps         []core.Step
 	image         string
@@ -51,10 +51,10 @@ func (dgaNode *DGANode) Id() string {
 	return dgaNode.id
 }
 
-func (dgaNode *DGANode) PipelineId() string {
+func (dgaNode *DGANode) WorkflowId() string {
 	dgaNode.mu.RLock()
 	defer dgaNode.mu.RUnlock()
-	return dgaNode.pipelineId
+	return dgaNode.workflowId
 }
 
 func (dgaNode *DGANode) Status() string {

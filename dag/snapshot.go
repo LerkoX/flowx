@@ -7,34 +7,34 @@ import (
 
 // Snapshotter 状态快照接口
 type Snapshotter interface {
-	// TakeSnapshot 从 Pipeline 生成带状态的配置
-	TakeSnapshot(pipeline Pipeline, originalConfig *core.PipelineConfig) (*core.PipelineConfig, error)
+	// TakeSnapshot 从 Workflow 生成带状态的配置
+	TakeSnapshot(workflow Workflow, originalConfig *core.WorkflowConfig) (*core.WorkflowConfig, error)
 	// ToYAML 将配置转换为 YAML
-	ToYAML(config *core.PipelineConfig) (string, error)
+	ToYAML(config *core.WorkflowConfig) (string, error)
 }
 
-// PipelineSnapshotter 实现
-type PipelineSnapshotter struct{}
+// WorkflowSnapshotter 实现
+type WorkflowSnapshotter struct{}
 
-func NewPipelineSnapshotter() *PipelineSnapshotter {
-	return &PipelineSnapshotter{}
+func NewWorkflowSnapshotter() *WorkflowSnapshotter {
+	return &WorkflowSnapshotter{}
 }
 
-// TakeSnapshot 将当前状态序列化为 PipelineConfig
-func (ps *PipelineSnapshotter) TakeSnapshot(pipeline Pipeline, originalConfig *core.PipelineConfig) (*core.PipelineConfig, error) {
+// TakeSnapshot 将当前状态序列化为 WorkflowConfig
+func (ps *WorkflowSnapshotter) TakeSnapshot(workflow Workflow, originalConfig *core.WorkflowConfig) (*core.WorkflowConfig, error) {
 	// 深拷贝原始配置
 	configBytes, err := yaml.Marshal(originalConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	var config core.PipelineConfig
+	var config core.WorkflowConfig
 	if err := yaml.Unmarshal(configBytes, &config); err != nil {
 		return nil, err
 	}
 
 	// 更新 Nodes 的 runtime 状态
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	for nodeName, node := range graph.Nodes() {
 		if nodeConfig, exists := config.Nodes[nodeName]; exists {
 			// 更新节点ID和运行时状态
@@ -85,7 +85,7 @@ func (ps *PipelineSnapshotter) TakeSnapshot(pipeline Pipeline, originalConfig *c
 }
 
 // ToYAML 将配置转换为 YAML
-func (ps *PipelineSnapshotter) ToYAML(config *core.PipelineConfig) (string, error) {
+func (ps *WorkflowSnapshotter) ToYAML(config *core.WorkflowConfig) (string, error) {
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return "", err

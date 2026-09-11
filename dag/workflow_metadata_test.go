@@ -105,8 +105,8 @@ func TestInConfigMetadataStore_Delete(t *testing.T) {
 // TestExtractOutput_Basic 测试基本的输出提取功能
 func TestExtractOutput_Basic(t *testing.T) {
 	ctx := context.Background()
-	pipeline := &PipelineImpl{
-		id:             "test-pipeline",
+	workflow := &WorkflowImpl{
+		id:             "test-workflow",
 		executors:      make(map[string]executor.Executor),
 		metadata:       make(Metadata),
 		param:          make(map[string]core.FieldItem),
@@ -135,13 +135,13 @@ func TestExtractOutput_Basic(t *testing.T) {
 	fullOutput := "Regular output\n```flowx-yaml\nextracted: value123\ncount: 42\n```\nMore output"
 
 	// 执行提取
-	err := pipeline.extractOutput(ctx, node, stepResult, fullOutput)
+	err := workflow.extractOutput(ctx, node, stepResult, fullOutput)
 	if err != nil {
 		t.Fatalf("Failed to extract output: %v", err)
 	}
 
 	// 验证 metadata
-	md := pipeline.Metadata()
+	md := workflow.Metadata()
 
 	if extracted, ok := md["TestNode.extracted"]; !ok {
 		t.Errorf("Expected TestNode.extracted, got missing")

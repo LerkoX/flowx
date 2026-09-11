@@ -15,7 +15,7 @@ import (
 )
 
 // buildGraph 构建图结构
-func (r *RuntimeImpl) buildGraph(config *core.PipelineConfig) dag.Graph {
+func (r *RuntimeImpl) buildGraph(config *core.WorkflowConfig) dag.Graph {
 	graph := dag.NewDGAGraph()
 
 	// 创建节点
@@ -80,10 +80,10 @@ func (r *RuntimeImpl) buildGraph(config *core.PipelineConfig) dag.Graph {
 	return graph
 }
 
-// SetPipelineParam 设置 pipeline 的 param 值（内部使用）
-func SetPipelineParam(pipeline dag.Pipeline, param map[string]interface{}) {
-	if pipelineImpl, ok := pipeline.(*dag.PipelineImpl); ok {
-		pipelineImpl.SetParam(param)
+// SetWorkflowParam 设置 workflow 的 param 值（内部使用）
+func SetWorkflowParam(workflow dag.Workflow, param map[string]interface{}) {
+	if workflowImpl, ok := workflow.(*dag.WorkflowImpl); ok {
+		workflowImpl.SetParam(param)
 	}
 }
 
@@ -182,7 +182,7 @@ func (r *RuntimeImpl) extractExpression(label string) string {
 	}
 
 	// 不能用 r.getTemplateEngine()：buildGraph 可能在持有 r.mu 写锁的
-	// preparePipeline 中被调用，内部再 RLock 会自死锁；
+	// prepareWorkflow 中被调用，内部再 RLock 会自死锁；
 	// ModifyGraph 路径持读锁时若有写者等待也会死锁。
 	// Validate 是无状态语法校验，与包级 ExtractExpression 一致，直接新建引擎。
 	engine := template.NewPongo2TemplateEngine()
@@ -197,20 +197,20 @@ func (r *RuntimeImpl) extractExpression(label string) string {
 // ModifyGraph 对暂停或停止的流水线执行图修改（原子操作）
 func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications dag.GraphModifications) error {
 	r.mu.RLock()
-	pipeline, exists := r.pipelines[id]
-	config, configExists := r.pipelineConfigs[id]
+	workflow, exists := r.workflows[id]
+	config, configExists := r.workflowConfigs[id]
 	r.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("pipeline with id %s not found", id)
+		return fmt.Errorf("workflow with id %s not found", id)
 	}
 
 	// 校验可修改状态
-	if !pipeline.IsModifiable() {
-		return core.ErrPipelineRunning
+	if !workflow.IsModifiable() {
+		return core.ErrWorkflowRunning
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 
 	// 快照当前状态用于回滚
 	snapshotNodes := graph.Nodes()
@@ -409,8 +409,8 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 	}
 
 	// 8. 触发图修改事件
-	if pipelineImpl, ok := pipeline.(*dag.PipelineImpl); ok {
-		pipelineImpl.NotifyEvent(dag.PipelineGraphModified)
+	if workflowImpl, ok := workflow.(*dag.WorkflowImpl); ok {
+		workflowImpl.NotifyEvent(dag.WorkflowGraphModified)
 	}
 
 	return nil
@@ -421,16 +421,16 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 // 除 Nodes 和 dag.Graph 外的其他配置字段不可更新
 func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML string) error {
 	r.mu.RLock()
-	pipeline, exists := r.pipelines[id]
-	oldConfig, configExists := r.pipelineConfigs[id]
+	workflow, exists := r.workflows[id]
+	oldConfig, configExists := r.workflowConfigs[id]
 	r.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("pipeline with id %s not found", id)
+		return fmt.Errorf("workflow with id %s not found", id)
 	}
 
-	if !pipeline.IsModifiable() {
-		return core.ErrPipelineRunning
+	if !workflow.IsModifiable() {
+		return core.ErrWorkflowRunning
 	}
 
 	newConfig, err := r.parseConfig(newConfigYAML)
@@ -444,7 +444,7 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 		}
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	mods, err := r.computeNodeModifications(oldConfig, newConfig, graph)
 	if err != nil {
 		return err
@@ -472,7 +472,7 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 	}
 
 	r.mu.Lock()
-	if config, ok := r.pipelineConfigs[id]; ok {
+	if config, ok := r.workflowConfigs[id]; ok {
 		config.Graph = newConfig.Graph
 		// 持久化新增执行器条目（validateExecutorsAdditive 已保证已有条目未改删），
 		// 否则 ExportExecutionConfig 导出的快照丢失新增条目
@@ -489,9 +489,9 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 	}
 	r.mu.Unlock()
 
-	// 将合并后的执行器集合重新注册到运行中 pipeline 的 provider：
+	// 将合并后的执行器集合重新注册到运行中 workflow 的 provider：
 	// UpdateConfig 允许新增执行器条目（续跑追加异构节点，如 docker），
-	// 但 provider 是 LoadPipeline 时按旧配置构建的，不重建会导致新节点
+	// 但 provider 是 LoadWorkflow 时按旧配置构建的，不重建会导致新节点
 	// 运行时报 executor config not found
 	if len(newConfig.Executors) > 0 {
 		execProvider := provider.NewProvider()
@@ -501,14 +501,14 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 				Config: execConfig.Config,
 			})
 		}
-		pipeline.SetExecutorProvider(execProvider)
+		workflow.SetExecutorProvider(execProvider)
 	}
 
 	return nil
 }
 
 // validateImmutableFields 校验不可变字段是否被修改
-func validateImmutableFields(old, new *core.PipelineConfig) error {
+func validateImmutableFields(old, new *core.WorkflowConfig) error {
 	if old.Version != new.Version {
 		return fmt.Errorf("%w: Version cannot be updated", core.ErrImmutableField)
 	}
@@ -594,7 +594,7 @@ func normalizeExecutors(m map[string]core.ExecutorConfig) map[string]core.Execut
 }
 
 // computeNodeModifications 比对新旧节点配置，计算差异
-func (r *RuntimeImpl) computeNodeModifications(oldConfig, newConfig *core.PipelineConfig, graph dag.Graph) (dag.GraphModifications, error) {
+func (r *RuntimeImpl) computeNodeModifications(oldConfig, newConfig *core.WorkflowConfig, graph dag.Graph) (dag.GraphModifications, error) {
 	var mods dag.GraphModifications
 
 	oldNodes := oldConfig.Nodes

@@ -29,7 +29,7 @@ func TestLevel_Constants(t *testing.T) {
 func TestEntry_Fields(t *testing.T) {
 	ts := time.Now()
 	entry := Entry{
-		Pipeline:  "test-pipeline",
+		Workflow:  "test-workflow",
 		BuildID:   "build-123",
 		Node:      "node-1",
 		Step:      "step-1",
@@ -39,8 +39,8 @@ func TestEntry_Fields(t *testing.T) {
 		Output:    "test output",
 	}
 
-	if entry.Pipeline != "test-pipeline" {
-		t.Errorf("Pipeline = %q, want %q", entry.Pipeline, "test-pipeline")
+	if entry.Workflow != "test-workflow" {
+		t.Errorf("Workflow = %q, want %q", entry.Workflow, "test-workflow")
 	}
 	if entry.BuildID != "build-123" {
 		t.Errorf("BuildID = %q, want %q", entry.BuildID, "build-123")

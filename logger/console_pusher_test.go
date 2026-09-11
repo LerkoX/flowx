@@ -22,7 +22,7 @@ func TestNewConsolePusher(t *testing.T) {
 func TestConsolePusher_Push_WithMessage(t *testing.T) {
 	p := NewConsolePusher()
 	err := p.Push(context.Background(), Entry{
-		Pipeline:  "test",
+		Workflow:  "test",
 		Timestamp: time.Now(),
 		Level:     LevelInfo,
 		Message:   "hello world",
@@ -35,7 +35,7 @@ func TestConsolePusher_Push_WithMessage(t *testing.T) {
 func TestConsolePusher_Push_WithOutput(t *testing.T) {
 	p := NewConsolePusher()
 	err := p.Push(context.Background(), Entry{
-		Pipeline:  "test",
+		Workflow:  "test",
 		Node:      "node1",
 		Timestamp: time.Now(),
 		Level:     LevelDebug,

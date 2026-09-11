@@ -1,5 +1,5 @@
 Version: "1.0"
-Name: ci-cd-deployment-pipeline
+Name: ci-cd-deployment-workflow
 
 Metadate:
   type: in-config

@@ -5,8 +5,8 @@ import "github.com/LerkoX/flowx/core"
 type Node interface {
 	//ID 获取节点唯一id
 	Id() string
-	//PipelineId 获取节点所属的流水线id
-	PipelineId() string
+	//WorkflowId 获取节点所属的流水线id
+	WorkflowId() string
 	//Status 获取节点状态
 	Status() string
 	//Get 获取节点属性数据

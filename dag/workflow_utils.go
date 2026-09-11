@@ -10,7 +10,7 @@ import (
 )
 
 // extractOutput 从节点输出中提取数据并保存到metadata
-func (p *PipelineImpl) extractOutput(ctx context.Context, node Node, stepResult *executor.StepResult, fullOutput string) error {
+func (p *WorkflowImpl) extractOutput(ctx context.Context, node Node, stepResult *executor.StepResult, fullOutput string) error {
 	// 获取节点配置
 	nodeConfig := node.GetConfig()
 	if nodeConfig == nil {
@@ -88,7 +88,7 @@ func convertToString(v interface{}) string {
 }
 
 // createExtractor 根据配置创建提取器
-func (p *PipelineImpl) createExtractor(extractConfig interface{}) (OutputExtractor, error) {
+func (p *WorkflowImpl) createExtractor(extractConfig interface{}) (OutputExtractor, error) {
 	if extractConfig == nil {
 		return nil, nil
 	}

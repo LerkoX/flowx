@@ -281,7 +281,7 @@ flowchart TD
     A --> C[Command<br/>待执行命令<br/>可能是模板]
 
     subgraph command_send["命令发送"]
-    D[Pipeline] --> E[renderString<br/>渲染命令模板]
+    D[Workflow] --> E[renderString<br/>渲染命令模板]
     E --> F[CommandWrapper<br/>stepName + command]
     F --> G[commandChan <- wrapper]
     G --> H[Executor接收]
@@ -289,7 +289,7 @@ flowchart TD
 
     subgraph result_mapping["结果映射"]
     I[Executor] --> J[StepResult<br/>包含StepName]
-    J --> K[Pipeline根据StepName<br/>匹配到对应步骤]
+    J --> K[Workflow根据StepName<br/>匹配到对应步骤]
     K --> L[更新步骤状态]
     end
 ```

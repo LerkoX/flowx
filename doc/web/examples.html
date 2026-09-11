@@ -249,7 +249,7 @@
             <div class="sidebar-title">更多文档</div>
             <a href="quickstart.html">快速开始</a>
             <a href="configuration.html">配置参考</a>
-            <a href="pipeline.html">流水线核心</a>
+            <a href="workflow.html">流水线核心</a>
             <a href="executors.html">执行器系统</a>
             <a href="node.html">节点与步骤</a>
             <a href="edge.html">条件边与循环</a>
@@ -334,7 +334,7 @@
         <p><strong>特性</strong>：并行执行（CompressLogs 和 GenerateManifest 并行运行）、数据传递（codec-block）、参数化配置、元数据存储。</p>
 
         <pre><code class="language-yaml">Version: "1.0"
-Name: file-processing-pipeline
+Name: file-processing-workflow
 
 Metadate:
   type: in-config
@@ -479,7 +479,7 @@ Nodes:
     Notify --> [*]</pre>
 
         <pre><code class="language-yaml">Version: "1.0"
-Name: data-collection-pipeline
+Name: data-collection-workflow
 
 Metadate:
   type: in-config
@@ -678,7 +678,7 @@ Nodes:
     RejectProduction --> [*]</pre>
 
         <pre><code class="language-yaml">Version: "1.0"
-Name: ci-cd-deployment-pipeline
+Name: ci-cd-deployment-workflow
 
 Metadate:
   type: in-config
@@ -1096,7 +1096,7 @@ Status:
     SendFeishu --> [*]</pre>
 
         <pre><code class="language-yaml">Version: "1.0"
-Name: shenzhen-weather-notify-pipeline
+Name: shenzhen-weather-notify-workflow
 
 Metadate:
   type: in-config
@@ -1232,21 +1232,21 @@ func main() {
     runtime := flowx.NewRuntime(ctx)
 
     // 运行流水线
-    pipelineID := "my-pipeline"
-    pipeline, err := runtime.RunSync(ctx, pipelineID, string(configData), nil)
+    workflowID := "my-workflow"
+    workflow, err := runtime.RunSync(ctx, workflowID, string(configData), nil)
     if err != nil {
         fmt.Printf("流水线执行失败: %v\n", err)
         os.Exit(1)
     }
 
-    fmt.Printf("流水线 %s 执行完成！状态: %s\n", pipeline.Id(), pipeline.Status())
+    fmt.Printf("流水线 %s 执行完成！状态: %s\n", workflow.Id(), workflow.Status())
 }</code></pre>
 
         <h3>方法二：直接运行 YAML</h3>
         <pre><code class="language-go">// 将 YAML 内容作为字符串传入
 configYAML := `
 Version: "1.0"
-Name: hello-pipeline
+Name: hello-workflow
 Executors:
   local:
     type: local

@@ -2,9 +2,9 @@
 
 ## [Unreleased]
 
-- 新增 `LoadPipeline`：加载流水线配置（含 `ExportConfig` 快照中的节点运行时状态）但不运行，按节点状态推导流水线状态（FAILED > STOPPED > SUCCESS），随后可 `UpdateConfig` 改图、`Rerun` 增量续跑——支持进程重启后从快照恢复已完成的流水线
+- 新增 `LoadWorkflow`：加载流水线配置（含 `ExportConfig` 快照中的节点运行时状态）但不运行，按节点状态推导流水线状态（FAILED > STOPPED > SUCCESS），随后可 `UpdateConfig` 改图、`Rerun` 增量续跑——支持进程重启后从快照恢复已完成的流水线
 - 新增 `Rerun`：重新运行处于可修改状态的流水线，已终结状态（SUCCESS/FAILED/CANCELLED）的节点自动跳过，仅执行新增/未运行节点
-- 修复 `Rm` 未释放 `pipelineIds`，同进程无法同名重建实例的问题
+- 修复 `Rm` 未释放 `workflowIds`，同进程无法同名重建实例的问题
 - 修复 `buildGraph` 复用 `config.Nodes` 的 Steps 切片回填运行时 ID 污染存储配置，导致 `UpdateConfig` 误判未修改节点的问题（深拷贝 Steps；`nodeConfigEqual` 忽略步骤 ID）
 - 修复 `validateImmutableFields` 将 nil 与空 map/切片误判为不等（Param、Logging.Headers、AI.Constraints、Metadate.Data、Executors.Config）
 - Docker executor 支持远程 daemon：`host`（tcp://… 或 ssh://user@host，未设置时回退 DOCKER_HOST）、`tlsVerify`、`certPath` 配置
@@ -49,7 +49,7 @@
 
 ## [Unreleased] - 2026-03-22
 
-- 新增 Pipeline 运行时状态持久化功能
+- 新增 Workflow 运行时状态持久化功能
 - 新增控制台日志推送
 - 增强 Metadata 线程安全性和渲染功能
 - 新增执行器信息追踪（Docker、Kubernetes、Local）
@@ -70,7 +70,7 @@
 ## [2026-03-14] - 2026-03-14
 
 - 新增输出提取功能（CodecBlockExtractor、RegexExtractor）
-- 完善 Pipeline 执行逻辑
+- 完善 Workflow 执行逻辑
 - 新增 README_ZH.md 中文文档
 - 添加描述配置和 GitNexus 支持
 
@@ -90,7 +90,7 @@
 - 新增模板引擎支持
 - 新增条件边执行功能
 - 新增元数据管理系统
-- Pipeline Runtime 重构，支持进程安全的并发执行
+- Workflow Runtime 重构，支持进程安全的并发执行
 - 配置文件系统增强
 - 新增 Graph 文本绘图支持
 - 修复死锁和多起始节点问题

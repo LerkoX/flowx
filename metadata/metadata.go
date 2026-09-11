@@ -20,6 +20,6 @@ type MetadataStore interface {
 
 // MetadataStoreFactory 元数据存储工厂接口，用于创建MetadataStore实例
 type MetadataStoreFactory interface {
-	// Create 根据配置创建MetadataStore实例，pipelineId用于隔离不同流水线的数据
-	Create(config core.MetadataConfig, pipelineId string) (MetadataStore, error)
+	// Create 根据配置创建MetadataStore实例，workflowId用于隔离不同流水线的数据
+	Create(config core.MetadataConfig, workflowId string) (MetadataStore, error)
 }

@@ -6,25 +6,25 @@
   <img src="icon.ico" alt="FlowX Icon" width="120">
 </p>
 
-A flexible and extensible pipeline execution library for Go, supporting multiple execution backends and DAG-based workflow orchestration.
+A flexible and extensible workflow execution library for Go, supporting multiple execution backends and DAG-based workflow orchestration.
 
 [![Go Version](https://img.shields.io/badge/go-%3E%3D1.23-blue)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ## Features
 
-- **DAG-Based Workflow**: Define complex pipelines using Directed Acyclic Graph (DAG) structure with Mermaid syntax
+- **DAG-Based Workflow**: Define complex workflows using Directed Acyclic Graph (DAG) structure with Mermaid syntax
 - **Cyclic Graph Support**: Conditional back-edges for controlled loops with `iteration` counter
 - **Multi-Backend Execution**: Support for Local, Docker, and Kubernetes executors
 - **Concurrent Execution**: Independent tasks run in parallel for optimal performance
 - **Conditional Edges**: Dynamic execution paths with template-based condition expressions
-- **Event-Driven Architecture**: Monitor pipeline lifecycle through event listeners
+- **Event-Driven Architecture**: Monitor workflow lifecycle through event listeners
 - **Template Engine**: Dynamic configuration rendering with Pongo2 templates
 - **Metadata Management**: Process-safe metadata storage and retrieval
 - **Log Streaming**: Real-time log output with customizable log pushing
 - **Output Extraction**: Extract structured data from command output using codec-block or regex patterns
-- **Runtime Recovery**: Resume pipeline execution from saved state
-- **Pause & Resume**: Pause running pipelines and modify graph structure during pause
+- **Runtime Recovery**: Resume workflow execution from saved state
+- **Pause & Resume**: Pause running workflows and modify graph structure during pause
 - **Dynamic Graph Modification**: Add/remove nodes and edges at runtime
 - **Data Passing**: Share data between nodes using metadata
 
@@ -52,10 +52,10 @@ func main() {
     // Create runtime
     runtime := flowx.NewRuntime(ctx)
 
-    // Pipeline configuration
+    // Workflow configuration
     config := `
 Version: "1.0"
-Name: example-pipeline
+Name: example-workflow
 
 Executors:
   local:
@@ -82,20 +82,20 @@ Nodes:
         run: echo "Testing..."
 `
 
-    // Execute pipeline synchronously
-    pipeline, err := runtime.RunSync(ctx, "pipeline-1", config, nil)
+    // Execute workflow synchronously
+    workflow, err := runtime.RunSync(ctx, "workflow-1", config, nil)
     if err != nil {
-        fmt.Printf("Pipeline failed: %v\n", err)
+        fmt.Printf("Workflow failed: %v\n", err)
         return
     }
 
-    fmt.Println("Pipeline completed successfully!")
+    fmt.Println("Workflow completed successfully!")
 }
 ```
 
 ## Output Extraction
 
-FlowX supports extracting structured data from command output and saving it to pipeline metadata for use in subsequent nodes. Extracted data includes field descriptions (from comments) and source node tracking.
+FlowX supports extracting structured data from command output and saving it to workflow metadata for use in subsequent nodes. Extracted data includes field descriptions (from comments) and source node tracking.
 
 ### Codec-Block Extraction
 
@@ -147,14 +147,14 @@ FlowX uses YAML configuration with the following structure:
 
 ```yaml
 Version: "1.0"              # Configuration version
-Name: my-pipeline           # Pipeline name
+Name: my-workflow           # Workflow name
 
 Metadate:                   # Metadata configuration
   type: in-config           # Store type: in-config, redis, http
   data:
     key: value
 
-Param:                      # Pipeline parameters
+Param:                      # Workflow parameters
   buildId: "123"
   branch: "main"
 
@@ -242,7 +242,7 @@ Executors:
     type: k8s
     config:
       namespace: default
-      serviceAccount: pipeline-sa
+      serviceAccount: workflow-sa
       podReadyTimeout: "60s"  # Pod ready timeout
 ```
 
@@ -295,7 +295,7 @@ The `iteration` variable starts at 0 and increments each loop. In this example, 
 
 ## Dynamic Graph Modification
 
-FlowX supports modifying the pipeline graph at runtime. You can add/remove nodes and edges while the pipeline is paused.
+FlowX supports modifying the workflow graph at runtime. You can add/remove nodes and edges while the workflow is paused.
 
 ### Using ModifyGraph (Fine-grained Control)
 
@@ -305,7 +305,7 @@ import (
     "github.com/LerkoX/flowx/dag"
 )
 
-err := runtime.ModifyGraph(ctx, "pipeline-id", dag.GraphModifications{
+err := runtime.ModifyGraph(ctx, "workflow-id", dag.GraphModifications{
     AddNodes: []core.NodeConfig{
         {
             Name: "NewNode",
@@ -325,12 +325,12 @@ err := runtime.ModifyGraph(ctx, "pipeline-id", dag.GraphModifications{
 
 ### Using UpdateConfig (Config-based Diff)
 
-Update the pipeline by providing a new YAML configuration. FlowX automatically computes the difference and applies the changes:
+Update the workflow by providing a new YAML configuration. FlowX automatically computes the difference and applies the changes:
 
 ```go
 newConfig := `
 Version: "1.0"
-Name: my-pipeline
+Name: my-workflow
 
 Graph: |
   stateDiagram-v2
@@ -351,7 +351,7 @@ Nodes:
         run: echo "Deploying..."
 `
 
-err := runtime.UpdateConfig(ctx, "pipeline-id", newConfig)
+err := runtime.UpdateConfig(ctx, "workflow-id", newConfig)
 ```
 
 Rules:
@@ -390,7 +390,7 @@ Nodes:
 
 ## Runtime Recovery
 
-Resume pipeline execution from saved state:
+Resume workflow execution from saved state:
 
 ```yaml
 Nodes:
@@ -419,7 +419,7 @@ Nodes:
 
 ## Event Monitoring
 
-Monitor pipeline execution through event listeners. Implement the `dag.Listener` interface and use event constants from the `core` package:
+Monitor workflow execution through event listeners. Implement the `dag.Listener` interface and use event constants from the `core` package:
 
 ```go
 import (
@@ -431,73 +431,73 @@ type MyListener struct{}
 
 func (l *MyListener) Events() []dag.Event {
     return []dag.Event{
-        core.EventPipelineInit,
-        core.EventPipelineStart,
-        core.EventPipelineFinish,
-        core.EventPipelineExecutorPrepare,
-        core.EventPipelineExecutorPrepareDone,
-        core.EventPipelineNodeStart,
-        core.EventPipelineNodeFinish,
-        core.EventPipelineNodeFailed,
-        core.EventPipelineCancelled,
-        core.EventPipelineStatusUpdate,
-        core.EventPipelinePaused,
-        core.EventPipelineResumed,
-        core.EventPipelineGraphModified,
+        core.EventWorkflowInit,
+        core.EventWorkflowStart,
+        core.EventWorkflowFinish,
+        core.EventWorkflowExecutorPrepare,
+        core.EventWorkflowExecutorPrepareDone,
+        core.EventWorkflowNodeStart,
+        core.EventWorkflowNodeFinish,
+        core.EventWorkflowNodeFailed,
+        core.EventWorkflowCancelled,
+        core.EventWorkflowStatusUpdate,
+        core.EventWorkflowPaused,
+        core.EventWorkflowResumed,
+        core.EventWorkflowGraphModified,
     }
 }
 
-func (l *MyListener) Handle(p dag.Pipeline, event dag.Event) {
+func (l *MyListener) Handle(p dag.Workflow, event dag.Event) {
     switch event {
-    case core.EventPipelineInit:
-        fmt.Println("Pipeline initialized")
-    case core.EventPipelineStart:
-        fmt.Println("Pipeline started")
-    case core.EventPipelineFinish:
-        fmt.Println("Pipeline finished")
-    case core.EventPipelineExecutorPrepare:
+    case core.EventWorkflowInit:
+        fmt.Println("Workflow initialized")
+    case core.EventWorkflowStart:
+        fmt.Println("Workflow started")
+    case core.EventWorkflowFinish:
+        fmt.Println("Workflow finished")
+    case core.EventWorkflowExecutorPrepare:
         fmt.Println("Executor preparing")
-    case core.EventPipelineExecutorPrepareDone:
+    case core.EventWorkflowExecutorPrepareDone:
         fmt.Println("Executor prepared")
-    case core.EventPipelineNodeStart:
+    case core.EventWorkflowNodeStart:
         fmt.Println("Node started")
-    case core.EventPipelineNodeFinish:
+    case core.EventWorkflowNodeFinish:
         fmt.Println("Node completed")
-    case core.EventPipelineNodeFailed:
+    case core.EventWorkflowNodeFailed:
         fmt.Println("Node failed")
-    case core.EventPipelineCancelled:
-        fmt.Println("Pipeline cancelled")
-    case core.EventPipelineStatusUpdate:
-        fmt.Println("Pipeline status updated")
-    case core.EventPipelinePaused:
-        fmt.Println("Pipeline paused")
-    case core.EventPipelineResumed:
-        fmt.Println("Pipeline resumed")
-    case core.EventPipelineGraphModified:
-        fmt.Println("Pipeline graph modified")
+    case core.EventWorkflowCancelled:
+        fmt.Println("Workflow cancelled")
+    case core.EventWorkflowStatusUpdate:
+        fmt.Println("Workflow status updated")
+    case core.EventWorkflowPaused:
+        fmt.Println("Workflow paused")
+    case core.EventWorkflowResumed:
+        fmt.Println("Workflow resumed")
+    case core.EventWorkflowGraphModified:
+        fmt.Println("Workflow graph modified")
     }
 }
 
-pipeline, err := runtime.RunSync(ctx, "id", config, &MyListener{})
+workflow, err := runtime.RunSync(ctx, "id", config, &MyListener{})
 ```
 
 **Available Events:**
 
 | Event | Description |
 |-------|-------------|
-| `PipelineInit` | Pipeline initialized |
-| `PipelineStart` | Pipeline started |
-| `PipelineFinish` | Pipeline finished (success or failure) |
-| `PipelineExecutorPrepare` | Node executor is being prepared |
-| `PipelineExecutorPrepareDone` | Node executor preparation completed |
-| `PipelineNodeStart` | Node execution started |
-| `PipelineNodeFinish` | Node execution finished |
-| `PipelineNodeFailed` | Node execution failed |
-| `PipelineCancelled` | Pipeline cancelled |
-| `PipelineStatusUpdate` | Pipeline status changed |
-| `PipelinePaused` | Pipeline paused |
-| `PipelineResumed` | Pipeline resumed |
-| `PipelineGraphModified` | Pipeline graph was modified |
+| `WorkflowInit` | Workflow initialized |
+| `WorkflowStart` | Workflow started |
+| `WorkflowFinish` | Workflow finished (success or failure) |
+| `WorkflowExecutorPrepare` | Node executor is being prepared |
+| `WorkflowExecutorPrepareDone` | Node executor preparation completed |
+| `WorkflowNodeStart` | Node execution started |
+| `WorkflowNodeFinish` | Node execution finished |
+| `WorkflowNodeFailed` | Node execution failed |
+| `WorkflowCancelled` | Workflow cancelled |
+| `WorkflowStatusUpdate` | Workflow status changed |
+| `WorkflowPaused` | Workflow paused |
+| `WorkflowResumed` | Workflow resumed |
+| `WorkflowGraphModified` | Workflow graph was modified |
 
 ## Architecture
 
@@ -508,9 +508,9 @@ graph TB
         RTI[Runtime Impl]
     end
 
-    subgraph "Pipeline Core"
-        PL[Pipeline]
-        PLI[Pipeline Impl]
+    subgraph "Workflow Core"
+        PL[Workflow]
+        PLI[Workflow Impl]
         NODE[Node]
         EDGE[Edge]
         EVAL[Eval Context]
@@ -575,22 +575,22 @@ See [examples/workflows/README.md](./examples/workflows/README.md) for detailed 
 
 - **File Processing**: Automated log archiving and cleanup
 - **Data ETL**: Parallel data collection and transformation
-- **CI/CD Deployment**: Complete deployment pipeline with quality gates
+- **CI/CD Deployment**: Complete deployment workflow with quality gates
 - **Weather Notification**: Weather API integration with messaging
 
 ## API Reference
 
-Types `Pipeline`, `Listener`, `Event`, `GraphModifications`, `EdgeModification`, and `EdgeRemoval` are defined in the `dag` package (`github.com/LerkoX/flowx/dag`). `NodeConfig` and `Step` are defined in the `core` package (`github.com/LerkoX/flowx/core`). Event constants (e.g., `core.EventPipelineStart`) are also in the `core` package.
+Types `Workflow`, `Listener`, `Event`, `GraphModifications`, `EdgeModification`, and `EdgeRemoval` are defined in the `dag` package (`github.com/LerkoX/flowx/dag`). `NodeConfig` and `Step` are defined in the `core` package (`github.com/LerkoX/flowx/core`). Event constants (e.g., `core.EventWorkflowStart`) are also in the `core` package.
 
 ### Runtime
 
 ```go
 type Runtime interface {
-    Get(id string) (dag.Pipeline, error)                          // Get pipeline by ID
-    Cancel(ctx context.Context, id string) error                  // Cancel running pipeline
-    RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)  // Async execution
-    RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)   // Sync execution
-    Rm(id string)                                                 // Remove pipeline record
+    Get(id string) (dag.Workflow, error)                          // Get workflow by ID
+    Cancel(ctx context.Context, id string) error                  // Cancel running workflow
+    RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error)  // Async execution
+    RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error)   // Sync execution
+    Rm(id string)                                                 // Remove workflow record
     Done() chan struct{}                                          // Runtime completion signal
     Notify(data interface{}) error                                // Notify runtime
     Ctx() context.Context                                         // Get runtime context
@@ -599,36 +599,36 @@ type Runtime interface {
     SetPusher(pusher logger.Pusher)                               // Set log pusher
     SetTemplateEngine(engine template.TemplateEngine)             // Set template engine
     GetTemplateEngine() template.TemplateEngine                   // Get template engine
-    ExportConfig(id string) (string, error)                       // Export pipeline config
-    Pause(ctx context.Context, id string) error                   // Pause running pipeline
-    Resume(ctx context.Context, id string) error                  // Resume paused/stopped pipeline
+    ExportConfig(id string) (string, error)                       // Export workflow config
+    Pause(ctx context.Context, id string) error                   // Pause running workflow
+    Resume(ctx context.Context, id string) error                  // Resume paused/stopped workflow
     ModifyGraph(ctx context.Context, id string, modifications dag.GraphModifications) error // Modify graph atomically
-    UpdateConfig(ctx context.Context, id string, newConfigYAML string) error // Update pipeline via YAML diff
-    ListPipelines() []string                                      // List active pipeline IDs
+    UpdateConfig(ctx context.Context, id string, newConfigYAML string) error // Update workflow via YAML diff
+    ListWorkflows() []string                                      // List active workflow IDs
 }
 ```
 
-### Pipeline
+### Workflow
 
 ```go
-type Pipeline interface {
-    Id() string                                               // Get pipeline ID
+type Workflow interface {
+    Id() string                                               // Get workflow ID
     GetGraph() dag.Graph                                      // Get DAG graph
     SetGraph(graph dag.Graph)                                 // Set DAG graph
-    Status() string                                           // Get pipeline status
+    Status() string                                           // Get workflow status
     SetMetadata(store metadata.MetadataStore)                 // Set metadata store
-    Metadata() dag.Metadata                                   // Get pipeline metadata
+    Metadata() dag.Metadata                                   // Get workflow metadata
     Listening(listener dag.Listener)                          // Set event listener
-    Done() <-chan struct{}                                    // Pipeline completion signal
-    Run(ctx context.Context) error                            // Run pipeline
-    Notify()                                                  // Step notifies pipeline
-    Cancel()                                                  // Cancel pipeline
+    Done() <-chan struct{}                                    // Workflow completion signal
+    Run(ctx context.Context) error                            // Run workflow
+    Notify()                                                  // Step notifies workflow
+    Cancel()                                                  // Cancel workflow
     SetExecutorProvider(provider dag.ExecutorProvider)        // Set executor provider
     SetTemplateEngine(engine template.TemplateEngine)          // Set template engine
     GetTemplateEngine() template.TemplateEngine               // Get template engine
     SetPusher(pusher logger.Pusher)                           // Set log pusher
-    Pause() error                                             // Pause pipeline (waits for current level)
-    Resume(ctx context.Context) error                         // Resume paused pipeline
+    Pause() error                                             // Pause workflow (waits for current level)
+    Resume(ctx context.Context) error                         // Resume paused workflow
     IsModifiable() bool                                       // Check if graph can be modified
     CurrentNode() dag.Node                                    // Return currently executing node (if any)
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# PipelineX 工作工作流运行器构建脚本
+# WorkflowX 工作工作流运行器构建脚本
 
 set -e
 
@@ -9,7 +9,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}=== PipelineX 工作流运行器构建脚本 ===${NC}"
+echo -e "${YELLOW}=== WorkflowX 工作流运行器构建脚本 ===${NC}"
 echo ""
 
 # 获取脚本所在目录

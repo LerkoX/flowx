@@ -178,8 +178,8 @@ func TestDAGGraph_RemoveEdge(t *testing.T) {
 
 // TestDAGGraph_SetMetadata 测试设置元数据
 func TestDAGGraph_SetMetadata(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	impl.SetMetadata(nil)
 
@@ -245,11 +245,11 @@ func TestDGANode_GetStepRuntimeStatus(t *testing.T) {
 	}
 }
 
-// TestDGANode_PipelineId 测试获取节点所属流水线ID
-func TestDGANode_PipelineId(t *testing.T) {
+// TestDGANode_WorkflowId 测试获取节点所属流水线ID
+func TestDGANode_WorkflowId(t *testing.T) {
 	node := NewDGANode("test-node", "RUNNING")
 
-	pid := node.PipelineId()
+	pid := node.WorkflowId()
 	if pid != "" {
 		t.Errorf("Expected empty string, got '%s'", pid)
 	}

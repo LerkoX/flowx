@@ -20,7 +20,7 @@ func TestNewHTTPMetadataStore_MissingURL(t *testing.T) {
 	}
 }
 
-func TestNewHTTPMetadataStore_WithPipelineId(t *testing.T) {
+func TestNewHTTPMetadataStore_WithWorkflowId(t *testing.T) {
 	config := core.MetadataConfig{
 		Type: "http",
 		Data: map[string]interface{}{
@@ -35,8 +35,8 @@ func TestNewHTTPMetadataStore_WithPipelineId(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if store.pipelineId != "pipe-123" {
-		t.Errorf("Expected pipelineId='pipe-123', got '%s'", store.pipelineId)
+	if store.workflowId != "pipe-123" {
+		t.Errorf("Expected workflowId='pipe-123', got '%s'", store.workflowId)
 	}
 	if store.method != "POST" {
 		t.Errorf("Expected method='POST', got '%s'", store.method)
@@ -64,9 +64,9 @@ func TestNewHTTPMetadataStore_DefaultMethod(t *testing.T) {
 
 func TestHTTPMetadataStore_Get_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 验证 X-Pipeline-ID Header
-		if r.Header.Get("X-Pipeline-ID") != "pipe-123" {
-			t.Errorf("Expected X-Pipeline-ID='pipe-123', got '%s'", r.Header.Get("X-Pipeline-ID"))
+		// 验证 X-Workflow-ID Header
+		if r.Header.Get("X-Workflow-ID") != "pipe-123" {
+			t.Errorf("Expected X-Workflow-ID='pipe-123', got '%s'", r.Header.Get("X-Workflow-ID"))
 		}
 		key := r.URL.Query().Get("key")
 		if key != "testKey" {
@@ -113,8 +113,8 @@ func TestHTTPMetadataStore_Set_Success(t *testing.T) {
 		if r.Method != "POST" {
 			t.Errorf("Expected POST, got %s", r.Method)
 		}
-		if r.Header.Get("X-Pipeline-ID") != "pipe-456" {
-			t.Errorf("Expected X-Pipeline-ID='pipe-456', got '%s'", r.Header.Get("X-Pipeline-ID"))
+		if r.Header.Get("X-Workflow-ID") != "pipe-456" {
+			t.Errorf("Expected X-Workflow-ID='pipe-456', got '%s'", r.Header.Get("X-Workflow-ID"))
 		}
 
 		var payload map[string]string
@@ -160,8 +160,8 @@ func TestHTTPMetadataStore_Delete_Success(t *testing.T) {
 		if r.Method != "DELETE" {
 			t.Errorf("Expected DELETE, got %s", r.Method)
 		}
-		if r.Header.Get("X-Pipeline-ID") != "pipe-789" {
-			t.Errorf("Expected X-Pipeline-ID='pipe-789', got '%s'", r.Header.Get("X-Pipeline-ID"))
+		if r.Header.Get("X-Workflow-ID") != "pipe-789" {
+			t.Errorf("Expected X-Workflow-ID='pipe-789', got '%s'", r.Header.Get("X-Workflow-ID"))
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -190,8 +190,8 @@ func TestHTTPMetadataStore_Close(t *testing.T) {
 
 // ========== RedisMetadataStore buildRedisKey 测试 ==========
 
-func TestBuildRedisKey_WithPipelineId(t *testing.T) {
-	store := &RedisMetadataStore{pipelineId: "pipe-abc"}
+func TestBuildRedisKey_WithWorkflowId(t *testing.T) {
+	store := &RedisMetadataStore{workflowId: "pipe-abc"}
 	result := store.buildRedisKey("mykey")
 	expected := "flowx/pipe-abc/mykey"
 	if result != expected {
@@ -199,8 +199,8 @@ func TestBuildRedisKey_WithPipelineId(t *testing.T) {
 	}
 }
 
-func TestBuildRedisKey_WithoutPipelineId(t *testing.T) {
-	store := &RedisMetadataStore{pipelineId: ""}
+func TestBuildRedisKey_WithoutWorkflowId(t *testing.T) {
+	store := &RedisMetadataStore{workflowId: ""}
 	result := store.buildRedisKey("mykey")
 	if result != "mykey" {
 		t.Errorf("Expected 'mykey', got '%s'", result)
@@ -222,7 +222,7 @@ func TestDefaultMetadataStoreFactory_Create_InConfig(t *testing.T) {
 	if store == nil {
 		t.Fatal("Expected non-nil store")
 	}
-	// InConfig 不依赖 pipelineId
+	// InConfig 不依赖 workflowId
 	store.Close()
 }
 
@@ -263,8 +263,8 @@ func TestNewRedisMetadataStore_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if store.pipelineId != "pipe-1" {
-		t.Errorf("Expected pipelineId='pipe-1', got '%s'", store.pipelineId)
+	if store.workflowId != "pipe-1" {
+		t.Errorf("Expected workflowId='pipe-1', got '%s'", store.workflowId)
 	}
 	store.Close()
 }
@@ -338,8 +338,8 @@ func TestNewRedisMetadataStore_WithAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if store.pipelineId != "pipe-auth" {
-		t.Errorf("Expected pipelineId='pipe-auth', got '%s'", store.pipelineId)
+	if store.workflowId != "pipe-auth" {
+		t.Errorf("Expected workflowId='pipe-auth', got '%s'", store.workflowId)
 	}
 	store.Close()
 }

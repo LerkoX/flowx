@@ -25,7 +25,7 @@ Nodes:
     executor: local
     steps:
       - name: start
-        run: "echo 'Starting pipeline with env={{ Param.env }}'"
+        run: "echo 'Starting workflow with env={{ Param.env }}'"
   Dev:
     executor: local
     steps:

@@ -8,9 +8,9 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func TestPipelineSnapshotter_ToYAML_BasicConfig(t *testing.T) {
-	s := NewPipelineSnapshotter()
-	config := &core.PipelineConfig{
+func TestWorkflowSnapshotter_ToYAML_BasicConfig(t *testing.T) {
+	s := NewWorkflowSnapshotter()
+	config := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "test",
 		Nodes: map[string]core.NodeConfig{
@@ -36,9 +36,9 @@ func TestPipelineSnapshotter_ToYAML_BasicConfig(t *testing.T) {
 	}
 }
 
-func TestPipelineSnapshotter_ToYAML_EmptyConfig(t *testing.T) {
-	s := NewPipelineSnapshotter()
-	config := &core.PipelineConfig{}
+func TestWorkflowSnapshotter_ToYAML_EmptyConfig(t *testing.T) {
+	s := NewWorkflowSnapshotter()
+	config := &core.WorkflowConfig{}
 
 	yamlStr, err := s.ToYAML(config)
 	if err != nil {
@@ -49,9 +49,9 @@ func TestPipelineSnapshotter_ToYAML_EmptyConfig(t *testing.T) {
 	}
 }
 
-func TestPipelineSnapshotter_FromYAML_BasicConfig(t *testing.T) {
+func TestWorkflowSnapshotter_FromYAML_BasicConfig(t *testing.T) {
 	yamlStr := `Version: "1.0"
-Name: test-pipeline
+Name: test-workflow
 Nodes:
   Node1:
     name: Node1
@@ -61,22 +61,22 @@ Nodes:
         run: "echo hello"
 `
 
-	config := &core.PipelineConfig{}
+	config := &core.WorkflowConfig{}
 	err := yaml.Unmarshal([]byte(yamlStr), config)
 	if err != nil {
 		t.Fatalf("yaml.Unmarshal() error = %v", err)
 	}
-	if config.Name != "test-pipeline" {
-		t.Errorf("Name = %q, want %q", config.Name, "test-pipeline")
+	if config.Name != "test-workflow" {
+		t.Errorf("Name = %q, want %q", config.Name, "test-workflow")
 	}
 	if _, ok := config.Nodes["Node1"]; !ok {
 		t.Error("Expected Node1 in config.Nodes")
 	}
 }
 
-func TestPipelineSnapshotter_FromYAML_RoundTrip(t *testing.T) {
-	s := NewPipelineSnapshotter()
-	original := &core.PipelineConfig{
+func TestWorkflowSnapshotter_FromYAML_RoundTrip(t *testing.T) {
+	s := NewWorkflowSnapshotter()
+	original := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "roundtrip",
 		Param:   map[string]interface{}{"key": "value"},
@@ -90,7 +90,7 @@ func TestPipelineSnapshotter_FromYAML_RoundTrip(t *testing.T) {
 		t.Fatalf("ToYAML() error = %v", err)
 	}
 
-	parsed := &core.PipelineConfig{}
+	parsed := &core.WorkflowConfig{}
 	err = yaml.Unmarshal([]byte(yamlStr), parsed)
 	if err != nil {
 		t.Fatalf("yaml.Unmarshal() error = %v", err)
@@ -100,16 +100,16 @@ func TestPipelineSnapshotter_FromYAML_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestPipelineSnapshotter_FromYAML_InvalidYAML(t *testing.T) {
+func TestWorkflowSnapshotter_FromYAML_InvalidYAML(t *testing.T) {
 	invalidYaml := ":\n  invalid: [yaml: content"
-	config := &core.PipelineConfig{}
+	config := &core.WorkflowConfig{}
 	err := yaml.Unmarshal([]byte(invalidYaml), config)
 	if err == nil {
 		t.Error("Expected error for invalid YAML")
 	}
 }
 
-func TestPipelineSnapshotter_TakeSnapshot_SimplePipeline(t *testing.T) {
+func TestWorkflowSnapshotter_TakeSnapshot_SimpleWorkflow(t *testing.T) {
 	graph := NewDGAGraph()
 	node := NewDGANode("Node1", core.StatusUnknown)
 	node.SetRuntimeStatus(&core.NodeRuntimeStatus{
@@ -121,10 +121,10 @@ func TestPipelineSnapshotter_TakeSnapshot_SimplePipeline(t *testing.T) {
 	})
 	graph.AddVertex(node)
 
-	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
-	pipeline.SetGraph(graph)
+	workflow := NewWorkflow(context.Background()).(*WorkflowImpl)
+	workflow.SetGraph(graph)
 
-	originalConfig := &core.PipelineConfig{
+	originalConfig := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "snapshot-test",
 		Nodes: map[string]core.NodeConfig{
@@ -136,8 +136,8 @@ func TestPipelineSnapshotter_TakeSnapshot_SimplePipeline(t *testing.T) {
 		},
 	}
 
-	snapshotter := NewPipelineSnapshotter()
-	snapshot, err := snapshotter.TakeSnapshot(pipeline, originalConfig)
+	snapshotter := NewWorkflowSnapshotter()
+	snapshot, err := snapshotter.TakeSnapshot(workflow, originalConfig)
 	if err != nil {
 		t.Fatalf("TakeSnapshot() error = %v", err)
 	}
@@ -154,16 +154,16 @@ func TestPipelineSnapshotter_TakeSnapshot_SimplePipeline(t *testing.T) {
 	}
 }
 
-func TestPipelineSnapshotter_TakeSnapshot_NilRuntimeStatus(t *testing.T) {
+func TestWorkflowSnapshotter_TakeSnapshot_NilRuntimeStatus(t *testing.T) {
 	graph := NewDGAGraph()
 	node := NewDGANode("Node1", core.StatusUnknown)
 	// 不设置 RuntimeStatus
 	graph.AddVertex(node)
 
-	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
-	pipeline.SetGraph(graph)
+	workflow := NewWorkflow(context.Background()).(*WorkflowImpl)
+	workflow.SetGraph(graph)
 
-	originalConfig := &core.PipelineConfig{
+	originalConfig := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "nil-runtime-test",
 		Nodes: map[string]core.NodeConfig{
@@ -171,8 +171,8 @@ func TestPipelineSnapshotter_TakeSnapshot_NilRuntimeStatus(t *testing.T) {
 		},
 	}
 
-	snapshotter := NewPipelineSnapshotter()
-	snapshot, err := snapshotter.TakeSnapshot(pipeline, originalConfig)
+	snapshotter := NewWorkflowSnapshotter()
+	snapshot, err := snapshotter.TakeSnapshot(workflow, originalConfig)
 	if err != nil {
 		t.Fatalf("TakeSnapshot() error = %v", err)
 	}
@@ -182,15 +182,15 @@ func TestPipelineSnapshotter_TakeSnapshot_NilRuntimeStatus(t *testing.T) {
 	}
 }
 
-func TestPipelineSnapshotter_TakeSnapshot_DeepCopy(t *testing.T) {
+func TestWorkflowSnapshotter_TakeSnapshot_DeepCopy(t *testing.T) {
 	graph := NewDGAGraph()
 	node := NewDGANode("Node1", core.StatusUnknown)
 	graph.AddVertex(node)
 
-	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
-	pipeline.SetGraph(graph)
+	workflow := NewWorkflow(context.Background()).(*WorkflowImpl)
+	workflow.SetGraph(graph)
 
-	originalConfig := &core.PipelineConfig{
+	originalConfig := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "deepcopy-test",
 		Nodes: map[string]core.NodeConfig{
@@ -198,8 +198,8 @@ func TestPipelineSnapshotter_TakeSnapshot_DeepCopy(t *testing.T) {
 		},
 	}
 
-	snapshotter := NewPipelineSnapshotter()
-	snapshot, err := snapshotter.TakeSnapshot(pipeline, originalConfig)
+	snapshotter := NewWorkflowSnapshotter()
+	snapshot, err := snapshotter.TakeSnapshot(workflow, originalConfig)
 	if err != nil {
 		t.Fatalf("TakeSnapshot() error = %v", err)
 	}
@@ -211,17 +211,17 @@ func TestPipelineSnapshotter_TakeSnapshot_DeepCopy(t *testing.T) {
 	}
 }
 
-func TestPipelineSnapshotter_TakeSnapshot_WithSteps(t *testing.T) {
+func TestWorkflowSnapshotter_TakeSnapshot_WithSteps(t *testing.T) {
 	graph := NewDGAGraph()
 	node := NewDGANodeWithConfig("Node1", core.StatusUnknown, "local", "", []core.Step{
 		{Name: "step1", Run: "echo hello", Id: "step-id-1"},
 	}, nil)
 	graph.AddVertex(node)
 
-	pipeline := NewPipeline(context.Background()).(*PipelineImpl)
-	pipeline.SetGraph(graph)
+	workflow := NewWorkflow(context.Background()).(*WorkflowImpl)
+	workflow.SetGraph(graph)
 
-	originalConfig := &core.PipelineConfig{
+	originalConfig := &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "steps-test",
 		Nodes: map[string]core.NodeConfig{
@@ -233,8 +233,8 @@ func TestPipelineSnapshotter_TakeSnapshot_WithSteps(t *testing.T) {
 		},
 	}
 
-	snapshotter := NewPipelineSnapshotter()
-	snapshot, err := snapshotter.TakeSnapshot(pipeline, originalConfig)
+	snapshotter := NewWorkflowSnapshotter()
+	snapshot, err := snapshotter.TakeSnapshot(workflow, originalConfig)
 	if err != nil {
 		t.Fatalf("TakeSnapshot() error = %v", err)
 	}

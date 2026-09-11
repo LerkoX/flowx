@@ -9,8 +9,8 @@ import (
 	"github.com/LerkoX/flowx/executor/provider"
 )
 
-// helperSetupModifiablePipeline 创建一个处于 PAUSED 状态的 pipeline 并注册到 runtime
-func helperSetupModifiablePipeline(t *testing.T, rt *RuntimeImpl, id string) (dag.Pipeline, dag.Graph) {
+// helperSetupModifiableWorkflow 创建一个处于 PAUSED 状态的 workflow 并注册到 runtime
+func helperSetupModifiableWorkflow(t *testing.T, rt *RuntimeImpl, id string) (dag.Workflow, dag.Graph) {
 	t.Helper()
 
 	graph := dag.NewDGAGraph()
@@ -25,16 +25,16 @@ func helperSetupModifiablePipeline(t *testing.T, rt *RuntimeImpl, id string) (da
 	graph.AddEdge(dag.NewDGAEdge(nodeA, nodeB))
 	graph.AddEdge(dag.NewDGAEdge(nodeB, nodeC))
 
-	pipeline := dag.NewPipeline(context.Background()).(*dag.PipelineImpl)
-	pipeline.SetGraph(graph)
-	pipeline.SetStatusForTest(core.StatusPaused) // 设置为可修改状态
+	workflow := dag.NewWorkflow(context.Background()).(*dag.WorkflowImpl)
+	workflow.SetGraph(graph)
+	workflow.SetStatusForTest(core.StatusPaused) // 设置为可修改状态
 
 	execProvider := provider.NewProvider()
 	execProvider.RegisterExecutor("local", provider.ExecutorConfig{Type: "local", Config: map[string]any{}})
-	pipeline.SetExecutorProvider(execProvider)
+	workflow.SetExecutorProvider(execProvider)
 
-	rt.pipelines[id] = pipeline
-	rt.pipelineConfigs[id] = &core.PipelineConfig{
+	rt.workflows[id] = workflow
+	rt.workflowConfigs[id] = &core.WorkflowConfig{
 		Version: "1.0",
 		Name:    "modify-test",
 		Executors: map[string]core.ExecutorConfig{
@@ -48,13 +48,13 @@ func helperSetupModifiablePipeline(t *testing.T, rt *RuntimeImpl, id string) (da
 		},
 	}
 
-	return pipeline, graph
+	return workflow, graph
 }
 
 func TestModifyGraph_AddNode(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	pipeline, _ := helperSetupModifiablePipeline(t, rt, "add-node")
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "add-node")
 
 	mods := dag.GraphModifications{
 		AddNodes: []core.NodeConfig{
@@ -67,7 +67,7 @@ func TestModifyGraph_AddNode(t *testing.T) {
 		t.Fatalf("ModifyGraph() error = %v", err)
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if _, ok := graph.GetNode("D"); !ok {
 		t.Error("Node D should exist after ModifyGraph")
 	}
@@ -76,7 +76,7 @@ func TestModifyGraph_AddNode(t *testing.T) {
 func TestModifyGraph_RemoveNode(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	pipeline, _ := helperSetupModifiablePipeline(t, rt, "remove-node")
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "remove-node")
 
 	mods := dag.GraphModifications{
 		RemoveNodes: []string{"C"},
@@ -87,7 +87,7 @@ func TestModifyGraph_RemoveNode(t *testing.T) {
 		t.Fatalf("ModifyGraph() error = %v", err)
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if _, ok := graph.GetNode("C"); ok {
 		t.Error("Node C should be removed")
 	}
@@ -96,7 +96,7 @@ func TestModifyGraph_RemoveNode(t *testing.T) {
 func TestModifyGraph_AddEdge(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	pipeline, _ := helperSetupModifiablePipeline(t, rt, "add-edge")
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "add-edge")
 
 	mods := dag.GraphModifications{
 		AddEdges: []dag.EdgeModification{
@@ -109,7 +109,7 @@ func TestModifyGraph_AddEdge(t *testing.T) {
 		t.Fatalf("ModifyGraph() error = %v", err)
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if _, ok := graph.GetEdge("A", "C"); !ok {
 		t.Error("Edge A->C should exist")
 	}
@@ -118,7 +118,7 @@ func TestModifyGraph_AddEdge(t *testing.T) {
 func TestModifyGraph_RemoveEdge(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	pipeline, _ := helperSetupModifiablePipeline(t, rt, "remove-edge")
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "remove-edge")
 
 	mods := dag.GraphModifications{
 		RemoveEdges: []dag.EdgeRemoval{
@@ -131,7 +131,7 @@ func TestModifyGraph_RemoveEdge(t *testing.T) {
 		t.Fatalf("ModifyGraph() error = %v", err)
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if _, ok := graph.GetEdge("B", "C"); ok {
 		t.Error("Edge B->C should be removed")
 	}
@@ -140,7 +140,7 @@ func TestModifyGraph_RemoveEdge(t *testing.T) {
 func TestModifyGraph_ConditionalBackEdge(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	pipeline, _ := helperSetupModifiablePipeline(t, rt, "cond-back-edge")
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "cond-back-edge")
 
 	mods := dag.GraphModifications{
 		AddEdges: []dag.EdgeModification{
@@ -153,7 +153,7 @@ func TestModifyGraph_ConditionalBackEdge(t *testing.T) {
 		t.Fatalf("ModifyGraph() with conditional back edge error = %v", err)
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if _, ok := graph.GetEdge("C", "A"); !ok {
 		t.Error("Conditional edge C->A should exist")
 	}
@@ -162,7 +162,7 @@ func TestModifyGraph_ConditionalBackEdge(t *testing.T) {
 func TestModifyGraph_UnconditionalCycle(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	_, _ = helperSetupModifiablePipeline(t, rt, "uncond-cycle")
+	_, _ = helperSetupModifiableWorkflow(t, rt, "uncond-cycle")
 
 	mods := dag.GraphModifications{
 		AddEdges: []dag.EdgeModification{
@@ -186,16 +186,16 @@ func TestModifyGraph_NotFound(t *testing.T) {
 
 	err := rt.ModifyGraph(ctx, "nonexistent", dag.GraphModifications{})
 	if err == nil {
-		t.Error("Expected error for non-existent pipeline")
+		t.Error("Expected error for non-existent workflow")
 	}
 }
 
 func TestModifyGraph_RollbackOnEdgeError(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	pipeline, _ := helperSetupModifiablePipeline(t, rt, "rollback-edge")
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "rollback-edge")
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 
 	// 添加到不存在目标的边应该失败
 	mods := dag.GraphModifications{
@@ -224,7 +224,7 @@ func TestModifyGraph_RollbackOnEdgeError(t *testing.T) {
 func TestModifyGraph_ComplexModification(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	pipeline, _ := helperSetupModifiablePipeline(t, rt, "complex-mod")
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "complex-mod")
 
 	mods := dag.GraphModifications{
 		RemoveEdges: []dag.EdgeRemoval{
@@ -243,7 +243,7 @@ func TestModifyGraph_ComplexModification(t *testing.T) {
 		t.Fatalf("ModifyGraph() error = %v", err)
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if _, ok := graph.GetEdge("B", "C"); ok {
 		t.Error("Edge B->C should be removed")
 	}
@@ -261,7 +261,7 @@ func TestModifyGraph_ComplexModification(t *testing.T) {
 func TestModifyGraph_ReplaceNodePreservesEdges(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	pipeline, _ := helperSetupModifiablePipeline(t, rt, "replace-node")
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "replace-node")
 
 	// B 未执行（StatusUnknown），替换其 executor；图结构不变
 	mods := dag.GraphModifications{
@@ -275,7 +275,7 @@ func TestModifyGraph_ReplaceNodePreservesEdges(t *testing.T) {
 		t.Fatalf("ModifyGraph() error = %v", err)
 	}
 
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	nodeB, ok := graph.GetNode("B")
 	if !ok {
 		t.Fatal("Node B should exist after replacement")
@@ -292,12 +292,12 @@ func TestModifyGraph_ReplaceNodePreservesEdges(t *testing.T) {
 }
 
 // UpdateConfig 新增执行器条目时，必须同时持久化到存储配置并注册进运行中
-// pipeline 的 provider——否则续跑追加的异构节点（如 docker）运行时报
+// workflow 的 provider——否则续跑追加的异构节点（如 docker）运行时报
 // executor config not found（曾导致续跑首轮失败）
 func TestUpdateConfig_AddExecutorUsable(t *testing.T) {
 	ctx := context.Background()
 	rt := NewRuntime(ctx).(*RuntimeImpl)
-	pipeline, _ := helperSetupModifiablePipeline(t, rt, "add-exec")
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "add-exec")
 
 	newYAML := `Version: "1.0"
 Name: modify-test
@@ -346,13 +346,13 @@ Nodes:
 	}
 
 	// 存储配置持久化新执行器
-	cfg := rt.pipelineConfigs["add-exec"]
+	cfg := rt.workflowConfigs["add-exec"]
 	if _, ok := cfg.Executors["local2"]; !ok {
 		t.Error("stored config should persist new executor local2")
 	}
 
 	// provider 可解析新执行器
-	prov := pipeline.(*dag.PipelineImpl).GetExecutorProvider()
+	prov := workflow.(*dag.WorkflowImpl).GetExecutorProvider()
 	if prov == nil {
 		t.Fatal("executor provider should not be nil")
 	}
@@ -365,7 +365,7 @@ Nodes:
 	}
 
 	// 新节点及其入边存在
-	graph := pipeline.GetGraph()
+	graph := workflow.GetGraph()
 	if _, ok := graph.GetNode("D"); !ok {
 		t.Error("Node D should exist")
 	}

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Go-based CI/CD pipeline execution library that supports multiple execution backends (Docker, Kubernetes, SSH, Local). The library uses a DAG (Directed Acyclic Graph) structure to manage pipeline dependencies and supports concurrent execution of independent tasks.
+This is a Go-based CI/CD workflow execution library that supports multiple execution backends (Docker, Kubernetes, SSH, Local). The library uses a DAG (Directed Acyclic Graph) structure to manage workflow dependencies and supports concurrent execution of independent tasks.
 
 ## Development Commands
 
@@ -49,21 +49,21 @@ go vet ./...            # Run static analysis
 
 ### Core Components
 
-1. **Pipeline Interface** (`pipeline.go`): Main pipeline lifecycle management
-2. **DAG Graph Implementation** (`pipeline_impl.go`): Manages task dependencies and traversal
+1. **Workflow Interface** (`workflow.go`): Main workflow lifecycle management
+2. **DAG Graph Implementation** (`workflow_impl.go`): Manages task dependencies and traversal
 3. **Node System** (`node.go`, `node_impl.go`): Individual task management with state tracking
 4. **Executor Pattern** (`executor.go`): Pluggable backend execution system
-5. **Runtime** (`runtime.go`, `runtime_impl.go`): Pipeline execution runtime with process safety
+5. **Runtime** (`runtime.go`, `runtime_impl.go`): Workflow execution runtime with process safety
 6. **Edge System** (`edge.go`, `edge_impl.go`): DAG edges with conditional expression support
 7. **Template Engine** (`templete.go`, `templete_impl.go`): Template rendering for dynamic configuration
 8. **Metadata Store** (`metadata.go`, `metadata_impl.go`): Process-safe metadata management
-9. **Configuration** (`config.go`): Pipeline configuration structures and parsing
+9. **Configuration** (`config.go`): Workflow configuration structures and parsing
 
 ### Key Architecture Patterns
 
-- **DAG-based Pipeline**: Tasks are nodes in a directed acyclic graph with dependencies
+- **DAG-based Workflow**: Tasks are nodes in a directed acyclic graph with dependencies
 - **Executor Pattern**: Different execution backends (Function, Docker, K8s, SSH, Local)
-- **Event-driven**: Pipeline and node lifecycle events for monitoring
+- **Event-driven**: Workflow and node lifecycle events for monitoring
 - **Concurrent Execution**: Independent tasks run in parallel using goroutines
 - **Conditional Edges**: Edges support conditional expressions for dynamic execution paths
 - **Template Engine**: Support for template rendering in configuration
@@ -71,7 +71,7 @@ go vet ./...            # Run static analysis
 
 ### Directory Structure
 
-- `/` - Core pipeline interfaces and implementations
+- `/` - Core workflow interfaces and implementations
 - `/executor/` - Execution backend implementations
   - `/kubenetes/` - Fully implemented Kubernetes executor
   - `/docker/` - Placeholder for Docker executor
@@ -84,10 +84,10 @@ go vet ./...            # Run static analysis
 
 ### Configuration
 
-Pipeline configuration uses YAML format with the following structure:
+Workflow configuration uses YAML format with the following structure:
 ```yaml
 Version: "1.0"           # Configuration version
-Name: my-pipeline        # Pipeline name
+Name: my-workflow        # Workflow name
 
 Metadate:                # Metadata configuration
   type: in-config        # Metadata store type (in-config, redis, http)
@@ -95,12 +95,12 @@ Metadate:                # Metadata configuration
     key1: value1
 
 AI:                      # AI-related configuration
-  intent: "描述Pipeline意图"
+  intent: "描述Workflow意图"
   constraints:           # Key constraints
     - "约束1"
   template: "template-id"
 
-Param:                   # Pipeline parameters
+Param:                   # Workflow parameters
   key: value
 
 Executors:               # Global executor definitions
@@ -138,15 +138,15 @@ See `config.example.yaml` for a complete example.
 ## Current Implementation Status
 
 **Implemented**:
-- ✅ Core pipeline DAG structure and traversal
-- ✅ Basic pipeline execution with concurrent processing
+- ✅ Core workflow DAG structure and traversal
+- ✅ Basic workflow execution with concurrent processing
 - ✅ Kubernetes executor (fully functional)
 - ✅ Node state management and event system
 - ✅ Cycle detection and graph validation
 - ✅ Conditional edges with expression evaluation
 - ✅ Template engine for dynamic configuration
 - ✅ Metadata store interface and implementations
-- ✅ Pipeline Runtime with process safety
+- ✅ Workflow Runtime with process safety
 - ✅ Multi-step node execution
 - ✅ Graph text visualization
 - ✅ Log pushing interface
@@ -167,9 +167,9 @@ See `config.example.yaml` for a complete example.
 ## Working with the Codebase
 
 When making changes:
-1. Understand the DAG traversal algorithm in `pipeline_impl.go`
+1. Understand the DAG traversal algorithm in `workflow_impl.go`
 2. Check the executor interfaces in `executor.go` before implementing new backends
-3. Follow the event-driven pattern for pipeline monitoring
+3. Follow the event-driven pattern for workflow monitoring
 4. Ensure graph validation and cycle detection are maintained
 5. Run `go build ./...` frequently to catch compilation issues early
 6. For conditional logic, check `edge.go` and `eval_context.go`
@@ -179,7 +179,7 @@ When making changes:
 
 ## Issue Archive
 
-### 2026-04-16: Pipeline 输出未通过 Pusher 推送
+### 2026-04-16: Workflow 输出未通过 Pusher 推送
 
 **问题描述**：
 - `wait_input_example.yaml` 工作流执行成功，但脚本中的 `echo` 语句输出没有通过日志推送器（logger.Pusher）推送
@@ -188,20 +188,20 @@ When making changes:
 
 **根本原因**：
 - `RuntimeImpl` 虽然有 `pusher` 字段，但从未实际使用
-- `PipelineImpl` 没有 `pusher` 字段，无法在内部推送日志
+- `WorkflowImpl` 没有 `pusher` 字段，无法在内部推送日志
 - `resultChan` 已包含实时输出，但 `handleResult` 方法只调用 `fmt.Print`
 
 **解决方案**：
-1. 给 `PipelineImpl` 添加 `pusher logger.Pusher` 字段
-2. 在 `Pipeline` 接口中添加 `SetPusher` 方法
-3. `RuntimeImpl` 创建 Pipeline 时传递 `pusher`
+1. 给 `WorkflowImpl` 添加 `pusher logger.Pusher` 字段
+2. 在 `Workflow` 接口中添加 `SetPusher` 方法
+3. `RuntimeImpl` 创建 Workflow 时传递 `pusher`
 4. `handleResult` 中删除 `fmt.Print`，改用 `pusher.Push` 推送日志
 
 **影响范围**：
-- `dag/pipeline.go`：接口添加
+- `dag/workflow.go`：接口添加
 - `dag/p`ipeline_impl.go`：结构体和实现修改
-- `runtime_impl.go`：创建 Pipeline 时传递 pusher
-- `test/pipeline_output_test.go`：新增测试用例
+- `runtime_impl.go`：创建 Workflow 时传递 pusher
+- `test/workflow_output_test.go`：新增测试用例
 
 **验证**：
 - 单元测试：`TestOutputPusher` 验证输出通过 pusher 推送

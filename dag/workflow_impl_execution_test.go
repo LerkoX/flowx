@@ -11,8 +11,8 @@ import (
 
 // TestSetTemplateEngine 测试设置模板引擎
 func TestSetTemplateEngine(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	engine := template.NewPongo2TemplateEngine()
 	impl.SetTemplateEngine(engine)
@@ -26,8 +26,8 @@ func TestSetTemplateEngine(t *testing.T) {
 
 // TestGetTemplateEngine_Nil 测试未设置模板引擎时返回 nil
 func TestGetTemplateEngine_Nil(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 不设置模板引擎
 	gotEngine := impl.GetTemplateEngine()
@@ -38,8 +38,8 @@ func TestGetTemplateEngine_Nil(t *testing.T) {
 
 // TestRenderStringWithRuntimeContext_NoEngine 测试没有模板引擎时返回原字符串
 func TestRenderStringWithRuntimeContext_NoEngine(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 不设置模板引擎
 	result, err := impl.renderStringWithRuntimeContext("{{ Param.version }}")
@@ -55,8 +55,8 @@ func TestRenderStringWithRuntimeContext_NoEngine(t *testing.T) {
 
 // TestRenderStringWithRuntimeContext_WithEngine 测试有模板引擎时渲染字符串
 func TestRenderStringWithRuntimeContext_WithEngine(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 设置模板引擎
 	impl.SetTemplateEngine(template.NewPongo2TemplateEngine())
@@ -79,8 +79,8 @@ func TestRenderStringWithRuntimeContext_WithEngine(t *testing.T) {
 
 // TestRenderStringWithRuntimeContext_WithMetadata 测试带 Metadata 渲染
 func TestRenderStringWithRuntimeContext_WithMetadata(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 设置模板引擎
 	impl.SetTemplateEngine(template.NewPongo2TemplateEngine())
@@ -105,8 +105,8 @@ func TestRenderStringWithRuntimeContext_WithMetadata(t *testing.T) {
 
 // TestExtractOutput_NoExtractConfig 测试无提取配置时不提取
 func TestExtractOutput_NoExtractConfig(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	node := NewDGANode("test-node", "RUNNING")
 
@@ -119,8 +119,8 @@ func TestExtractOutput_NoExtractConfig(t *testing.T) {
 
 // TestExtractOutput_EmptyOutput 测试空输出
 func TestExtractOutput_EmptyOutput(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	node := NewDGANode("test-node", "RUNNING")
 
@@ -132,8 +132,8 @@ func TestExtractOutput_EmptyOutput(t *testing.T) {
 
 // TestShouldSkipStep_NoRuntimeStatus 测试无运行时状态时不跳过
 func TestShouldSkipStep_NoRuntimeStatus(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	node := NewDGANode("test-node", "RUNNING")
 
@@ -146,8 +146,8 @@ func TestShouldSkipStep_NoRuntimeStatus(t *testing.T) {
 
 // TestShouldSkipStep_WithRuntimeStatus 测试有运行时状态时跳过已完成步骤
 func TestShouldSkipStep_WithRuntimeStatus(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	var node Node = NewDGANode("test-node", "RUNNING")
 	node.SetRuntimeStatus(&core.NodeRuntimeStatus{
@@ -174,8 +174,8 @@ func TestShouldSkipStep_WithRuntimeStatus(t *testing.T) {
 
 // TestCreateExtractor_NilConfig 测试 nil 配置返回 nil 提取器
 func TestCreateExtractor_NilConfig(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	extractor, err := impl.createExtractor(nil)
 	if err != nil {
@@ -188,8 +188,8 @@ func TestCreateExtractor_NilConfig(t *testing.T) {
 
 // TestCreateExtractor_CodecBlock 测试创建 codec block 提取器
 func TestCreateExtractor_CodecBlock(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	config := map[string]interface{}{
 		"type": "codec-block",
@@ -206,8 +206,8 @@ func TestCreateExtractor_CodecBlock(t *testing.T) {
 
 // TestHandleInputRequest_NilEvent 测试 nil 事件不处理
 func TestHandleInputRequest_NilEvent(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	node := NewDGANode("test-node", "RUNNING")
 
@@ -217,8 +217,8 @@ func TestHandleInputRequest_NilEvent(t *testing.T) {
 
 // TestHandleInputRequest_EmptyRequest 测试空请求不处理
 func TestHandleInputRequest_EmptyRequest(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	node := NewDGANode("test-node", "RUNNING")
 
@@ -232,8 +232,8 @@ func TestHandleInputRequest_EmptyRequest(t *testing.T) {
 
 // TestCancel 测试取消流水线
 func TestCancel(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 取消不应该 panic
 	impl.Cancel()

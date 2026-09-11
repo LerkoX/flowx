@@ -11,19 +11,19 @@ import (
 // Runtime 运行时
 type Runtime interface {
 	//获取流水线状态
-	Get(id string) (dag.Pipeline, error)
+	Get(id string) (dag.Workflow, error)
 	//取消运行中的流水线
 	Cancel(ctx context.Context, id string) error
 	//执行异步流水线（完成后实例即从 Runtime 删除）
-	RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)
+	RunAsync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error)
 	//加载流水线但不运行：恢复配置中的节点运行时状态并推导流水线状态，
 	//之后可通过 ModifyGraph/UpdateConfig 修改图，用 Rerun 继续运行。
 	//用于从运行结束时导出的快照 YAML（ExportConfig）重建已完成的流水线
-	LoadPipeline(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)
+	LoadWorkflow(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error)
 	//重新运行处于可修改状态的流水线（已终结状态的节点跳过，仅执行新增/未运行节点）
 	Rerun(ctx context.Context, id string) error
 	//执行同步流水线
-	RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Pipeline, error)
+	RunSync(ctx context.Context, id string, config string, listener dag.Listener) (dag.Workflow, error)
 	//移除流水线记录
 	Rm(id string)
 	//runtime已经执行完成
@@ -55,6 +55,6 @@ type Runtime interface {
 	// 已执行的节点不允许删除或替换，只允许修改尚未运行的节点
 	// 除 Nodes 和 Graph 外的其他配置字段不可更新
 	UpdateConfig(ctx context.Context, id string, newConfigYAML string) error
-	// ListPipelines 列出所有活跃的流水线ID
-	ListPipelines() []string
+	// ListWorkflows 列出所有活跃的流水线ID
+	ListWorkflows() []string
 }

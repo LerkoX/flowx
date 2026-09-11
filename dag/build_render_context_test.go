@@ -8,8 +8,8 @@ import (
 
 // TestBuildRenderContext_Empty 测试空上下文
 func TestBuildRenderContext_Empty(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 确保 param 和 metadata 都是 nil/empty
 	impl.mu.Lock()
@@ -23,20 +23,20 @@ func TestBuildRenderContext_Empty(t *testing.T) {
 		t.Fatal("buildRenderContext should not return nil")
 	}
 
-	// 空 pipeline 可能会有一个空的 Metadata map
+	// 空 workflow 可能会有一个空的 Metadata map
 	// 这是实现的行为，不应该 panic
 	if ctx["Metadata"] != nil {
 		metadataMap, ok := ctx["Metadata"].(map[string]any)
 		if ok && len(metadataMap) > 0 {
-			t.Errorf("Empty pipeline should have empty Metadata, got %d items", len(metadataMap))
+			t.Errorf("Empty workflow should have empty Metadata, got %d items", len(metadataMap))
 		}
 	}
 }
 
 // TestBuildRenderContext_WithParam 测试带 Param 的上下文
 func TestBuildRenderContext_WithParam(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 设置 Param
 	impl.SetParam(map[string]interface{}{
@@ -70,8 +70,8 @@ func TestBuildRenderContext_WithParam(t *testing.T) {
 
 // TestBuildRenderContext_WithParam_Boolean 测试带布尔类型 Param 的上下文
 func TestBuildRenderContext_WithParam_Boolean(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 设置带布尔值的 Param
 	impl.SetParam(map[string]interface{}{
@@ -92,8 +92,8 @@ func TestBuildRenderContext_WithParam_Boolean(t *testing.T) {
 
 // TestBuildRenderContext_WithMetadata 测试带 Metadata 的上下文
 func TestBuildRenderContext_WithMetadata(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 设置 Metadata
 	impl.mu.Lock()
@@ -140,8 +140,8 @@ func TestBuildRenderContext_WithMetadata(t *testing.T) {
 
 // TestBuildRenderContext_WithMetadata_StandaloneKey 测试 Metadata 中不带点的键
 func TestBuildRenderContext_WithMetadata_StandaloneKey(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 设置 Metadata（包含不带点的键）
 	impl.mu.Lock()
@@ -170,8 +170,8 @@ func TestBuildRenderContext_WithMetadata_StandaloneKey(t *testing.T) {
 
 // TestBuildRenderContext_ParamAndMetadata 测试同时有 Param 和 Metadata
 func TestBuildRenderContext_ParamAndMetadata(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 设置 Param
 	impl.SetParam(map[string]interface{}{
@@ -210,8 +210,8 @@ func TestBuildRenderContext_ParamAndMetadata(t *testing.T) {
 
 // TestBuildRenderContext_ParamNil 测试 Param 为 nil 的情况
 func TestBuildRenderContext_ParamNil(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 不设置 Param，保持 nil
 	ctx := impl.buildRenderContext()
@@ -223,14 +223,14 @@ func TestBuildRenderContext_ParamNil(t *testing.T) {
 
 	// 不应该有 Param 键
 	if _, exists := ctx["Param"]; exists {
-		t.Error("Empty pipeline should not have Param in context")
+		t.Error("Empty workflow should not have Param in context")
 	}
 }
 
 // TestBuildRenderContext_MetadataNil 测试 Metadata 为 nil 的情况
 func TestBuildRenderContext_MetadataNil(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 确保 metadata 是 nil
 	impl.mu.Lock()
@@ -249,15 +249,15 @@ func TestBuildRenderContext_MetadataNil(t *testing.T) {
 	if metadata != nil {
 		metadataMap, ok := metadata.(map[string]any)
 		if ok && len(metadataMap) > 0 {
-			t.Error("Pipeline without metadata should have empty Metadata in context")
+			t.Error("Workflow without metadata should have empty Metadata in context")
 		}
 	}
 }
 
 // TestBuildRenderContext_Concurrent 测试并发安全性
 func TestBuildRenderContext_Concurrent(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 设置初始 Param
 	impl.SetParam(map[string]interface{}{
@@ -284,8 +284,8 @@ func TestBuildRenderContext_Concurrent(t *testing.T) {
 
 // TestBuildRenderContext_FieldItemValue 测试 FieldItem 值的提取
 func TestBuildRenderContext_FieldItemValue(t *testing.T) {
-	pipeline := NewPipeline(nil)
-	impl := pipeline.(*PipelineImpl)
+	workflow := NewWorkflow(nil)
+	impl := workflow.(*WorkflowImpl)
 
 	// 直接设置 FieldItem 类型的 Param
 	impl.mu.Lock()

@@ -1,6 +1,6 @@
 # Logger 日志模块
 
-日志模块提供了 Pipeline 日志推送的核心接口和实现。
+日志模块提供了 Workflow 日志推送的核心接口和实现。
 
 ## 核心接口
 
@@ -27,7 +27,7 @@ type Pusher interface {
 
 ```go
 type Entry struct {
-    Pipeline  string    // 流水线 ID
+    Workflow  string    // 流水线 ID
     BuildID   string    // 构建ID
     Node      string    // 节点名称
     Step      string    // 步骤名称
@@ -65,7 +65,7 @@ pusher.SetShowNode(true)   // 显示节点信息
 
 // 推送日志
 pusher.Push(ctx, logger.Entry{
-    Pipeline: "pipeline-id",
+    Workflow: "workflow-id",
     Level:    logger.LevelInfo,
     Message:  "消息内容",
 })
@@ -99,15 +99,15 @@ func main() {
 ### 在事件监听器中使用
 
 ```go
-type PipelineListener struct {
+type WorkflowListener struct {
     pusher logger.Pusher
     ctx    context.Context
 }
 
-func (l *PipelineListener) Handle(p flowx.Pipeline, event flowx.Event) {
+func (l *WorkflowListener) Handle(p flowx.Workflow, event flowx.Event) {
     if l.pusher != nil {
         l.pusher.Push(l.ctx, logger.Entry{
-            Pipeline: p.Id(),
+            Workflow: p.Id(),
             Level:    logger.LevelInfo,
             Message:  "流水线开始执行",
         })

@@ -104,8 +104,8 @@ func (c *ConsolePusher) buildPrefix(entry Entry) string {
 	}
 
 	if c.showNode {
-		if entry.Pipeline != "" {
-			prefix += fmt.Sprintf("[%s]", entry.Pipeline)
+		if entry.Workflow != "" {
+			prefix += fmt.Sprintf("[%s]", entry.Workflow)
 		}
 		if entry.Node != "" {
 			prefix += fmt.Sprintf("[%s]", entry.Node)

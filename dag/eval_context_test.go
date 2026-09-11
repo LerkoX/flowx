@@ -246,10 +246,10 @@ func TestDGAEvaluationContext_EmptyKey(t *testing.T) {
 	}
 }
 
-func TestDGAEvaluationContext_WithPipeline(t *testing.T) {
+func TestDGAEvaluationContext_WithWorkflow(t *testing.T) {
 	ctx := NewEvaluationContext().
 		WithParams(map[string]any{"key": "value"}).
-		WithPipeline(&PipelineImpl{})
+		WithWorkflow(&WorkflowImpl{})
 
 	all := ctx.All()
 
@@ -258,9 +258,9 @@ func TestDGAEvaluationContext_WithPipeline(t *testing.T) {
 		t.Errorf("Expected key='value', got '%v'", all["key"])
 	}
 
-	// 应该包含 pipelineId
-	if _, ok := all["pipelineId"]; !ok {
-		t.Error("Expected pipelineId to be present")
+	// 应该包含 workflowId
+	if _, ok := all["workflowId"]; !ok {
+		t.Error("Expected workflowId to be present")
 	}
 }
 
@@ -314,24 +314,24 @@ func deepCompare(a, b any) bool {
 	}
 }
 
-func TestDGAEvaluationContext_WithPipeline_DoesNotModifyOriginal(t *testing.T) {
+func TestDGAEvaluationContext_WithWorkflow_DoesNotModifyOriginal(t *testing.T) {
 	ctx1 := NewEvaluationContext().WithParams(map[string]any{
 		"key1": "value1",
 	})
 
-	pipeline := NewPipeline(nil)
-	ctx2 := ctx1.WithPipeline(pipeline.(*PipelineImpl))
+	workflow := NewWorkflow(nil)
+	ctx2 := ctx1.WithWorkflow(workflow.(*WorkflowImpl))
 
-	// ctx1 不应该包含 pipelineId
+	// ctx1 不应该包含 workflowId
 	all1 := ctx1.All()
-	if _, ok := all1["pipelineId"]; ok {
-		t.Error("Original context should not have pipelineId")
+	if _, ok := all1["workflowId"]; ok {
+		t.Error("Original context should not have workflowId")
 	}
 
-	// ctx2 应该包含 pipelineId
+	// ctx2 应该包含 workflowId
 	all2 := ctx2.All()
-	if _, ok := all2["pipelineId"]; !ok {
-		t.Error("New context should have pipelineId")
+	if _, ok := all2["workflowId"]; !ok {
+		t.Error("New context should have workflowId")
 	}
 }
 

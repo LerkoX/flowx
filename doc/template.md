@@ -1,6 +1,6 @@
 # 模板引擎
 
-本文档介绍 Pipelinex 的模板引擎机制，包括 pongo2 引擎的使用、Param 自引用渲染、Metadata 渲染以及运行时命令渲染。
+本文档介绍 Workflowx 的模板引擎机制，包括 pongo2 引擎的使用、Param 自引用渲染、Metadata 渲染以及运行时命令渲染。
 
 ## TemplateEngine 接口
 
@@ -55,9 +55,9 @@ err := engine.Validate("{{ Param.env == ")
 
 模板渲染在两个不同阶段发生：
 
-### 1. 配置解析阶段（Pipeline 启动前）
+### 1. 配置解析阶段（Workflow 启动前）
 
-在 `RuntimeImpl` 创建 Pipeline 时渲染以下字段：
+在 `RuntimeImpl` 创建 Workflow 时渲染以下字段：
 
 - **Param**：支持自引用，最多迭代 10 次防止无限循环
 - **Metadata.data**：引用 `Param` 中的值
