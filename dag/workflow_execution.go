@@ -39,8 +39,12 @@ func (p *WorkflowImpl) Run(ctx context.Context) error {
 			}
 			p.mu.Unlock()
 
-			// 清理所有executor
-			p.cleanupExecutors(ctx)
+			// 清理所有executor。注意必须用独立的 context：上方 cancelFunc
+			// 已取消 ctx，若沿用 canceled ctx 发 Docker API（ContainerStop/
+			// ContainerRemove）会立即失败，导致容器残留泄漏。
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cleanupCancel()
+			p.cleanupExecutors(cleanupCtx)
 
 			p.mu.Lock()
 			close(p.doneChan)
