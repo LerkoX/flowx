@@ -225,25 +225,10 @@ func (d *DockerExecutor) Destruction(ctx context.Context) error {
 // 当 ctx 被取消时，会立即停止执行新命令，并终止当前正在容器内执行的命令
 func (d *DockerExecutor) Transfer(ctx context.Context, resultChan chan<- any, commandChan <-chan any, inputChan <-chan []byte) {
 	// 创建一个可取消的内部上下文，用于控制当前命令的执行
+	// execCtx 是 ctx 的子上下文，外部取消会自动传播，无需额外监听。
+	// commandChan 关闭时下方 for 循环的 !ok 分支会直接退出。
 	execCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
-	// 监听 commandChan 关闭，确保监听 goroutine 能正确退出
-	commandChanDone := make(chan struct{})
-	go func() {
-		for range commandChan {
-		}
-		close(commandChanDone)
-	}()
-
-	// 启动一个 goroutine 监听外部上下文取消和 commandChan 关闭
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-commandChanDone:
-		}
-		cancel()
-	}()
 
 	for {
 		// 检查上下文是否已取消
