@@ -656,6 +656,58 @@ func (d *DockerExecutor) GetType() string {
 	return "docker"
 }
 
+// ConnectionInfo Docker daemon 连接测试结果
+// 用于 studio 等调用方的「连接状态测试」功能，不创建容器，仅探测 daemon 可达性。
+type ConnectionInfo struct {
+	ServerVersion string `json:"serverVersion"` // daemon 的 Docker 版本
+	APIVersion    string `json:"apiVersion"`    // 协商后的 API 版本
+	OS            string `json:"os"`            // daemon 所在操作系统
+	Arch          string `json:"arch"`          // daemon 架构
+	Name          string `json:"name"`          // daemon 节点名
+	LatencyMs     int64  `json:"latencyMs"`     // Ping 往返耗时（毫秒）
+}
+
+// TestConnection 测试与 Docker daemon 的连接状态。
+// 只做 Ping + ServerVersion，不拉取镜像也不创建容器；失败时返回带原因的 error。
+func (d *DockerExecutor) TestConnection(ctx context.Context) (*ConnectionInfo, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if err := d.ensureClient(); err != nil {
+		return nil, err
+	}
+
+	start := time.Now()
+	if _, err := d.client.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("docker daemon ping failed (host=%q): %w", d.host, err)
+	}
+	latency := time.Since(start).Milliseconds()
+
+	info := &ConnectionInfo{LatencyMs: latency}
+	if ver, err := d.client.ServerVersion(ctx); err == nil {
+		info.ServerVersion = ver.Version
+		info.APIVersion = ver.APIVersion
+		info.OS = ver.Os
+		info.Arch = ver.Arch
+		info.Name = ver.Platform.Name
+	}
+	return info, nil
+}
+
+// TestConnectionWithConfig 按配置项构造一个临时 Docker 执行器并测试 daemon 连接。
+// config 支持的键与 DockerAdapter 一致（host/tlsVerify/certPath 等，与连接无关的
+// image/network/volumes 等会被忽略）。不创建容器，调用方无需 Prepare/Destruction。
+func TestConnectionWithConfig(ctx context.Context, config map[string]any) (*ConnectionInfo, error) {
+	exec, err := NewDockerExecutor()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create docker executor: %w", err)
+	}
+	if err := applyConfigToExecutor(config, exec); err != nil {
+		return nil, err
+	}
+	return exec.TestConnection(ctx)
+}
+
 // safeSend 安全地发送数据到 channel，如果 channel 已关闭则忽略
 func safeSend(ch chan<- any, value any) {
 	defer func() {
