@@ -363,6 +363,10 @@ func (p *WorkflowImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	exec, err := p.getOrCreateExecutor(ctx, executorName)
 	if err != nil {
 		fmt.Printf("Failed to get executor for node %s: %v\n", node.Id(), err)
+		// executor 获取/准备失败（如镜像拉取失败、daemon 不可达）也是节点失败，
+		// 必须触发 WorkflowNodeFailed——否则上游只能看到 node-start 没有收尾事件，
+		// 节点状态会永远停留在 running
+		p.NotifyEventForNode(WorkflowNodeFailed, node)
 		// 清理当前节点
 		p.mu.Lock()
 		p.currentNode = nil
