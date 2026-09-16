@@ -229,3 +229,50 @@ func TestCurrentNode_ThreadSafety(t *testing.T) {
 
 	wg.Wait()
 }
+
+// nodeFailedRecorder 记录 WorkflowNodeFailed 事件时刻的 CurrentNode
+type nodeFailedRecorder struct {
+	events    []Event
+	failedNodeID string
+}
+
+func (l *nodeFailedRecorder) Handle(p Workflow, event Event) {
+	l.events = append(l.events, event)
+	if event == WorkflowNodeFailed && p.CurrentNode() != nil {
+		l.failedNodeID = p.CurrentNode().Id()
+	}
+}
+
+func (l *nodeFailedRecorder) Events() []Event {
+	return []Event{WorkflowNodeStart, WorkflowNodeFinish, WorkflowNodeFailed}
+}
+
+// TestExecuteNode_ExecutorFailureEmitsNodeFailed 节点 executor 获取/准备失败
+// （如镜像拉取失败、daemon 不可达）时必须触发 WorkflowNodeFailed 事件。
+// 回归：此前该路径只返回错误不发事件，上游只看到 node-start，
+// 节点状态永远停在 running（studio 执行被误判为 success 的根因）。
+func TestExecuteNode_ExecutorFailureEmitsNodeFailed(t *testing.T) {
+	workflow := NewWorkflow(context.Background())
+	impl := workflow.(*WorkflowImpl)
+
+	recorder := &nodeFailedRecorder{}
+	impl.Listening(recorder)
+
+	// 未设置 executor provider，getOrCreateExecutor 必然失败
+	node := NewDGANodeWithConfig("Ensure", core.StatusUnknown, "some-exec", "",
+		[]core.Step{{Name: "step1", Run: "echo hi"}}, nil)
+
+	err := impl.executeNodeWithLifecycle(context.Background(), node)
+	if err == nil {
+		t.Fatal("expected executor error, got nil")
+	}
+
+	if recorder.failedNodeID != "Ensure" {
+		t.Errorf("WorkflowNodeFailed event not fired with failing node as CurrentNode; events=%v failedNodeID=%q",
+			recorder.events, recorder.failedNodeID)
+	}
+	// 事件顺序必须是 start -> failed
+	if len(recorder.events) < 2 || recorder.events[0] != WorkflowNodeStart || recorder.events[1] != WorkflowNodeFailed {
+		t.Errorf("unexpected event sequence: %v", recorder.events)
+	}
+}
