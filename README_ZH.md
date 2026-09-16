@@ -9,7 +9,7 @@
 一个灵活且可扩展的 Go 语言流水线执行库，支持多种执行后端和基于 DAG 的工作流编排。
 
 [![Go Version](https://img.shields.io/badge/go-%3E%3D1.23-blue)](https://golang.org)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 ## 特性
 
@@ -648,4 +648,4 @@ go test ./...
 
 ## 许可证
 
-MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
+GNU 通用公共许可证 v3.0（GPL-3.0）- 详见 [LICENSE](LICENSE) 文件。
