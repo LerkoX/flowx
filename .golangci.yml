@@ -1,0 +1,22 @@
+version: "2"
+
+linters:
+  # 默认启用：errcheck, govet, ineffassign, staticcheck, unused
+  exclusions:
+    rules:
+      # 测试代码不强制检查错误返回值（defer Close、Setenv、Cleanup 等惯常忽略）
+      - path: _test\.go
+        linters:
+          - errcheck
+
+      # 测试代码允许传递 nil Context（构造极简测试对象时的惯例）
+      - path: _test\.go
+        linters:
+          - staticcheck
+        text: "SA1012"
+
+      # 二进制/Unicode 测试数据故意包含控制字符与格式字符，属于测试目的本身
+      - path: executor/local/.*_test\.go
+        linters:
+          - staticcheck
+        text: "ST1018"

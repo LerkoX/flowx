@@ -41,12 +41,25 @@ func init() {
 	// flowx 是流水线引擎而非 HTML 模板场景：关闭全局 autoescape，
 	// 否则参数值中的引号会被转义为 &#39;/&quot;（且在多次渲染间累积成 &amp;amp;）
 	pongo2.SetAutoescape(false)
-	pongo2.RegisterFilter("toJson", filterToJSON)
-	pongo2.RegisterFilter("toYaml", filterToYaml)
-	pongo2.RegisterFilter("toBase64", filterToBase64)
-	pongo2.RegisterFilter("fromBase64", filterFromBase64)
-	pongo2.RegisterFilter("urlencode", filterURLEncode)
-	pongo2.RegisterFilter("urldecode", filterURLDecode)
+	filters := map[string]pongo2.FilterFunction{
+		"toJson":     filterToJSON,
+		"toYaml":     filterToYaml,
+		"toBase64":   filterToBase64,
+		"fromBase64": filterFromBase64,
+		"urlencode":  filterURLEncode,
+		"urldecode":  filterURLDecode,
+	}
+	// 注册失败属于编程错误（名称非法等），init 阶段直接 panic 暴露问题。
+	// 例外：与 pongo2 内置过滤器同名（如 urlencode）时保留内置实现，
+	// 与历史行为一致（原代码忽略了 RegisterFilter 的冲突错误）。
+	for name, fn := range filters {
+		if err := pongo2.RegisterFilter(name, fn); err != nil {
+			if strings.Contains(err.Error(), "already registered") {
+				continue
+			}
+			panic(fmt.Sprintf("failed to register template filter %q: %v", name, err))
+		}
+	}
 }
 
 // filterToJSON 将值转换为 JSON 字符串

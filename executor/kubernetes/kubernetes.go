@@ -402,8 +402,8 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 
 	k.mu.Lock()
 	k.currentExecCancel = func() {
-		stdinWriter.Write([]byte{0x03})
-		stdinWriter.Close()
+		_, _ = stdinWriter.Write([]byte{0x03})
+		_ = stdinWriter.Close()
 		execCancel()
 	}
 	k.mu.Unlock()
@@ -420,7 +420,7 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 
 	if inputChan != nil {
 		go func() {
-			defer stdinWriter.Close()
+			defer func() { _ = stdinWriter.Close() }()
 
 			for {
 				select {
@@ -433,7 +433,7 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 						return
 					}
 					if len(data) > 0 {
-						stdinWriter.Write(data)
+						_, _ = stdinWriter.Write(data)
 					}
 				}
 			}
@@ -446,7 +446,7 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer stdoutReader.Close()
+		defer func() { _ = stdoutReader.Close() }()
 
 		scanner := bufio.NewScanner(stdoutReader)
 		scanner.Buffer(make([]byte, 4096), 1024*1024)
@@ -498,7 +498,7 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 	}
 
 	err = exec.StreamWithContext(execCtx, streamOptions)
-	stdoutWriter.Close()
+	_ = stdoutWriter.Close()
 
 	wg.Wait()
 
@@ -517,26 +517,6 @@ func (k *KubernetesExecutor) executeCommandInPodStreaming(ctx context.Context, c
 	}
 
 	return nil
-}
-
-// execStreamer 执行流输出器
-type execStreamer struct {
-	callback func([]byte)
-	useTTY   bool
-	data     []byte
-}
-
-// Write 实现io.Writer接口
-func (s *execStreamer) Write(p []byte) (n int, err error) {
-	if s.callback != nil {
-		s.callback(p)
-	}
-	return len(p), nil
-}
-
-// Read 实现io.Reader接口（用于stdin，这里不需要）
-func (s *execStreamer) Read(p []byte) (n int, err error) {
-	return 0, io.EOF
 }
 
 // fixedTerminalSize 固定终端大小

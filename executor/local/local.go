@@ -112,11 +112,16 @@ func (l *LocalExecutor) Transfer(ctx context.Context, resultChan chan<- any, com
 		}
 	}()
 
+	cancelled := false
 	for data := range commandChan {
-		// 检查上下文是否已取消
+		// 上下文已取消：不再执行新命令，仅排空 channel 防止发送方阻塞
+		if cancelled {
+			continue
+		}
 		select {
 		case <-execCtx.Done():
-			break
+			cancelled = true
+			continue
 		default:
 		}
 
@@ -512,7 +517,7 @@ func parseInputRequest(content string) *executor.InputRequest {
 func safeSend(ch chan<- any, value any) {
 	defer func() {
 		if r := recover(); r != nil {
-			// channel 已关闭，忽略
+			_ = r // channel 已关闭，忽略
 		}
 	}()
 	ch <- value
@@ -563,9 +568,12 @@ func (l *LocalExecutor) createCommandWithPTY(ctx context.Context, command string
 		if shell == "" {
 			shell = "/bin/sh"
 		}
+		// 显式通过配置的 shell 执行命令（script -c 默认走 $SHELL，会忽略自定义 shell 配置）。
+		// 使用单引号包裹并转义内部单引号，避免命令被外层 shell 二次解析。
+		quoted := "'" + strings.ReplaceAll(command, "'", `'\''`) + "'"
 		// 使用 script 命令创建伪终端；-e 透传子进程退出码（util-linux），
 		// 否则节点脚本 exit 非零会被 script 吞掉导致失败节点误报成功
-		return prepareCmd(exec.CommandContext(ctx, "script", "-q", "-e", "-c", command, "/dev/null"))
+		return prepareCmd(exec.CommandContext(ctx, "script", "-q", "-e", "-c", shell+" -c "+quoted, "/dev/null"))
 	}
 }
 

@@ -90,7 +90,7 @@ func (e *CodecBlockExtractor) extractComments(yamlStr string) map[string]string 
 
 	for _, line := range lines {
 		match := linePattern.FindStringSubmatch(line)
-		if match != nil && len(match) >= 3 {
+		if len(match) >= 3 {
 			key := match[1]
 			comment := strings.TrimSpace(match[2])
 			descriptions[key] = comment
