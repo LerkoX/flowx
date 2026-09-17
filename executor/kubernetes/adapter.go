@@ -236,7 +236,7 @@ func parseEmptyDirVolume(volume map[string]any) (corev1.Volume, corev1.VolumeMou
 		if sizeLimitStr, ok := sizeLimit.(string); ok {
 			// 解析大小限制（例如："1Gi"）
 			quantity := parseQuantity(sizeLimitStr)
-			volumeConfig.VolumeSource.EmptyDir.SizeLimit = &quantity
+			volumeConfig.EmptyDir.SizeLimit = &quantity
 		}
 	}
 
@@ -245,9 +245,9 @@ func parseEmptyDirVolume(volume map[string]any) (corev1.Volume, corev1.VolumeMou
 		if mediumStr, ok := medium.(string); ok {
 			switch strings.ToLower(mediumStr) {
 			case "memory":
-				volumeConfig.VolumeSource.EmptyDir.Medium = corev1.StorageMediumMemory
+				volumeConfig.EmptyDir.Medium = corev1.StorageMediumMemory
 			default:
-				volumeConfig.VolumeSource.EmptyDir.Medium = corev1.StorageMediumDefault
+				volumeConfig.EmptyDir.Medium = corev1.StorageMediumDefault
 			}
 		}
 	}

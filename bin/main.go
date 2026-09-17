@@ -21,7 +21,7 @@ func (l *WorkflowListener) Handle(p dag.Workflow, event dag.Event) {
 	switch event {
 	case dag.WorkflowInit:
 		if l.pusher != nil {
-			l.pusher.Push(l.ctx, logger.Entry{
+			_ = l.pusher.Push(l.ctx, logger.Entry{
 				Workflow: p.Id(),
 				Level:    logger.LevelInfo,
 				Message:  "流水线初始化",
@@ -30,7 +30,7 @@ func (l *WorkflowListener) Handle(p dag.Workflow, event dag.Event) {
 		fmt.Printf("[事件] 流水线初始化: %s\n", p.Id())
 	case dag.WorkflowStart:
 		if l.pusher != nil {
-			l.pusher.Push(l.ctx, logger.Entry{
+			_ = l.pusher.Push(l.ctx, logger.Entry{
 				Workflow: p.Id(),
 				Level:    logger.LevelInfo,
 				Message:  "流水线开始执行",
@@ -39,7 +39,7 @@ func (l *WorkflowListener) Handle(p dag.Workflow, event dag.Event) {
 		fmt.Printf("[事件] 流水线开始执行: %s\n", p.Id())
 	case dag.WorkflowFinish:
 		if l.pusher != nil {
-			l.pusher.Push(l.ctx, logger.Entry{
+			_ = l.pusher.Push(l.ctx, logger.Entry{
 				Workflow: p.Id(),
 				Level:    logger.LevelInfo,
 				Message:  fmt.Sprintf("流水线执行完成，状态: %s", p.Status()),
@@ -48,7 +48,7 @@ func (l *WorkflowListener) Handle(p dag.Workflow, event dag.Event) {
 		fmt.Printf("[事件] 流水线执行完成: %s, 状态: %s\n", p.Id(), p.Status())
 	case dag.WorkflowExecutorPrepare:
 		if l.pusher != nil {
-			l.pusher.Push(l.ctx, logger.Entry{
+			_ = l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
 				Message: "执行器准备中",
 			})
@@ -56,7 +56,7 @@ func (l *WorkflowListener) Handle(p dag.Workflow, event dag.Event) {
 		fmt.Printf("[事件] 执行器准备中\n")
 	case dag.WorkflowNodeStart:
 		if l.pusher != nil {
-			l.pusher.Push(l.ctx, logger.Entry{
+			_ = l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
 				Message: "节点开始执行",
 			})
@@ -64,7 +64,7 @@ func (l *WorkflowListener) Handle(p dag.Workflow, event dag.Event) {
 		fmt.Printf("[事件] 节点开始执行\n")
 	case dag.WorkflowNodeFinish:
 		if l.pusher != nil {
-			l.pusher.Push(l.ctx, logger.Entry{
+			_ = l.pusher.Push(l.ctx, logger.Entry{
 				Level:   logger.LevelDebug,
 				Message: "节点执行完成",
 			})

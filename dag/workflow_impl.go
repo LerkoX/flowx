@@ -469,7 +469,7 @@ func tryParseJSON(v interface{}) interface{} {
 	first := trimmed[0]
 	last := trimmed[len(trimmed)-1]
 
-	if !((first == '{' && last == '}') || (first == '[' && last == ']')) {
+	if (first != '{' || last != '}') && (first != '[' || last != ']') {
 		return v
 	}
 

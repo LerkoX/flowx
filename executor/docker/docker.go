@@ -479,7 +479,7 @@ func (d *DockerExecutor) detectShell() string {
 // pullImageIfNeeded 检查并拉取镜像
 func (d *DockerExecutor) pullImageIfNeeded(ctx context.Context, imageName string) error {
 	// 检查镜像是否存在
-	_, _, err := d.client.ImageInspectWithRaw(ctx, imageName)
+	_, err := d.client.ImageInspect(ctx, imageName)
 	if err == nil {
 		return nil
 	}
@@ -489,7 +489,7 @@ func (d *DockerExecutor) pullImageIfNeeded(ctx context.Context, imageName string
 	if err != nil {
 		return fmt.Errorf("failed to pull image %s: %w", imageName, err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// 等待拉取完成（读取所有输出）
 	_, _ = io.Copy(io.Discard, reader)
@@ -509,7 +509,20 @@ func (d *DockerExecutor) waitForContainer(ctx context.Context) error {
 			return nil
 		}
 
-		return fmt.Errorf("container exited with code %d", containerJSON.State.ExitCode)
+		// 容器已退出（启动失败），直接报错，不再重试
+		if containerJSON.State.Status == "exited" || containerJSON.State.Status == "dead" {
+			if containerJSON.State.Error != "" {
+				return fmt.Errorf("container exited with code %d: %s", containerJSON.State.ExitCode, containerJSON.State.Error)
+			}
+			return fmt.Errorf("container exited with code %d", containerJSON.State.ExitCode)
+		}
+
+		// 容器仍在启动中（如 created/restarting），等待后重试
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 
 	return fmt.Errorf("timeout waiting for container to start")
@@ -712,7 +725,7 @@ func TestConnectionWithConfig(ctx context.Context, config map[string]any) (*Conn
 func safeSend(ch chan<- any, value any) {
 	defer func() {
 		if r := recover(); r != nil {
-			// channel 已关闭，忽略
+			_ = r // channel 已关闭，忽略
 		}
 	}()
 	ch <- value

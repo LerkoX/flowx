@@ -524,3 +524,84 @@ func TestExecuteCommandWithStreaming_WithInput(t *testing.T) {
 		t.Errorf("Expected output to contain 'test input', got: %v", outputs)
 	}
 }
+
+// TestCreateCommand_PTYUsesCustomShell 测试 PTY 模式下自定义 shell 被传入命令
+func TestCreateCommand_PTYUsesCustomShell(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PTY test skipped on Windows")
+	}
+
+	exec := NewLocalExecutor()
+	exec.setPTY(true)
+	exec.setShell("/bin/bash")
+
+	ctx := context.Background()
+	cmd := exec.createCommand(ctx, "echo 'it works'")
+
+	if cmd == nil {
+		t.Fatal("Expected non-nil command")
+	}
+
+	// 期望 -c 参数为：/bin/bash -c 'echo '\''it works'\'''
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "/bin/bash -c ") {
+		t.Errorf("Expected custom shell in command args, got: %v", cmd.Args)
+	}
+	// 内部单引号应被转义，防止外层 shell 二次解析出错
+	if !strings.Contains(joined, `'\''`) {
+		t.Errorf("Expected inner single quotes to be escaped, got: %v", cmd.Args)
+	}
+}
+
+// TestTransfer_CancelSkipsQueuedCommands 测试上下文取消后，队列中积压的命令不再执行
+func TestTransfer_CancelSkipsQueuedCommands(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses /bin/sh specific command")
+	}
+
+	tmpFile, err := os.CreateTemp("", "flowx-cancel-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	os.Remove(tmpPath) // 确保文件不存在，由命令执行时创建
+
+	exec := NewLocalExecutor()
+	if err := exec.Prepare(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer exec.Destruction(context.Background())
+
+	// 预先取消的上下文：Transfer 启动时 execCtx 已 Done
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resultChan := make(chan any, 16)
+	commandChan := make(chan any, 2)
+	// 积压两条命令：若 bug 未修复，取消后仍会执行并创建文件
+	commandChan <- executor.CommandWrapper{Command: "touch " + tmpPath, StepName: "step1"}
+	commandChan <- executor.CommandWrapper{Command: "touch " + tmpPath, StepName: "step2"}
+	close(commandChan)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		exec.Transfer(ctx, resultChan, commandChan, nil)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Transfer did not return after cancellation")
+	}
+
+	// 排空 resultChan，确认没有命令被执行
+	for range resultChan {
+	}
+
+	if _, err := os.Stat(tmpPath); !os.IsNotExist(err) {
+		os.Remove(tmpPath)
+		t.Error("Expected queued commands to be skipped after cancellation, but command was executed")
+	}
+}

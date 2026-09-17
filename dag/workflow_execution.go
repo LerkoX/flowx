@@ -423,7 +423,7 @@ func (p *WorkflowImpl) executeNode(ctx context.Context, node Node, exec executor
 	go p.sendCommands(ctx, node, commandChan, steps)
 
 	// 4. 等待并处理所有结果
-	lastErr, fullOutput := p.waitForResults(ctx, node, exec, resultChan, steps)
+	fullOutput, lastErr := p.waitForResults(ctx, node, exec, resultChan, steps)
 
 	// 5. 从完整输出中提取元数据
 	if lastErr == nil {
@@ -510,11 +510,6 @@ func (p *WorkflowImpl) setupExecutorChannels(ctx context.Context, exec executor.
 	}()
 
 	return commandChan, resultChan, inputChan
-}
-
-// shellQuoteSingle 用单引号包裹字符串供 shell export 使用（转义内部单引号）
-func shellQuoteSingle(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `"'\''`) + "'"
 }
 
 // sendCommands 发送所有步骤命令
@@ -607,7 +602,7 @@ func getStepStatusString(node Node, stepName string) string {
 }
 
 // waitForResults 等待并处理所有结果
-func (p *WorkflowImpl) waitForResults(ctx context.Context, node Node, exec executor.Executor, resultChan chan any, steps []core.Step) (error, string) {
+func (p *WorkflowImpl) waitForResults(ctx context.Context, node Node, exec executor.Executor, resultChan chan any, steps []core.Step) (string, error) {
 	var lastErr error
 	resultCount := 0
 	// 计算实际需要执行的步骤数量（不包括已完成的步骤）
@@ -619,7 +614,7 @@ func (p *WorkflowImpl) waitForResults(ctx context.Context, node Node, exec execu
 	}
 	// 如果没有需要执行的步骤，直接返回
 	if expectedResults == 0 {
-		return nil, ""
+		return "", nil
 	}
 	var allOutput strings.Builder
 
@@ -627,10 +622,10 @@ func (p *WorkflowImpl) waitForResults(ctx context.Context, node Node, exec execu
 		select {
 		case <-ctx.Done():
 			p.handleCancellation(nodeContext{ctx: ctx, node: node})
-			return ctx.Err(), allOutput.String()
+			return allOutput.String(), ctx.Err()
 		case result, ok := <-resultChan:
 			if !ok {
-				return lastErr, allOutput.String()
+				return allOutput.String(), lastErr
 			}
 
 			errCount := p.handleResult(ctx, node, exec, result, resultCount, steps)
@@ -642,7 +637,7 @@ func (p *WorkflowImpl) waitForResults(ctx context.Context, node Node, exec execu
 		}
 	}
 
-	return lastErr, allOutput.String()
+	return allOutput.String(), lastErr
 }
 
 // handleCancellation 处理节点取消
@@ -704,7 +699,7 @@ func (p *WorkflowImpl) handleResult(ctx context.Context, node Node, _ executor.E
 			}
 		}
 		if p.pusher != nil {
-			p.pusher.Push(ctx, logger.Entry{
+			_ = p.pusher.Push(ctx, logger.Entry{
 				Workflow: p.Id(),
 				Node:     node.Id(),
 				Level:    level,
