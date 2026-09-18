@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/docker/client"
 	"gopkg.in/yaml.v2"
 )
@@ -401,7 +402,20 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 		}()
 	}
 
-	scanner := bufio.NewScanner(attachResp.Reader)
+	// 非 TTY 模式下 docker attach 是带 8 字节帧头的多路复用流（stdout/stderr 合帧），
+	// 直接 scan 会把帧头混进日志行（污染行首标记解析，如 FLOWX_PREVIEW 拦截）。
+	// 经 stdcopy 解复用到单一管道后再扫描；TTY 模式本身就是裸流，无需处理
+	var outputReader io.Reader = attachResp.Reader
+	if !d.tty {
+		pr, pw := io.Pipe()
+		go func() {
+			_, err := stdcopy.StdCopy(pw, pw, attachResp.Reader)
+			_ = pw.CloseWithError(err)
+		}()
+		outputReader = pr
+	}
+
+	scanner := bufio.NewScanner(outputReader)
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 
 	var buffer strings.Builder
