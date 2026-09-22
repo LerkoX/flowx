@@ -114,6 +114,30 @@ func convertToString(v interface{}) string {
 	}
 }
 
+// markStreamTruncated 标记节点输出流曾被截断（执行器已重挂/补齐，但可能仍缺字节）。
+// 与 __extract_missing 同一套路：日志告警 + metadata 标记，供 Studio 提示"输出可能不完整"。
+// 不改变节点状态：是否失败由执行器决定（重挂用尽时执行器已返回错误）。
+func (p *WorkflowImpl) markStreamTruncated(ctx context.Context, node Node, stepName string) {
+	markerKey := node.Id() + ".__stream_truncated"
+	fmt.Printf("Warning: node %s 步骤 %s 的输出流曾被截断"+
+		"（执行器已重挂/补齐，输出可能不完整）；标记 %s\n", node.Id(), stepName, markerKey)
+	p.mu.Lock()
+	if p.metadata == nil {
+		p.metadata = make(Metadata)
+	}
+	p.metadata[markerKey] = core.FieldItem{
+		Value:       "true",
+		SrcNode:     node.Id(),
+		Description: "执行器输出流曾被截断（docker exec 断流后已重挂/补齐，输出可能不完整）",
+	}
+	p.mu.Unlock()
+	if p.metadataStore != nil {
+		if err := p.metadataStore.Set(ctx, markerKey, "true"); err != nil {
+			fmt.Printf("Warning: Failed to save stream truncation marker to store: %v\n", err)
+		}
+	}
+}
+
 // createExtractor 根据配置创建提取器
 func (p *WorkflowImpl) createExtractor(extractConfig interface{}) (OutputExtractor, error) {
 	if extractConfig == nil {

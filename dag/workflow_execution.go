@@ -689,6 +689,12 @@ func (p *WorkflowImpl) handleResult(ctx context.Context, node Node, _ executor.E
 			handler.err = v.Error
 		}
 
+		// 执行器报告输出流曾被截断（已尽力重挂/补齐）：节点可能绿灯但输出块不完整。
+		// 留显式标记，供 Studio 在节点/详情上提示"输出可能不完整"。
+		if v.StreamTruncated {
+			p.markStreamTruncated(ctx, node, v.StepName)
+		}
+
 		// 通过步骤名称查找对应的步骤（修复索引映射错误）
 		var targetStep *core.Step
 		for i := range steps {

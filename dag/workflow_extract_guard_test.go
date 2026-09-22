@@ -93,3 +93,36 @@ func TestSendCommands_CaptureOutputOnlyForExtractNodes(t *testing.T) {
 		})
 	}
 }
+
+// 执行器报告流被截断：必须留标记（Studio 据此提示"输出可能不完整"），且不改变节点状态
+func TestHandleResult_StreamTruncatedMarksMetadata(t *testing.T) {
+	wf := &WorkflowImpl{metadata: make(Metadata)}
+	node := NewDGANodeWithConfig("KSampler", "", "", "", nil, map[string]any{
+		"extract": map[string]interface{}{"type": "codec-block"},
+	})
+
+	wf.handleResult(context.Background(), node, nil, &executor.StepResult{
+		StepName:        "run",
+		StreamTruncated: true,
+	}, 0, nil)
+
+	marker, ok := wf.metadata["KSampler.__stream_truncated"]
+	if !ok {
+		t.Fatalf("expected marker KSampler.__stream_truncated, got keys %v", wf.Metadata())
+	}
+	if core.GetValue(marker.Value) != "true" || marker.SrcNode != "KSampler" {
+		t.Fatalf("marker = %+v, want true/@KSampler", marker)
+	}
+}
+
+// 未截断不标记（正常路径不能出现假阳性）
+func TestHandleResult_NoTruncationNoMarker(t *testing.T) {
+	wf := &WorkflowImpl{metadata: make(Metadata)}
+	node := NewDGANodeWithConfig("KSampler", "", "", "", nil, nil)
+
+	wf.handleResult(context.Background(), node, nil, &executor.StepResult{StepName: "run"}, 0, nil)
+
+	if _, ok := wf.metadata["KSampler.__stream_truncated"]; ok {
+		t.Fatal("marker should not be set when stream was intact")
+	}
+}
