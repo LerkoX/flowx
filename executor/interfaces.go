@@ -59,6 +59,11 @@ type StepResult struct {
 	Error      error
 	StartTime  time.Time
 	FinishTime time.Time
+	// StreamTruncated 标记输出流曾被中断（已尽力重挂续读）。
+	// docker 执行器专用：cpolar 等隧道下的 docker exec 流会被中途掐断，
+	// 命令仍能跑完（ExitCode=0）但尾部输出丢失——节点输出块往往就在尾部，
+	// 丢失会让下游报“缺参”（exec 364 事故）。宿主可据此提示“输出可能不完整”。
+	StreamTruncated bool
 }
 
 // CommandWrapper 包装命令，携带步骤元信息用于精确映射

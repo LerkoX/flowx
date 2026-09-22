@@ -35,6 +35,33 @@ func (p *WorkflowImpl) extractOutput(ctx context.Context, node Node, stepResult 
 		return fmt.Errorf("failed to extract data from node %s: %w", node.Id(), err)
 	}
 
+	// 零提取护栏：节点声明了 extract（codec-block/regex）却一条都没提取到，通常意味着
+	// 输出块被截断（如 docker exec 流中断，exec 364）或 extract 配置失效。不直接失败
+	// （合法的空输出分支不应被误杀），但必须留下显式痕迹：日志告警 + metadata 标记
+	// <node>.__extract_missing，供 Studio 提示"输出可能不完整"，并让下游绑定校验
+	// （dag/binding_check.go）能给出定向上游的错误。
+	if len(extracted) == 0 {
+		markerKey := node.Id() + ".__extract_missing"
+		fmt.Printf("Warning: node %s 声明了 extract 但未提取到任何数据"+
+			"（输出被截断或 extract 配置失效）；标记 %s\n", node.Id(), markerKey)
+		p.mu.Lock()
+		if p.metadata == nil {
+			p.metadata = make(Metadata)
+		}
+		p.metadata[markerKey] = core.FieldItem{
+			Value:       "true",
+			SrcNode:     node.Id(),
+			Description: "节点声明了输出提取但未提取到数据（可能输出被截断或 extract 配置失效）",
+		}
+		p.mu.Unlock()
+		if p.metadataStore != nil {
+			if err := p.metadataStore.Set(ctx, markerKey, "true"); err != nil {
+				fmt.Printf("Warning: Failed to save extract marker to store: %v\n", err)
+			}
+		}
+		return nil
+	}
+
 	// 保存到 metadata（加锁防止并发写入）
 	if len(extracted) > 0 {
 		p.mu.Lock()

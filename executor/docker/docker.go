@@ -281,29 +281,35 @@ func (d *DockerExecutor) executeCommandStreaming(ctx context.Context, command st
 		}
 	}()
 
-	err := d.executeCommandInContainerStreaming(ctx, command, env, func(data []byte) {
+	truncated, err := d.executeCommandInContainerStreaming(ctx, command, env, func(data []byte) {
 		safeSend(resultChan, data)
 	}, inputChan, onInputRequest)
 
 	// 发送最终结果
 	safeSend(resultChan, &executor.StepResult{
-		StepName:   stepName,
-		Command:    command,
-		Output:     "",
-		Error:      err,
-		StartTime:  startTime,
-		FinishTime: time.Now(),
+		StepName:        stepName,
+		Command:         command,
+		Output:          "",
+		Error:           err,
+		StartTime:       startTime,
+		FinishTime:      time.Now(),
+		StreamTruncated: truncated > 0,
 	})
 }
 
-// executeCommandInContainerStreaming 在容器中执行命令并实时流式输出
-func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context, command string, env map[string]string, outputCallback func([]byte), inputChan <-chan []byte, onInputRequest func(*executor.InputRequest)) error {
+// executeCommandInContainerStreaming 在容器中执行命令并实时流式输出。
+//
+// 返回值 truncated 表示 attach 读取流曾被中断（已尽力重挂续读，次数=truncated）；
+// 重挂仍无法续接时返回错误——**绝不静默当成功**：日志流被截断会让节点输出块丢失，
+// 下游节点随后报"缺参"，把排查方向带偏（exec 364 事故：cpolar 上的 docker exec
+// 流被截断 → KSampler 绿灯但无输出 → VAEDecode 报 missing required parameter）。
+func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context, command string, env map[string]string, outputCallback func([]byte), inputChan <-chan []byte, onInputRequest func(*executor.InputRequest)) (int, error) {
 	d.mu.RLock()
 	containerID := d.containerID
 	d.mu.RUnlock()
 
 	if containerID == "" {
-		return fmt.Errorf("container not prepared")
+		return 0, fmt.Errorf("container not prepared")
 	}
 
 	shell := d.detectShell()
@@ -326,16 +332,24 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 
 	execResp, err := d.client.ContainerExecCreate(ctx, containerID, execConfig)
 	if err != nil {
-		return fmt.Errorf("failed to create exec: %w", err)
+		return 0, fmt.Errorf("failed to create exec: %w", err)
 	}
 
 	attachResp, err := d.client.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{
 		Tty: d.tty,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to attach to exec: %w", err)
+		return 0, fmt.Errorf("failed to attach to exec: %w", err)
 	}
-	defer attachResp.Close()
+	defer func() {
+		// 闭包捕获变量：重挂后 attachResp 已换为新连接，关闭的必须是当前这条
+		attachResp.Close()
+	}()
+
+	// 断流重挂时会替换连接：取消信号与 stdin 写入都必须指向当前连接，
+	// 故统一经 curConn 读写（attachResp 本身在重挂时被替换）。
+	var connMu sync.Mutex
+	curConn := attachResp.Conn
 
 	// 如果启用 TTY，应用终端尺寸
 	if d.tty && (d.ttyWidth > 0 || d.ttyHeight > 0) {
@@ -356,8 +370,11 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 	d.mu.Lock()
 	d.currentExecCancel = func() {
 		cancelOnce.Do(func() {
-			if attachResp.Conn != nil {
-				_, _ = attachResp.Conn.Write([]byte{0x03})
+			connMu.Lock()
+			conn := curConn
+			connMu.Unlock()
+			if conn != nil {
+				_, _ = conn.Write([]byte{0x03})
 			}
 			execCancel()
 		})
@@ -394,90 +411,215 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 					if !ok {
 						return
 					}
-					if len(data) > 0 && attachResp.Conn != nil {
-						_, _ = attachResp.Conn.Write(data)
+					if len(data) > 0 {
+						connMu.Lock()
+						conn := curConn
+						connMu.Unlock()
+						if conn != nil {
+							_, _ = conn.Write(data)
+						}
 					}
 				}
 			}
 		}()
 	}
 
-	// 非 TTY 模式下 docker attach 是带 8 字节帧头的多路复用流（stdout/stderr 合帧），
-	// 直接 scan 会把帧头混进日志行（污染行首标记解析，如 FLOWX_PREVIEW 拦截）。
-	// 经 stdcopy 解复用到单一管道后再扫描；TTY 模式本身就是裸流，无需处理
-	var outputReader io.Reader = attachResp.Reader
-	if !d.tty {
-		pr, pw := io.Pipe()
-		go func() {
-			_, err := stdcopy.StdCopy(pw, pw, attachResp.Reader)
-			_ = pw.CloseWithError(err)
-		}()
-		outputReader = pr
-	}
-
-	scanner := bufio.NewScanner(outputReader)
-	scanner.Buffer(make([]byte, 4096), 1024*1024)
-
+	// 读取一轮 attach 流至结束。非 TTY 模式下 docker attach 是带 8 字节帧头的
+	// 多路复用流（stdout/stderr 合帧），直接 scan 会把帧头混进日志行（污染行首
+	// 标记解析，如 FLOWX_PREVIEW 拦截）→ 经 stdcopy 解复用到单一管道后再扫描；
+	// TTY 模式本身即裸流。读取状态（flowx-input 代码块解析）跨重挂轮次保留。
 	var buffer strings.Builder
 	inInputBlock := false
 
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if strings.TrimSpace(line) == "```flowx-input" {
-			inInputBlock = true
-			buffer.Reset()
-			continue
+	scanRound := func(reader io.Reader) error {
+		var outputReader io.Reader = reader
+		if !d.tty {
+			pr, pw := io.Pipe()
+			go func() {
+				_, err := stdcopy.StdCopy(pw, pw, reader)
+				_ = pw.CloseWithError(err)
+			}()
+			outputReader = pr
 		}
 
-		if inInputBlock && strings.TrimSpace(line) == "```" {
-			inInputBlock = false
-			if req := parseInputRequest(buffer.String()); req != nil && onInputRequest != nil {
-				onInputRequest(req)
+		scanner := bufio.NewScanner(outputReader)
+		scanner.Buffer(make([]byte, 4096), 1024*1024)
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if strings.TrimSpace(line) == "```flowx-input" {
+				inInputBlock = true
+				buffer.Reset()
+				continue
 			}
-			continue
-		}
 
-		if inInputBlock {
-			buffer.WriteString(line)
-			buffer.WriteString("\n")
-			continue
-		}
+			if inInputBlock && strings.TrimSpace(line) == "```" {
+				inInputBlock = false
+				if req := parseInputRequest(buffer.String()); req != nil && onInputRequest != nil {
+					onInputRequest(req)
+				}
+				continue
+			}
 
-		if outputCallback != nil {
-			outputCallback(append([]byte(line), '\n'))
+			if inInputBlock {
+				buffer.WriteString(line)
+				buffer.WriteString("\n")
+				continue
+			}
+
+			if outputCallback != nil {
+				outputCallback(append([]byte(line), '\n'))
+			}
 		}
+		return scanner.Err()
 	}
 
-	if err := scanner.Err(); err != nil && err != io.EOF {
-		close(done)
-		wg.Wait()
-		if outputCallback != nil {
-			outputCallback([]byte(fmt.Sprintf("\n[stream error: %v]\n", err)))
+	truncated := 0
+	for {
+		scanErr := scanRound(attachResp.Reader)
+
+		// 流结束：仅凭 EOF 无法区分"命令真的退出"与"流被中途掐断"
+		// （两者都是干净关闭），但进程是否仍在运行可以区分：
+		// 命令正常结束时进程必然已退出。settle 窗口避开"刚退出仍报 running"的竞态。
+		running, inspectErr := d.execRunningSettled(ctx, execResp.ID, execStreamSettleWindow)
+		if inspectErr != nil {
+			close(done)
+			wg.Wait()
+			return truncated, fmt.Errorf("failed to inspect exec: %w", inspectErr)
 		}
-		return fmt.Errorf("failed to read output: %w", err)
+
+		switch classifyStreamEnd(running, truncated, execStreamMaxReattach) {
+		case streamOutcomeDone:
+			if scanErr != nil && scanErr != io.EOF && outputCallback != nil {
+				outputCallback([]byte(fmt.Sprintf("\n[stream error: %v]\n", scanErr)))
+			}
+		case streamOutcomeGiveUp:
+			close(done)
+			wg.Wait()
+			return truncated, fmt.Errorf(
+				"docker exec output stream truncated while command still running "+
+					"(re-attached %d times, last read error: %v)", truncated, scanErr)
+		case streamOutcomeReattach:
+			truncated++
+			if outputCallback != nil {
+				outputCallback([]byte(fmt.Sprintf(
+					"[flowx] docker exec stream truncated, re-attach %d/%d ...\n",
+					truncated, execStreamMaxReattach)))
+			}
+			time.Sleep(execStreamReattachBackoff(truncated))
+
+			newResp, aerr := d.client.ContainerExecAttach(ctx, execResp.ID,
+				container.ExecAttachOptions{Tty: d.tty})
+			if aerr != nil {
+				close(done)
+				wg.Wait()
+				return truncated, fmt.Errorf(
+					"docker exec stream truncated and re-attach failed: %w", aerr)
+			}
+			connMu.Lock()
+			old := attachResp
+			attachResp = newResp
+			curConn = newResp.Conn
+			connMu.Unlock()
+			old.Close()
+			continue
+		}
+		break
 	}
 
 	close(done)
 	wg.Wait()
 
-	for {
-		inspectResp, err := d.client.ContainerExecInspect(ctx, execResp.ID)
-		if err != nil {
-			return fmt.Errorf("failed to inspect exec: %w", err)
-		}
-
-		if !inspectResp.Running {
-			if inspectResp.ExitCode != 0 {
-				return fmt.Errorf("command exited with code %d", inspectResp.ExitCode)
-			}
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond)
+	inspectResp, err := d.execInspect(ctx, execResp.ID)
+	if err != nil {
+		return truncated, fmt.Errorf("failed to inspect exec: %w", err)
+	}
+	if inspectResp.ExitCode != 0 {
+		return truncated, fmt.Errorf("command exited with code %d", inspectResp.ExitCode)
 	}
 
-	return nil
+	return truncated, nil
+}
+
+// execStreamMaxReattach docker exec 输出流被中断后的最大重挂次数
+// （退避 0.5s/1s/2s，每次重挂能继续读到之后的输出）。
+const execStreamMaxReattach = 3
+
+// execStreamReattachBackoff 重挂前退避：0.5s、1s、2s（超出上限时按 2s）
+func execStreamReattachBackoff(attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
+	}
+	if attempt > 3 {
+		attempt = 3
+	}
+	return 500 * time.Millisecond << (attempt - 1)
+}
+
+// streamOutcome 一轮 attach 读取结束后的处置
+// （抽成纯函数便于单测：截断判定不依赖真 docker）。
+type streamOutcome int
+
+const (
+	// streamOutcomeDone 命令已退出 ⇒ 正常结束
+	streamOutcomeDone streamOutcome = iota
+	// streamOutcomeReattach 进程仍在运行而流已断 ⇒ 输出流被截断，重挂续读
+	streamOutcomeReattach
+	// streamOutcomeGiveUp 已用尽重挂次数仍中断 ⇒ 判失败，绝不静默当成功
+	streamOutcomeGiveUp
+)
+
+// classifyStreamEnd 判定"流结束"的处置：仅当进程仍在运行时才视为截断
+// （正常结束时进程必然已退出，EOF 与断流的唯一可区分依据）。
+func classifyStreamEnd(running bool, reattached, max int) streamOutcome {
+	if !running {
+		return streamOutcomeDone
+	}
+	if reattached >= max {
+		return streamOutcomeGiveUp
+	}
+	return streamOutcomeReattach
+}
+
+// execStreamSettleWindow 进程刚退出时 docker 可能瞬时仍报 Running=true；判定截断前
+// 先观察一个窗口，避免把"正常结束"误判为断流（会造成多余重挂与 StreamTruncated 假阳性）。
+const execStreamSettleWindow = 1500 * time.Millisecond
+
+// execRunningSettled 查询 exec 是否仍在运行，但要求 Running=true 在 settle 窗口内持续成立：
+// 一旦某次查询返回 !Running 立即返回 false（即命令已退出 = 正常结束）。
+func (d *DockerExecutor) execRunningSettled(ctx context.Context, execID string, settle time.Duration) (bool, error) {
+	deadline := time.Now().Add(settle)
+	for {
+		running, err := d.execRunning(ctx, execID)
+		if err != nil {
+			return false, err
+		}
+		if !running {
+			return false, nil
+		}
+		if !time.Now().Before(deadline) {
+			return true, nil
+		}
+		select {
+		case <-ctx.Done():
+			return true, ctx.Err()
+		case <-time.After(150 * time.Millisecond):
+		}
+	}
+}
+
+// execRunning 查询 exec 是否仍在运行
+func (d *DockerExecutor) execRunning(ctx context.Context, execID string) (bool, error) {
+	resp, err := d.client.ContainerExecInspect(ctx, execID)
+	if err != nil {
+		return false, err
+	}
+	return resp.Running, nil
+}
+
+// execInspect 查询 exec 终态（退出码）
+func (d *DockerExecutor) execInspect(ctx context.Context, execID string) (container.ExecInspect, error) {
+	return d.client.ContainerExecInspect(ctx, execID)
 }
 
 // detectShell 检测容器中的shell
