@@ -419,13 +419,25 @@ func (p *WorkflowImpl) executeNode(ctx context.Context, node Node, exec executor
 		node.SetRuntimeStatus(runtimeStatus)
 	}
 
-	// 3. 发送所有步骤命令
+	// 3. 上游绑定引用静态校验：{{ Upstream.field }} 中上游未产出的字段在此直接失败。
+	// pongo2 非 strict 模式会把缺失字段渲染成空串（不报错），错误最终落到下游节点的
+	// "缺参"上，掩盖真正的上游问题（exec 364：docker exec 流被截断 → KSampler 无输出）。
+	if err := p.validateNodeBindings(node); err != nil {
+		fmt.Printf("Node %s binding validation failed: %v\n", node.Id(), err)
+		if rs := node.GetRuntimeStatus(); rs != nil {
+			p.updateNodeFinalStatus(rs, err)
+			node.SetRuntimeStatus(rs)
+		}
+		return err
+	}
+
+	// 4. 发送所有步骤命令
 	go p.sendCommands(ctx, node, commandChan, steps)
 
-	// 4. 等待并处理所有结果
+	// 5. 等待并处理所有结果
 	fullOutput, lastErr := p.waitForResults(ctx, node, exec, resultChan, steps)
 
-	// 5. 从完整输出中提取元数据
+	// 6. 从完整输出中提取元数据
 	if lastErr == nil {
 		// 创建一个虚拟 executor.StepResult 用于提取
 		stepResult := &executor.StepResult{
@@ -438,13 +450,13 @@ func (p *WorkflowImpl) executeNode(ctx context.Context, node Node, exec executor
 		}
 	}
 
-	// 6. 更新节点最终状态
+	// 7. 更新节点最终状态
 	if runtimeStatus = node.GetRuntimeStatus(); runtimeStatus != nil {
 		p.updateNodeFinalStatus(runtimeStatus, lastErr)
 		node.SetRuntimeStatus(runtimeStatus)
 	}
 
-	// 7. 等待 executor Transfer 完全退出后再关闭 inputChan
+	// 8. 等待 executor Transfer 完全退出后再关闭 inputChan
 	//    Transfer 会在 commandChan 关闭后退出，sendCommands 负责关闭 commandChan。
 	//    这里 drain resultChan 直到关闭，以确认 Transfer 已结束。
 	go func() {
