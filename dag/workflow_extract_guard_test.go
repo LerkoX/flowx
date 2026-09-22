@@ -2,9 +2,11 @@ package dag
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/LerkoX/flowx/core"
+	"github.com/LerkoX/flowx/executor"
 )
 
 // 零提取护栏：节点声明了 extract 但输出里没有 codec 块（如 docker exec 流被截断，
@@ -49,5 +51,45 @@ func TestExtractOutput_PresentBlockNoMarker(t *testing.T) {
 	}
 	if core.GetValue(wf.metadata["KSampler.latent"].Value) != "abc" {
 		t.Fatalf("latent not extracted: %v", wf.Metadata())
+	}
+}
+
+// 只有声明 extract 的节点才应启用容器内 tee 兜底（CaptureOutput）：
+// 包壳会给每个这类步骤多一次清理 exec，不能给无输出块的节点白花。
+func TestSendCommands_CaptureOutputOnlyForExtractNodes(t *testing.T) {
+	steps := []core.Step{{Name: "run", Run: "echo hi"}}
+	cases := []struct {
+		name string
+		cfg  map[string]any
+		want bool
+	}{
+		{"有 extract", map[string]any{"extract": map[string]interface{}{"type": "codec-block"}}, true},
+		{"无 extract", map[string]any{"command": "echo hi"}, false},
+		{"extract 为 null", map[string]any{"extract": nil}, false},
+		{"无配置", nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			wf := &WorkflowImpl{}
+			node := NewDGANodeWithConfig("KSampler", "", "", "", nil, tc.cfg)
+			ch := make(chan any, 4)
+			wf.sendCommands(context.Background(), node, ch, steps)
+
+			select {
+			case got := <-ch:
+				wrapper, ok := got.(executor.CommandWrapper)
+				if !ok {
+					t.Fatalf("unexpected payload type %T", got)
+				}
+				if wrapper.CaptureOutput != tc.want {
+					t.Fatalf("CaptureOutput = %v, want %v", wrapper.CaptureOutput, tc.want)
+				}
+				if !strings.Contains(wrapper.Command, "echo hi") {
+					t.Fatalf("命令不应被改写: %q", wrapper.Command)
+				}
+			default:
+				t.Fatal("no command sent")
+			}
+		})
 	}
 }

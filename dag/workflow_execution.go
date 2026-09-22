@@ -569,11 +569,25 @@ func (p *WorkflowImpl) sendCommands(ctx context.Context, node Node, commandChan 
 		}
 
 		commandChan <- executor.CommandWrapper{
-			StepName: step.Name,
-			Command:  renderedRun,
-			Env:      env,
+			StepName:      step.Name,
+			Command:       renderedRun,
+			Env:           env,
+			CaptureOutput: nodeDeclaresExtract(node),
 		}
 	}
+}
+
+// nodeDeclaresExtract 判断节点是否声明了输出提取（extract 配置）。
+// 这类节点的输出块是下游节点的数据来源，一旦丢失，下游会报"缺参"而掩盖真因
+// （exec 364）；故 docker 执行器对其启用容器内 tee 兜底（落盘 + 断流后补齐尾部）。
+// 判定条件与 extractOutput 一致：extract 存在且非 nil。
+func nodeDeclaresExtract(node Node) bool {
+	cfg := node.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	extract, ok := cfg["extract"]
+	return ok && extract != nil
 }
 
 // shouldSkipStep 检查步骤是否应该跳过执行
