@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -78,14 +79,17 @@ type fakeDaemon struct {
 	exitCode        int
 	attachFailAfter int // >0 时第 N 次之后的 attach 返回 500
 	attachCalls     int
+	// captureLog：容器内 tee 落盘的完整日志；兜底 exec 按 tail -c +N 截取后返回
+	captureLog string
+	cmds       map[string][]string // exec id → Cmd（断言命令包壳）
 }
 
 func (f *fakeDaemon) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasSuffix(r.URL.Path, "/containers/fake-container/exec"):
-		f.handleExecCreate(w)
+		f.handleExecCreate(w, r)
 	case strings.HasSuffix(r.URL.Path, "/start"):
-		f.handleAttach(w)
+		f.handleAttach(w, execIDFromPath(r.URL.Path))
 	case strings.HasSuffix(r.URL.Path, "/json"):
 		f.handleInspect(w)
 	default:
@@ -93,22 +97,64 @@ func (f *fakeDaemon) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleExecCreate 模拟 POST /containers/{id}/exec → {Id}
-func (f *fakeDaemon) handleExecCreate(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(map[string]any{"Id": "fake-exec"})
+// execIDFromPath 从 /v1.47/exec/{id}/start 里取 exec id
+func execIDFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, p := range parts {
+		if p == "exec" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
 }
 
-func (f *fakeDaemon) handleAttach(w http.ResponseWriter) {
+// lastCmd 返回某个 exec 实际执行的命令（断言包壳/补齐命令用）
+func (f *fakeDaemon) lastCmd(id string) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cmds[id]
+}
+
+// handleExecCreate 模拟 POST /containers/{id}/exec → {Id}
+// 兜底命令（tee 日志的 tail/rm）用独立 exec id，避免干扰命令 exec 的 inspect 序列。
+func (f *fakeDaemon) handleExecCreate(w http.ResponseWriter, r *http.Request) {
+	var body struct{ Cmd []string }
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	id := "fake-exec"
+	for _, arg := range body.Cmd {
+		if strings.Contains(arg, "tail -c +") || strings.Contains(arg, ".flowx-capture-") && strings.Contains(arg, "rm -f") {
+			id = "capture-exec"
+			break
+		}
+	}
+	f.mu.Lock()
+	if f.cmds == nil {
+		f.cmds = map[string][]string{}
+	}
+	f.cmds[id] = body.Cmd
+	f.mu.Unlock()
+
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]any{"Id": id})
+}
+
+func (f *fakeDaemon) handleAttach(w http.ResponseWriter, execID string) {
 	f.mu.Lock()
 	f.attachCalls++
 	call := f.attachCalls
 	fail := f.attachFailAfter > 0 && call > f.attachFailAfter
 	var lines []string
-	if f.roundIdx < len(f.rounds) {
+	if execID == "capture-exec" {
+		f.attachCalls-- // 兜底 exec 不参与命令 exec 的 attach 计数
+		// 忠实模拟 `tail -c +N <log>`：从第 N 字节（1 起）返回，这样"跳过已送达前缀"
+		// 这件事本身也被验证（假实现若整段返回，重复投递的断言就会失败）。
+		if offset := parseTailOffset(f.cmds["capture-exec"]); offset > 0 && offset-1 < len(f.captureLog) {
+			lines = []string{f.captureLog[offset-1:]}
+		}
+	} else if f.roundIdx < len(f.rounds) {
 		lines = f.rounds[f.roundIdx]
+		f.roundIdx++
 	}
-	f.roundIdx++
 	f.mu.Unlock()
 
 	if fail {
@@ -138,6 +184,10 @@ func (f *fakeDaemon) handleAttach(w http.ResponseWriter) {
 		"Content-Type: application/vnd.docker.raw-stream\r\n" +
 		"Connection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
 	for _, line := range lines {
+		if strings.HasSuffix(line, "\n") {
+			writeStdoutFrame(rw, line)
+			continue
+		}
 		writeStdoutFrame(rw, line+"\n")
 	}
 	_ = rw.Flush()
@@ -175,6 +225,24 @@ func (f *fakeDaemon) handleInspect(w http.ResponseWriter) {
 		"Pid":        1,
 		"ExitCodeCh": nil,
 	})
+}
+
+// parseTailOffset 从 `tail -c +N <log>` 命令里取出 N（1 起；无 tail 则 0）
+func parseTailOffset(cmd []string) int {
+	for _, arg := range cmd {
+		i := strings.Index(arg, "tail -c +")
+		if i < 0 {
+			continue
+		}
+		rest := strings.Fields(arg[i+len("tail -c +"):])
+		if len(rest) == 0 {
+			continue
+		}
+		if n, err := strconv.Atoi(rest[0]); err == nil {
+			return n
+		}
+	}
+	return 0
 }
 
 func writeStdoutFrame(w io.Writer, s string) {
@@ -251,7 +319,7 @@ func TestExecStream_TruncatedThenReattachRecovers(t *testing.T) {
 	appendCb := func(b []byte) { out <- b }
 
 	truncated, err := exec.executeCommandInContainerStreaming(context.Background(),
-		"python main.py", nil, appendCb, nil, nil)
+		"python main.py", nil, "", appendCb, nil, nil)
 	close(closed)
 
 	if err != nil {
@@ -278,7 +346,7 @@ func TestExecStream_TruncatedReattachFails(t *testing.T) {
 	exec := newFakeExecutor(t, d)
 
 	truncated, err := exec.executeCommandInContainerStreaming(context.Background(),
-		"python main.py", nil, func([]byte) {}, nil, nil)
+		"python main.py", nil, "", func([]byte) {}, nil, nil)
 
 	if err == nil {
 		t.Fatal("expected error when re-attach fails, got nil (silent success is the bug)")
@@ -301,7 +369,7 @@ func TestExecStream_NormalEnd(t *testing.T) {
 
 	var sb strings.Builder
 	truncated, err := exec.executeCommandInContainerStreaming(context.Background(),
-		"python main.py", nil, func(b []byte) { sb.Write(b) }, nil, nil)
+		"python main.py", nil, "", func(b []byte) { sb.Write(b) }, nil, nil)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -324,7 +392,7 @@ func TestExecStream_NonZeroExit(t *testing.T) {
 	exec := newFakeExecutor(t, d)
 
 	_, err := exec.executeCommandInContainerStreaming(context.Background(),
-		"false", nil, func([]byte) {}, nil, nil)
+		"false", nil, "", func([]byte) {}, nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "exited with code 2") {
 		t.Fatalf("expected exit code error, got: %v", err)
 	}
@@ -380,7 +448,7 @@ func TestExecStream_StdCopyFraming(t *testing.T) {
 
 	var lines []string
 	var mu sync.Mutex
-	_, err := exec.executeCommandInContainerStreaming(context.Background(), "cmd", nil,
+	_, err := exec.executeCommandInContainerStreaming(context.Background(), "cmd", nil, "",
 		func(b []byte) { mu.Lock(); lines = append(lines, strings.TrimRight(string(b), "\n")); mu.Unlock() },
 		nil, nil)
 	if err != nil {
@@ -413,5 +481,128 @@ func TestExecRunningSettled(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed < 300*time.Millisecond {
 		t.Fatalf("settle returned too early: %v", elapsed)
+	}
+}
+
+// ---------- 容器内 tee 兜底（captureTag 非空，仅声明 extract 的步骤） ----------
+
+// 未声明 extract：命令原样下发，不加包壳
+func TestCapture_NoTagNoWrap(t *testing.T) {
+	d := &fakeDaemon{rounds: [][]string{{"plain output"}}}
+	exec := newFakeExecutor(t, d)
+
+	_, err := exec.executeCommandInContainerStreaming(context.Background(),
+		"python main.py", nil, "", func([]byte) {}, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmd := strings.Join(d.lastCmd("fake-exec"), " ")
+	if strings.Contains(cmd, "tee ") || strings.Contains(cmd, ".flowx-capture-") {
+		t.Fatalf("命令不应被包壳: %q", cmd)
+	}
+}
+
+// 声明 extract：命令被包成 tee 落盘 + 退出码走 rc 文件
+func TestCapture_TagWrapsCommand(t *testing.T) {
+	d := &fakeDaemon{rounds: [][]string{{"```flowx-yaml", "latent: abc", "```"}}}
+	exec := newFakeExecutor(t, d)
+
+	_, err := exec.executeCommandInContainerStreaming(context.Background(),
+		"python main.py", nil, "unit-wrap", func([]byte) {}, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmd := strings.Join(d.lastCmd("fake-exec"), " ")
+	for _, want := range []string{
+		"tee /tmp/.flowx-capture-unit-wrap.log",
+		"echo $? > /tmp/.flowx-capture-unit-wrap.rc",
+		"exit ${__flowx_rc:-1}",
+		"python main.py", // 原命令仍在
+	} {
+		if !strings.Contains(cmd, want) {
+			t.Fatalf("包壳命令缺少 %q: %q", want, cmd)
+		}
+	}
+	// 流未中断：只做清理，不补齐（tail 不应出现）
+	if clean := strings.Join(d.lastCmd("capture-exec"), " "); strings.Contains(clean, "tail -c +") {
+		t.Fatalf("未断流不应补齐: %q", clean)
+	} else if !strings.Contains(clean, "rm -f /tmp/.flowx-capture-unit-wrap.log") {
+		t.Fatalf("未断流应清理临时文件: %q", clean)
+	}
+}
+
+// 断流 + 重挂接回但中间缺了尾部：从容器内日志按"已送达字节数"补齐，且不重复投递
+func TestCapture_ReplaysMissingTailAfterTruncation(t *testing.T) {
+	full := "progress 1/2\n```flowx-yaml\nlatent: abc\n```\n"
+	d := &fakeDaemon{
+		rounds:          [][]string{{"progress 1/2"}, {}}, // 重挂没拿到任何字节
+		exitAfterAttach: 2,                                // 第一轮流关闭时进程仍在运行 → 真截断
+		captureLog:      full,                             // 容器内 tee 日志（完整输出）
+	}
+	exec := newFakeExecutor(t, d)
+
+	var sb strings.Builder
+	truncated, err := exec.executeCommandInContainerStreaming(context.Background(),
+		"python main.py", nil, "unit-replay", func(b []byte) { sb.Write(b) }, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if truncated != 1 {
+		t.Fatalf("truncated = %d, want 1", truncated)
+	}
+	got := sb.String()
+	if !strings.Contains(got, "latent: abc") {
+		t.Fatalf("补齐输出未送达: %q", got)
+	}
+	if n := strings.Count(got, "progress 1/2"); n != 1 {
+		t.Fatalf("已送达前缀被重复投递 %d 次: %q", n, got)
+	}
+	replay := strings.Join(d.lastCmd("capture-exec"), " ")
+	// streamBytes = len("progress 1/2\n") = 13 → tail 从第 14 字节开始
+	if !strings.Contains(replay, "tail -c +14 /tmp/.flowx-capture-unit-replay.log") {
+		t.Fatalf("补齐命令偏移不对: %q", replay)
+	}
+	if !strings.Contains(replay, "rm -f /tmp/.flowx-capture-unit-replay.log") {
+		t.Fatalf("补齐后应清理临时文件: %q", replay)
+	}
+}
+
+// 重挂用尽（直接失败）：仍尽量补齐尾部，失败现场要完整
+func TestCapture_ReplaysOnGiveUp(t *testing.T) {
+	d := &fakeDaemon{
+		rounds:          [][]string{{"progress 1/2"}},
+		exitAfterAttach: 99, // 进程永不退出 → 重挂 3 次后放弃
+		captureLog:      "progress 1/2\n```flowx-yaml\nlatent: abc\n```\n",
+	}
+	exec := newFakeExecutor(t, d)
+
+	var sb strings.Builder
+	truncated, err := exec.executeCommandInContainerStreaming(context.Background(),
+		"python main.py", nil, "unit-giveup", func(b []byte) { sb.Write(b) }, nil, nil)
+	if err == nil {
+		t.Fatal("流持续中断必须失败（不得静默当成功）")
+	}
+	if truncated != execStreamMaxReattach {
+		t.Fatalf("truncated = %d, want %d", truncated, execStreamMaxReattach)
+	}
+	if !strings.Contains(sb.String(), "latent: abc") {
+		t.Fatalf("失败前应补齐尾部: %q", sb.String())
+	}
+}
+
+// 多行命令：内层组整体重定向，保证每行 stderr 都进日志（否则日志比流短，
+// "日志前缀=已送达"的补齐前提被破坏）
+func TestCapture_MultilineCommandRedirection(t *testing.T) {
+	d := &fakeDaemon{rounds: [][]string{{"ok"}}}
+	exec := newFakeExecutor(t, d)
+
+	_, err := exec.executeCommandInContainerStreaming(context.Background(),
+		"echo a\npython b.py", nil, "unit-multi", func([]byte) {}, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmd := strings.Join(d.lastCmd("fake-exec"), " ")
+	if !strings.Contains(cmd, "{ { echo a\npython b.py\n} 2>&1;") {
+		t.Fatalf("多行命令未整体重定向: %q", cmd)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/LerkoX/flowx/executor"
@@ -247,14 +248,14 @@ func (d *DockerExecutor) Transfer(ctx context.Context, resultChan chan<- any, co
 				safeSend(resultChan, fmt.Errorf("unsupported data type: %T, expected CommandWrapper", data))
 				continue
 			}
-			// 执行命令（携带步骤名称）
-			d.executeCommandStreaming(execCtx, cmdWrapper.Command, cmdWrapper.StepName, cmdWrapper.Env, resultChan, inputChan)
+			// 执行命令（携带步骤名称；CaptureOutput 步骤启用容器内 tee 兜底）
+			d.executeCommandStreaming(execCtx, cmdWrapper.Command, cmdWrapper.StepName, cmdWrapper.Env, cmdWrapper.CaptureOutput, resultChan, inputChan)
 		}
 	}
 }
 
 // executeCommandStreaming 执行命令并实时流式输出
-func (d *DockerExecutor) executeCommandStreaming(ctx context.Context, command string, stepName string, env map[string]string, resultChan chan<- any, inputChan <-chan []byte) {
+func (d *DockerExecutor) executeCommandStreaming(ctx context.Context, command string, stepName string, env map[string]string, captureOutput bool, resultChan chan<- any, inputChan <-chan []byte) {
 	startTime := time.Now()
 
 	inputRequestChan := make(chan *executor.InputRequest, 1)
@@ -281,7 +282,13 @@ func (d *DockerExecutor) executeCommandStreaming(ctx context.Context, command st
 		}
 	}()
 
-	truncated, err := d.executeCommandInContainerStreaming(ctx, command, env, func(data []byte) {
+	// 声明了 extract 的步骤才启用容器内 tee 兜底（短任务节点无需多花一次 exec 清理）
+	capt := ""
+	if captureOutput {
+		capt = newCaptureTag(stepName)
+	}
+
+	truncated, err := d.executeCommandInContainerStreaming(ctx, command, env, capt, func(data []byte) {
 		safeSend(resultChan, data)
 	}, inputChan, onInputRequest)
 
@@ -299,11 +306,15 @@ func (d *DockerExecutor) executeCommandStreaming(ctx context.Context, command st
 
 // executeCommandInContainerStreaming 在容器中执行命令并实时流式输出。
 //
+// captureTag 非空时（仅节点声明了 extract 的步骤）在容器内加 tee 兜底：
+// 完整输出同时写 /tmp/.flowx-capture-<tag>.log，退出码写 .rc 并由 wrapper 显式 exit，
+// 这样“输出落盘”与“退出码语义”都不依赖 attach 流是否完整（见下方 replayCapturedTail）。
+//
 // 返回值 truncated 表示 attach 读取流曾被中断（已尽力重挂续读，次数=truncated）；
 // 重挂仍无法续接时返回错误——**绝不静默当成功**：日志流被截断会让节点输出块丢失，
 // 下游节点随后报"缺参"，把排查方向带偏（exec 364 事故：cpolar 上的 docker exec
 // 流被截断 → KSampler 绿灯但无输出 → VAEDecode 报 missing required parameter）。
-func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context, command string, env map[string]string, outputCallback func([]byte), inputChan <-chan []byte, onInputRequest func(*executor.InputRequest)) (int, error) {
+func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context, command string, env map[string]string, captureTag string, outputCallback func([]byte), inputChan <-chan []byte, onInputRequest func(*executor.InputRequest)) (int, error) {
 	d.mu.RLock()
 	containerID := d.containerID
 	d.mu.RUnlock()
@@ -313,6 +324,12 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 	}
 
 	shell := d.detectShell()
+
+	// 声明了 extract 的步骤：命令包壳，完整输出经 tee 落盘（容器内 /tmp）。
+	// 包壳只改变重定向与退出码来源，不影响实时性（tee 边读边写）。
+	if captureTag != "" {
+		command = wrapCommandForCapture(command, captureTag)
+	}
 
 	execConfig := container.ExecOptions{
 		Cmd:          []string{shell, "-c", command},
@@ -431,6 +448,10 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 	var buffer strings.Builder
 	inInputBlock := false
 
+	// 已从 attach 流读到的字节数 ≈ 容器内日志的前缀长度：断流兜底时据此跳过
+	// 已送达的前缀，只补发缺失的尾部（避免整段重复）。重挂提示行不计入（它不在日志里）。
+	streamBytes := 0
+
 	scanRound := func(reader io.Reader) error {
 		var outputReader io.Reader = reader
 		if !d.tty {
@@ -446,6 +467,7 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 		scanner.Buffer(make([]byte, 4096), 1024*1024)
 		for scanner.Scan() {
 			line := scanner.Text()
+			streamBytes += len(line) + 1 // ≈ 该行在容器内日志中占用的字节数
 
 			if strings.TrimSpace(line) == "```flowx-input" {
 				inInputBlock = true
@@ -496,6 +518,8 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 		case streamOutcomeGiveUp:
 			close(done)
 			wg.Wait()
+			// 已确定失败，但仍把容器内的尾部补发出去：失败现场越完整越好排查
+			d.replayCapturedTail(ctx, captureTag, streamBytes, outputCallback)
 			return truncated, fmt.Errorf(
 				"docker exec output stream truncated while command still running "+
 					"(re-attached %d times, last read error: %v)", truncated, scanErr)
@@ -513,6 +537,7 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 			if aerr != nil {
 				close(done)
 				wg.Wait()
+				d.replayCapturedTail(ctx, captureTag, streamBytes, outputCallback)
 				return truncated, fmt.Errorf(
 					"docker exec stream truncated and re-attach failed: %w", aerr)
 			}
@@ -529,6 +554,17 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 
 	close(done)
 	wg.Wait()
+
+	// 流曾中断（已重挂接回）：实时流中间可能缺了一段（重挂前未及读到的字节），
+	// 用容器内日志补齐尾部；未中断则只清理临时文件（容器按 executor 复用，
+	// 不清理会在硬盘上累加，故不省这一次 exec）。
+	if captureTag != "" {
+		if truncated > 0 {
+			d.replayCapturedTail(ctx, captureTag, streamBytes, outputCallback)
+		} else {
+			d.cleanupCapture(ctx, captureTag)
+		}
+	}
 
 	inspectResp, err := d.execInspect(ctx, execResp.ID)
 	if err != nil {
@@ -890,3 +926,137 @@ func safeSend(ch chan<- any, value any) {
 // 确保DockerExecutor实现了Executor接口和ExecutorInfoProvider接口
 var _ executor.Executor = (*DockerExecutor)(nil)
 var _ executor.ExecutorInfoProvider = (*DockerExecutor)(nil)
+
+// ===== 容器内输出兜底（tee）：仅用于声明了 extract 的步骤 =====
+//
+// 动机：docker attach 流被中途掐断时客户端读到的是干净 EOF，与"命令正常结束"无法
+// 区分（见 executeCommandInContainerStreaming），重挂也可能接不回中间缺的那段。
+// 对"输出块要被下游消费"的节点，光靠流不可靠 —— 让输出同时落盘在容器内，
+// 断了就按字节前缀补齐尾部（exec 364 事故的直接兜底）。
+
+// captureSeq 保证同一容器内多个步骤/节点的临时文件互不覆盖
+var captureSeq atomic.Uint64
+
+// newCaptureTag 生成容器内临时文件名后缀：步骤名（清洗）+ pid + 自增序号
+func newCaptureTag(stepName string) string {
+	name := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+			return r
+		default:
+			return '_'
+		}
+	}, stepName)
+	if name == "" {
+		name = "step"
+	}
+	if len(name) > 24 {
+		name = name[:24]
+	}
+	return fmt.Sprintf("%s-%d-%d", name, os.Getpid(), captureSeq.Add(1))
+}
+
+func captureLogPath(tag string) string { return "/tmp/.flowx-capture-" + tag + ".log" }
+func captureRCPath(tag string) string  { return "/tmp/.flowx-capture-" + tag + ".rc" }
+
+// wrapCommandForCapture 把命令包成"输出落盘 + 退出码走文件"的形式：
+//
+//	{ { <cmd>; } 2>&1; echo $? > <rc>; } | tee <log>; __flowx_rc=$(cat <rc> 2>/dev/null); exit ${__flowx_rc:-1}
+//
+// 要点：
+//   - stderr 在**内层组**上整体重定向进管道，多行命令的每一行 stderr 都进日志
+//     （只重定向最后一行会让日志比流少字节，破坏"日志前缀=已送达"的补发前提）
+//   - `echo $?` 紧跟内层组：拿到的仍是命令退出码（不是 tee 的）
+//   - 末尾显式 exit 让 exec 退出码回到命令语义，`execInspect` 仍然可信
+//   - rc 文件缺失/不可读时按 1 处理：宁可失败也不要静默成功
+func wrapCommandForCapture(command, tag string) string {
+	logPath, rcPath := captureLogPath(tag), captureRCPath(tag)
+	return fmt.Sprintf(
+		"{ { %s\n} 2>&1; echo $? > %s; } | tee %s; "+
+			"__flowx_rc=$(cat %s 2>/dev/null); exit ${__flowx_rc:-1}",
+		command, rcPath, logPath, rcPath)
+}
+
+// replayCapturedTail 断流兜底：把容器内日志中"实时流没送到"的尾部补发出去。
+//
+// streamBytes 是已从 attach 流读到的字节数，即日志的已送达前缀长度；日志与流同为
+// tee 的同一次读取，故流内容恒为日志的前缀（tee 先写文件后写 stdout）。用
+// `tail -c +N` 从该前缀之后开始输出；若已送达字节数已超过日志长度（进程仍在运行、
+// tee 尚未 flush），tail 输出为空 —— 只少补、不重复。顺带清理临时文件。
+func (d *DockerExecutor) replayCapturedTail(ctx context.Context, tag string, streamBytes int, outputCallback func([]byte)) {
+	if tag == "" {
+		return
+	}
+	logPath, rcPath := captureLogPath(tag), captureRCPath(tag)
+	if streamBytes < 0 {
+		streamBytes = 0
+	}
+	cmd := fmt.Sprintf("tail -c +%d %s 2>/dev/null; rm -f %s %s 2>/dev/null",
+		streamBytes+1, logPath, logPath, rcPath)
+	out, err := d.runContainerCommand(ctx, cmd)
+	if err != nil {
+		if outputCallback != nil {
+			outputCallback([]byte(fmt.Sprintf("[flowx] 从容器内补齐输出失败: %v\n", err)))
+		}
+		return
+	}
+	if out != "" {
+		if outputCallback != nil {
+			outputCallback([]byte(
+				"[flowx] docker exec 流曾中断，以下为从容器内日志补齐的缺失输出：\n"))
+			outputCallback([]byte(out))
+		}
+		fmt.Printf("docker exec captured tail replayed: tag=%s from=%d bytes=%d\n",
+			tag, streamBytes, len(out))
+	}
+}
+
+// cleanupCapture 清理容器内临时文件（未发生断流时调用）
+func (d *DockerExecutor) cleanupCapture(ctx context.Context, tag string) {
+	if tag == "" {
+		return
+	}
+	if _, err := d.runContainerCommand(ctx,
+		fmt.Sprintf("rm -f %s %s 2>/dev/null", captureLogPath(tag), captureRCPath(tag))); err != nil {
+		fmt.Printf("Warning: 清理容器内输出兜底文件失败: %v\n", err)
+	}
+}
+
+// runContainerCommand 在容器内执行一条短命令并返回其合并输出（非流式，兜底路径专用）。
+// 不复用流式实现：它要注册取消回调、维护重挂连接与输入通道，代价远高于收益。
+func (d *DockerExecutor) runContainerCommand(ctx context.Context, command string) (string, error) {
+	d.mu.RLock()
+	containerID := d.containerID
+	d.mu.RUnlock()
+	if containerID == "" {
+		return "", fmt.Errorf("container not prepared")
+	}
+
+	execResp, err := d.client.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+		Cmd:          []string{d.detectShell(), "-c", command},
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create exec: %w", err)
+	}
+	attachResp, err := d.client.ContainerExecAttach(ctx, execResp.ID,
+		container.ExecAttachOptions{Tty: d.tty})
+	if err != nil {
+		return "", fmt.Errorf("failed to attach to exec: %w", err)
+	}
+	defer attachResp.Close()
+
+	var out strings.Builder
+	if d.tty {
+		// TTY 模式是裸流
+		if _, err := io.Copy(&out, attachResp.Reader); err != nil && err != io.EOF {
+			return out.String(), err
+		}
+		return out.String(), nil
+	}
+	if _, err := stdcopy.StdCopy(&out, &out, attachResp.Reader); err != nil && err != io.EOF {
+		return out.String(), err
+	}
+	return out.String(), nil
+}

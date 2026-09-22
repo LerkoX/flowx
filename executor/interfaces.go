@@ -72,6 +72,10 @@ type CommandWrapper struct {
 	Command  string            // 要执行的命令
 	Env      map[string]string // 命令级环境变量（已渲染终值）：执行器尽量以真实进程
 	                           // 环境变量注入；不支持时在命令前拼接单引号转义的 export 行
+	// CaptureOutput 标记"输出必须完整送达"的步骤（节点声明了 extract）：
+	// 输出块是下游节点的数据来源，一旦丢失会让下游报"缺参"而掩盖真因。
+	// 仅 docker 执行器使用：它在容器内加 tee 兜底（落盘 + 断流后补齐尾部）。
+	CaptureOutput bool
 }
 
 // InputRequest 输入请求信息
