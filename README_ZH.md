@@ -227,6 +227,8 @@ Executors:
       tty: true             # 启用 TTY
       ttyWidth: 120         # TTY 宽度
       ttyHeight: 40         # TTY 高度
+      daemonTimeout: "15s"  # daemon 控制面请求响应超时（默认 15s）；
+                            # daemon 不响应时快速失败而非让节点停在 running
       volumes:              # 卷挂载
         - /host/path:/container/path
       env:                  # 环境变量

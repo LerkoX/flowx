@@ -227,6 +227,8 @@ Executors:
       tty: true             # Enable TTY
       ttyWidth: 120         # TTY width
       ttyHeight: 40         # TTY height
+      daemonTimeout: "15s"  # Daemon control-plane response timeout (default 15s);
+                            # fail fast instead of hanging when the daemon is unresponsive
       volumes:              # Volume mounts
         - /host/path:/container/path
       env:                  # Environment variables

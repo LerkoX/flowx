@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- 修复 docker 执行器在 daemon 不可达时永久挂起的问题：host 端口能 TCP 连上但 daemon 不响应（隧道断开后中间设备仍接受连接）时，docker client 只设了拨号超时、没有响应头超时，控制面请求会一直等下去，节点永远停在 running（exec 407 事故）。现对镜像探测/容器创建启动、exec 创建与探测、镜像拉取、exec attach 等控制面调用统一加 daemon 响应超时（配置键 `daemonTimeout`，默认 15s，支持 `"15s"`/秒数），超时即失败并给出 `docker daemon not responding (host=...)` 提示；daemon 不可达时不再误入镜像拉取分支。响应体/流式输出读取不受该超时限制。
 - 新增 `LoadWorkflow`：加载流水线配置（含 `ExportConfig` 快照中的节点运行时状态）但不运行，按节点状态推导流水线状态（FAILED > STOPPED > SUCCESS），随后可 `UpdateConfig` 改图、`Rerun` 增量续跑——支持进程重启后从快照恢复已完成的流水线
 - 新增 `Rerun`：重新运行处于可修改状态的流水线，已终结状态（SUCCESS/FAILED/CANCELLED）的节点自动跳过，仅执行新增/未运行节点
 - 修复 `Rm` 未释放 `workflowIds`，同进程无法同名重建实例的问题

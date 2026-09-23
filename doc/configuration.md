@@ -238,6 +238,8 @@ Executors:
       tty: true                    # 启用 TTY
       ttyWidth: 80                 # TTY 宽度
       ttyHeight: 24                # TTY 高度
+      daemonTimeout: "15s"         # daemon 控制面请求响应超时（默认 15s；
+                                   # daemon 不响应时快速失败而非永久挂起）
 ```
 
 ### 6.3 kubernetes 执行器

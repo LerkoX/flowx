@@ -36,6 +36,10 @@ func NewDockerAdapter() *DockerAdapter {
 //   - tty: 是否启用 TTY 模式 bool
 //   - ttyWidth: TTY 终端宽度 int（默认 80）
 //   - ttyHeight: TTY 终端高度 int（默认 24）
+//   - daemonTimeout: daemon 控制面请求响应超时（如 "15s" 或秒数 int/float，
+//     默认 15s）。host 能 TCP 连上但 daemon 不响应时，无超时的请求会永久挂起，
+//     节点停在 running；设置后此类异常在超时后快速失败。只限制响应头等待，
+//     不影响镜像拉取流/exec attach 长连接的响应体读取。
 func (a *DockerAdapter) Config(ctx context.Context, config map[string]any) error {
 	a.config = config
 	return nil
