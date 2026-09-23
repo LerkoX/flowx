@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,13 +16,23 @@ import (
 	"time"
 
 	"github.com/LerkoX/flowx/executor"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
+	"github.com/docker/docker/pkg/stdcopy"
 	"gopkg.in/yaml.v2"
 )
+
+// defaultDaemonTimeout docker daemon 控制面请求的默认响应超时。
+//
+// 动机（exec 407 事故）：host 的 TCP 端口能被连上但 daemon 不响应（隧道断开后
+// 中间设备仍接受连接）时，docker client 默认只设了 10s 拨号超时、没有响应头超时，
+// 控制面请求会永久挂起 —— 节点永远停在 running，整条流水线卡死且没有任何失败信号。
+// 这里给控制面请求一个上限，让这类异常快速失败（见 controlContext / attachExec）。
+const defaultDaemonTimeout = 15 * time.Second
 
 // DockerExecutor Docker执行器实现
 type DockerExecutor struct {
@@ -32,12 +44,13 @@ type DockerExecutor struct {
 	volumes           map[string]string
 	network           string
 	registry          string
-	host              string // daemon 地址（tcp://… / ssh://… / unix://…），空表示从环境变量读取（DOCKER_HOST 等）
-	tlsVerify         bool   // 是否启用 TLS 校验
-	certPath          string // TLS 证书目录（含 ca.pem/cert.pem/key.pem），默认为 ~/.docker
-	tty               bool   // 是否启用 TTY 模式
-	ttyHeight         uint   // TTY 终端高度
-	ttyWidth          uint   // TTY 终端宽度
+	host              string             // daemon 地址（tcp://… / ssh://… / unix://…），空表示从环境变量读取（DOCKER_HOST 等）
+	tlsVerify         bool               // 是否启用 TLS 校验
+	certPath          string             // TLS 证书目录（含 ca.pem/cert.pem/key.pem），默认为 ~/.docker
+	tty               bool               // 是否启用 TTY 模式
+	ttyHeight         uint               // TTY 终端高度
+	ttyWidth          uint               // TTY 终端宽度
+	daemonTimeout     time.Duration      // daemon 控制面请求响应超时（0 表示 defaultDaemonTimeout）
 	currentExecCancel context.CancelFunc // 用于取消当前执行的命令
 	mu                sync.RWMutex
 }
@@ -114,6 +127,40 @@ func (d *DockerExecutor) ensureClient() error {
 	return nil
 }
 
+// daemonResponseTimeout 返回 daemon 控制面请求响应超时（未配置时用默认值）
+func (d *DockerExecutor) daemonResponseTimeout() time.Duration {
+	if d.daemonTimeout > 0 {
+		return d.daemonTimeout
+	}
+	return defaultDaemonTimeout
+}
+
+// controlContext 为单次控制面调用派生带超时的 context。
+// 调用方 ctx 已有不晚于本超时的 deadline 时原样返回（尊重更紧的上层约束）。
+func (d *DockerExecutor) controlContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	timeout := d.daemonResponseTimeout()
+	if dl, ok := ctx.Deadline(); ok && time.Until(dl) <= timeout {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+// daemonErrHint 对超时/连接类错误补充 host 与排查提示，
+// 把"daemon 不可达"与"镜像/容器不存在"两类失败在日志里区分开。
+func (d *DockerExecutor) daemonErrHint(err error) error {
+	if err == nil {
+		return nil
+	}
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &netErr) {
+		return fmt.Errorf(
+			"docker daemon not responding (host=%q, timeout=%s): %w; "+
+				"check the executor host/tlsVerify/certPath and that the daemon is reachable",
+			d.host, d.daemonResponseTimeout(), err)
+	}
+	return err
+}
+
 // NewDockerExecutorWithClient 使用指定的Docker客户端创建执行器
 func NewDockerExecutorWithClient(cli *client.Client) *DockerExecutor {
 	return &DockerExecutor{
@@ -145,7 +192,7 @@ func (d *DockerExecutor) Prepare(ctx context.Context) error {
 
 	// 检查镜像是否存在，不存在则拉取
 	if err := d.pullImageIfNeeded(ctx, fullImage); err != nil {
-		return fmt.Errorf("failed to pull image: %w", err)
+		return err
 	}
 
 	// 构建容器配置
@@ -172,21 +219,26 @@ func (d *DockerExecutor) Prepare(ctx context.Context) error {
 		hostConfig.NetworkMode = container.NetworkMode(d.network)
 	}
 
+	// 创建/启动/等待容器属于控制面握手：daemon 无响应时必须有界失败，
+	// 否则节点会永远停在 running（exec 407 事故）
+	controlCtx, cancel := d.controlContext(ctx)
+	defer cancel()
+
 	// 创建容器
-	resp, err := d.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, fmt.Sprintf("flowx-%d", time.Now().UnixNano()))
+	resp, err := d.client.ContainerCreate(controlCtx, containerConfig, hostConfig, nil, nil, fmt.Sprintf("flowx-%d", time.Now().UnixNano()))
 	if err != nil {
-		return fmt.Errorf("failed to create container: %w", err)
+		return fmt.Errorf("failed to create container: %w", d.daemonErrHint(err))
 	}
 
 	d.containerID = resp.ID
 
 	// 启动容器
-	if err := d.client.ContainerStart(ctx, d.containerID, container.StartOptions{}); err != nil {
-		return fmt.Errorf("failed to start container: %w", err)
+	if err := d.client.ContainerStart(controlCtx, d.containerID, container.StartOptions{}); err != nil {
+		return fmt.Errorf("failed to start container: %w", d.daemonErrHint(err))
 	}
 
 	// 等待容器启动完成
-	if err := d.waitForContainer(ctx); err != nil {
+	if err := d.waitForContainer(controlCtx); err != nil {
 		return fmt.Errorf("container failed to start: %w", err)
 	}
 
@@ -347,14 +399,15 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 		execConfig.Env = envList
 	}
 
-	execResp, err := d.client.ContainerExecCreate(ctx, containerID, execConfig)
+	// 控制面调用（创建 exec）：daemon 无响应时有界失败，避免节点卡在 running
+	createCtx, createCancel := d.controlContext(ctx)
+	execResp, err := d.client.ContainerExecCreate(createCtx, containerID, execConfig)
+	createCancel()
 	if err != nil {
 		return 0, fmt.Errorf("failed to create exec: %w", err)
 	}
 
-	attachResp, err := d.client.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{
-		Tty: d.tty,
-	})
+	attachResp, err := d.attachExec(ctx, execResp.ID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to attach to exec: %w", err)
 	}
@@ -370,10 +423,12 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 
 	// 如果启用 TTY，应用终端尺寸
 	if d.tty && (d.ttyWidth > 0 || d.ttyHeight > 0) {
-		_ = d.client.ContainerExecResize(ctx, execResp.ID, container.ResizeOptions{
+		resizeCtx, resizeCancel := d.controlContext(ctx)
+		_ = d.client.ContainerExecResize(resizeCtx, execResp.ID, container.ResizeOptions{
 			Width:  d.ttyWidth,
 			Height: d.ttyHeight,
 		})
+		resizeCancel()
 	}
 
 	var wg sync.WaitGroup
@@ -532,8 +587,7 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 			}
 			time.Sleep(execStreamReattachBackoff(truncated))
 
-			newResp, aerr := d.client.ContainerExecAttach(ctx, execResp.ID,
-				container.ExecAttachOptions{Tty: d.tty})
+			newResp, aerr := d.attachExec(ctx, execResp.ID)
 			if aerr != nil {
 				close(done)
 				wg.Wait()
@@ -580,6 +634,51 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 // execStreamMaxReattach docker exec 输出流被中断后的最大重挂次数
 // （退避 0.5s/1s/2s，每次重挂能继续读到之后的输出）。
 const execStreamMaxReattach = 3
+
+// attachResultContainerExecAttach 结果（供带超时的 attachExec 与延迟回收使用）
+type attachResult struct {
+	resp types.HijackedResponse
+	err  error
+}
+
+// attachExec 带超时的 exec attach。
+//
+// docker 的 attach 走裸连接（client.hijack → http.ReadResponse），不受 HTTP
+// transport 的响应头超时约束：daemon 接受连接但不回 upgrade 响应时会永久阻塞。
+// 这里用独立计时兜底，超时即让节点失败；attach 拿到连接之后的流式读取（可能
+// 持续很久）不受影响。
+func (d *DockerExecutor) attachExec(ctx context.Context, execID string) (types.HijackedResponse, error) {
+	timeout := d.daemonResponseTimeout()
+	ch := make(chan attachResult, 1)
+	go func() {
+		resp, err := d.client.ContainerExecAttach(ctx, execID, container.ExecAttachOptions{Tty: d.tty})
+		ch <- attachResult{resp: resp, err: err}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case r := <-ch:
+		return r.resp, r.err
+	case <-ctx.Done():
+		go closeLateAttach(ch)
+		return types.HijackedResponse{}, ctx.Err()
+	case <-timer.C:
+		go closeLateAttach(ch)
+		return types.HijackedResponse{}, fmt.Errorf(
+			"docker exec attach timed out after %s (host=%q, daemon not responding)", timeout, d.host)
+	}
+}
+
+// closeLateAttach 回收超时后才返回的 attach 连接（等 attach 的 goroutine
+// 无法从 http.ReadResponse 中收回，但至少不让已建立的连接悬挂）。
+func closeLateAttach(ch <-chan attachResult) {
+	r := <-ch
+	if r.resp.Conn != nil {
+		r.resp.Close()
+	}
+}
 
 // execStreamReattachBackoff 重挂前退避：0.5s、1s、2s（超出上限时按 2s）
 func execStreamReattachBackoff(attempt int) time.Duration {
@@ -646,7 +745,9 @@ func (d *DockerExecutor) execRunningSettled(ctx context.Context, execID string, 
 
 // execRunning 查询 exec 是否仍在运行
 func (d *DockerExecutor) execRunning(ctx context.Context, execID string) (bool, error) {
-	resp, err := d.client.ContainerExecInspect(ctx, execID)
+	inspectCtx, cancel := d.controlContext(ctx)
+	defer cancel()
+	resp, err := d.client.ContainerExecInspect(inspectCtx, execID)
 	if err != nil {
 		return false, err
 	}
@@ -655,7 +756,9 @@ func (d *DockerExecutor) execRunning(ctx context.Context, execID string) (bool, 
 
 // execInspect 查询 exec 终态（退出码）
 func (d *DockerExecutor) execInspect(ctx context.Context, execID string) (container.ExecInspect, error) {
-	return d.client.ContainerExecInspect(ctx, execID)
+	inspectCtx, cancel := d.controlContext(ctx)
+	defer cancel()
+	return d.client.ContainerExecInspect(inspectCtx, execID)
 }
 
 // detectShell 检测容器中的shell
@@ -670,16 +773,25 @@ func (d *DockerExecutor) detectShell() string {
 
 // pullImageIfNeeded 检查并拉取镜像
 func (d *DockerExecutor) pullImageIfNeeded(ctx context.Context, imageName string) error {
-	// 检查镜像是否存在
-	_, err := d.client.ImageInspect(ctx, imageName)
-	if err == nil {
+	// 镜像探测是控制面调用：daemon 无响应时必须在有限时间内失败，
+	// 不能卡在这里等一个永远不会到的响应
+	inspectCtx, cancel := d.controlContext(ctx)
+	defer cancel()
+
+	if _, err := d.client.ImageInspect(inspectCtx, imageName); err == nil {
 		return nil
+	} else if !isImageNotFound(err) {
+		// daemon 不可达/无响应/鉴权失败等：直接失败，不再误入"拉取"分支
+		//（误入会让同样的超时再叠加一次，并把错误误导成"拉取失败"）
+		return fmt.Errorf("failed to inspect image %s: %w", imageName, d.daemonErrHint(err))
 	}
 
-	// 镜像不存在，需要拉取
-	reader, err := d.client.ImagePull(ctx, imageName, image.PullOptions{})
+	// 镜像确实不存在才拉取。拉取进度流可能持续很久，不能用控制面超时约束
+	// 响应体读取；但"daemon 是否响应"必须有界——用独立计时等 ImagePull
+	// 拿到响应头（拿到后计时释放，body 读取不受限）。
+	reader, err := d.pullImage(ctx, imageName)
 	if err != nil {
-		return fmt.Errorf("failed to pull image %s: %w", imageName, err)
+		return err
 	}
 	defer func() { _ = reader.Close() }()
 
@@ -687,6 +799,68 @@ func (d *DockerExecutor) pullImageIfNeeded(ctx context.Context, imageName string
 	_, _ = io.Copy(io.Discard, reader)
 
 	return nil
+}
+
+// pullResult ImagePull 结果（供超时后延迟回收使用）
+type pullResult struct {
+	reader io.ReadCloser
+	err    error
+}
+
+// pullImage 发起镜像拉取，并对"daemon 是否响应拉取请求"加超时。
+// ImagePull 返回的是进度流（需长时间读取），不能直接用带 deadline 的 ctx
+// 调用（超时会连带掐断 body）。这里在独立 goroutine 中等响应，
+// 超时即判失败；超时后才返回的流由 closeLatePull 回收。
+func (d *DockerExecutor) pullImage(ctx context.Context, imageName string) (io.ReadCloser, error) {
+	timeout := d.daemonResponseTimeout()
+	ch := make(chan pullResult, 1)
+	go func() {
+		reader, err := d.client.ImagePull(ctx, imageName, image.PullOptions{})
+		ch <- pullResult{reader: reader, err: err}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case r := <-ch:
+		if r.err != nil {
+			return nil, fmt.Errorf("failed to pull image %s: %w", imageName, d.daemonErrHint(r.err))
+		}
+		return r.reader, nil
+	case <-ctx.Done():
+		go closeLatePull(ch)
+		return nil, ctx.Err()
+	case <-timer.C:
+		go closeLatePull(ch)
+		return nil, fmt.Errorf(
+			"docker daemon not responding (host=%q): image pull %s timed out after %s",
+			d.host, imageName, timeout)
+	}
+}
+
+// closeLatePull 回收超时后才建立的拉取流
+func closeLatePull(ch <-chan pullResult) {
+	r := <-ch
+	if r.reader != nil {
+		_ = r.reader.Close()
+	}
+}
+
+// isImageNotFound 判断 ImageInspect 的错误是否表示"镜像不存在"。
+// 只有镜像不存在才应转入拉取；daemon 不可达/超时/鉴权失败等必须直接失败，
+// 否则会用一个同样会超时的拉取请求掩盖真正的连接问题。
+func isImageNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errdefs.IsNotFound(err) {
+		return true
+	}
+	// 兜底：个别 daemon/镜像代理对缺失镜像返回非标准文案；
+	// 只匹配明确的"镜像不存在"语义，不用宽泛的 "not found"（避免把隧道/代理的 404 页面
+	// 误判为镜像缺失而转去拉取，掩盖真正的连接问题）
+	return strings.Contains(strings.ToLower(err.Error()), "no such image")
 }
 
 // waitForContainer 等待容器启动完成
@@ -829,6 +1003,13 @@ func (d *DockerExecutor) setTTYSize(width, height uint) {
 	d.ttyHeight = height
 }
 
+// setDaemonTimeout 设置 daemon 控制面请求响应超时（<=0 表示用默认值）
+func (d *DockerExecutor) setDaemonTimeout(timeout time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.daemonTimeout = timeout
+}
+
 // GetContainerID 获取容器ID
 func (d *DockerExecutor) GetContainerID() string {
 	d.mu.RLock()
@@ -882,14 +1063,18 @@ func (d *DockerExecutor) TestConnection(ctx context.Context) (*ConnectionInfo, e
 		return nil, err
 	}
 
+	// 调用方未给 deadline 时也必须有界，避免直接 API 调用挂死
+	testCtx, cancel := d.controlContext(ctx)
+	defer cancel()
+
 	start := time.Now()
-	if _, err := d.client.Ping(ctx); err != nil {
+	if _, err := d.client.Ping(testCtx); err != nil {
 		return nil, fmt.Errorf("docker daemon ping failed (host=%q): %w", d.host, err)
 	}
 	latency := time.Since(start).Milliseconds()
 
 	info := &ConnectionInfo{LatencyMs: latency}
-	if ver, err := d.client.ServerVersion(ctx); err == nil {
+	if ver, err := d.client.ServerVersion(testCtx); err == nil {
 		info.ServerVersion = ver.Version
 		info.APIVersion = ver.APIVersion
 		info.OS = ver.Os
@@ -1032,20 +1217,27 @@ func (d *DockerExecutor) runContainerCommand(ctx context.Context, command string
 		return "", fmt.Errorf("container not prepared")
 	}
 
-	execResp, err := d.client.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+	// 创建 exec 是控制面调用：daemon 无响应时有界失败
+	createCtx, createCancel := d.controlContext(ctx)
+	execResp, err := d.client.ContainerExecCreate(createCtx, containerID, container.ExecOptions{
 		Cmd:          []string{d.detectShell(), "-c", command},
 		AttachStdout: true,
 		AttachStderr: true,
 	})
+	createCancel()
 	if err != nil {
 		return "", fmt.Errorf("failed to create exec: %w", err)
 	}
-	attachResp, err := d.client.ContainerExecAttach(ctx, execResp.ID,
-		container.ExecAttachOptions{Tty: d.tty})
+	attachResp, err := d.attachExec(ctx, execResp.ID)
 	if err != nil {
 		return "", fmt.Errorf("failed to attach to exec: %w", err)
 	}
 	defer attachResp.Close()
+
+	// 短命令（兜底路径）加读超时：daemon 中途不响应时不至于卡死
+	if attachResp.Conn != nil {
+		_ = attachResp.Conn.SetReadDeadline(time.Now().Add(d.daemonResponseTimeout()))
+	}
 
 	var out strings.Builder
 	if d.tty {

@@ -42,6 +42,8 @@ Executors:
       tty: true                      # 可选：启用 TTY 模式（支持颜色输出和交互式程序）
       ttyWidth: 120                  # 可选：TTY 终端宽度（默认 80）
       ttyHeight: 40                  # 可选：TTY 终端高度（默认 24）
+      daemonTimeout: "15s"           # 可选：daemon 控制面请求响应超时（默认 15s，支持 "15s"/秒数）；
+                                     # daemon 不响应时快速失败而非让节点停在 running
       volumes:                       # 可选：卷挂载列表（远程 daemon 时为远端机器路径）
         - /var/run/docker.sock:/var/run/docker.sock
         - /host/data:/container/data

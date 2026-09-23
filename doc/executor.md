@@ -175,6 +175,7 @@ exec := docker.NewDockerExecutorWithClient(cli)
 | `tty` | bool | 启用 TTY |
 | `ttyWidth` | int | TTY 宽度 |
 | `ttyHeight` | int | TTY 高度 |
+| `daemonTimeout` | string/int | daemon 控制面请求响应超时（默认 `15s`）；daemon 不可达时快速失败而非让节点停在 running |
 
 ### 行为特点
 
@@ -544,6 +545,7 @@ exec := docker.NewDockerExecutorWithClient(cli)
 | `tty` | bool | 启用 TTY |
 | `ttyWidth` | int | TTY 宽度 |
 | `ttyHeight` | int | TTY 高度 |
+| `daemonTimeout` | string/int | daemon 控制面请求响应超时（默认 `15s`）；daemon 不可达时快速失败而非让节点停在 running |
 
 ### 行为特点
 

@@ -3,6 +3,8 @@ package docker
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/LerkoX/flowx/executor"
 )
@@ -170,7 +172,31 @@ func applyConfigToExecutor(config map[string]any, executor *DockerExecutor) erro
 		}
 	}
 
+	// 应用 daemonTimeout（daemon 控制面请求响应超时，如 "15s" / 15；
+	// 默认 15s。daemon 不可达时节点必须在有限时间内失败而不是永远 running）
+	if v, ok := config["daemonTimeout"]; ok {
+		if dur, err := parseDaemonTimeout(v); err == nil {
+			executor.setDaemonTimeout(dur)
+		}
+	}
+
 	return nil
+}
+
+// parseDaemonTimeout 解析 daemonTimeout 配置：支持 "15s"/"1m" 字符串或秒数
+func parseDaemonTimeout(v any) (time.Duration, error) {
+	switch t := v.(type) {
+	case string:
+		return time.ParseDuration(strings.TrimSpace(t))
+	case int:
+		return time.Duration(t) * time.Second, nil
+	case int64:
+		return time.Duration(t) * time.Second, nil
+	case float64:
+		return time.Duration(t * float64(time.Second)), nil
+	default:
+		return 0, fmt.Errorf("unsupported daemonTimeout type: %T", v)
+	}
 }
 
 // getString 从map中获取字符串值
