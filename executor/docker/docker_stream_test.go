@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"fmt"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -329,7 +330,7 @@ func TestExecStream_TruncatedThenReattachRecovers(t *testing.T) {
 		t.Fatalf("truncated = %d, want 1", truncated)
 	}
 	got := getOut()
-	for _, want := range []string{"[job] running 2/2", "```flowx-yaml", "latent: \"abc\"", "stream truncated, re-attach 1/3"} {
+	for _, want := range []string{"[job] running 2/2", "```flowx-yaml", "latent: \"abc\"", fmt.Sprintf("stream truncated, re-attach 1/%d", execStreamMaxReattach)} {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q\n---\n%s", want, got)
 		}
