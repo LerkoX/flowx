@@ -123,6 +123,15 @@ func (d *DockerExecutor) ensureClient() error {
 	if err != nil {
 		return fmt.Errorf("failed to create docker client (host=%q): %w", d.host, err)
 	}
+	// 立即协商 API 版本：SDK 默认版本（1.51）可能高于旧 daemon（如 Docker 27.x = 1.47）；
+	// 惰性协商的 ping 一旦被隧道瞬断吞掉，后续请求就带着过高版本被 daemon 拒绝
+	// （cpolar 免费隧道瞬断病，exec 503/504 实测复现）
+	pingCtx, cancel := context.WithTimeout(context.Background(), d.daemonResponseTimeout())
+	defer cancel()
+	if _, err := cli.Ping(pingCtx); err != nil {
+		return d.daemonErrHint(fmt.Errorf("docker ping failed (host=%q): %w", d.host, err))
+	}
+	cli.NegotiateAPIVersion(pingCtx)
 	d.client = cli
 	return nil
 }
