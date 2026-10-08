@@ -2,6 +2,7 @@ package docker
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -818,7 +819,15 @@ func (d *DockerExecutor) attachExecWithRetry(ctx context.Context, execID string)
 	for attempt := 1; attempt <= 6; attempt++ {
 		resp, err = d.attachExec(ctx, execID)
 		if err == nil {
-			return resp, nil
+			// daemon 对并发 attach 的拒绝不走 HTTP 错误码，而是写进劫持流内容
+			// （"Error: Exec command ... is already running"，attach-repro 实测复现），
+			// attach 表面成功、读到该行后流即关闭。peek 首帧识别此哨兵，按可重试处理。
+			if sentinel, healthy := peekAttachSentinel(&resp); !healthy {
+				resp.Close()
+				err = fmt.Errorf("exec %s rejected by daemon: %s", execID[:12], sentinel)
+			} else {
+				return resp, nil
+			}
 		}
 		if attempt == 6 {
 			break
@@ -832,6 +841,28 @@ func (d *DockerExecutor) attachExecWithRetry(ctx context.Context, execID string)
 		}
 	}
 	return types.HijackedResponse{}, err
+}
+
+// peekAttachSentinel 窥探 attach 流首帧（1.5s 窗口）：检出 daemon 的并发拒绝
+// 哨兵文本则返回 (哨兵内容, false)；健康（无哨兵/无数据）时把 peek 到的字节
+// 拼回流首并返回 ("", true)，调用方无感。
+func peekAttachSentinel(resp *types.HijackedResponse) (string, bool) {
+	if resp.Conn == nil || resp.Reader == nil {
+		return "", true
+	}
+	_ = resp.Conn.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
+	peek := make([]byte, 512)
+	n, rerr := resp.Reader.Read(peek)
+	_ = resp.Conn.SetReadDeadline(time.Time{})
+	if n > 0 {
+		// 拼回：bufio.Reader 内可能还有残留缓冲，继续用原 Reader 串联即可
+		resp.Reader = bufio.NewReader(io.MultiReader(bytes.NewReader(peek[:n]), resp.Reader))
+		if idx := bytes.Index(peek[:n], []byte("is already running")); idx >= 0 {
+			return string(peek[:n]), false
+		}
+	}
+	_ = rerr // 超时无数据 = 健康静默；读错误留给主扫描循环处理
+	return "", true
 }
 
 // closeLateAttach 回收超时后才返回的 attach 连接（等 attach 的 goroutine
