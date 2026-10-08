@@ -219,10 +219,15 @@ func isTransientNetErr(err error) bool {
 		strings.Contains(msg, "network is unreachable")
 }
 
-// controlCall 带退避重试的控制面调用：每次尝试独立派生超时 ctx，
-// 瞬断重试、确定性错误（镜像不存在/权限等）直接返回
+// controlCall 带退避重试的控制面调用：每次尝试独立派生超时 ctx。
+// 重试策略分两类（exec 407 快速失败契约 × cpolar 瞬断症的平衡）：
+//   - 快瞬断（EOF/重置/拒绝，立即返回）：最多 controlRetryMax 次，隧道拥塞窗主打这种
+//   - 超时（deadline，每次烧满 daemonTimeout）：最多 2 次——黑洞 daemon 场景
+//     必须快速失败（TestDockerExecutor_UnresponsiveDaemonFailsFast），不能指数叠加
+// API 确定性错误（镜像不存在/权限等）不 retry，直接返回
 func (d *DockerExecutor) controlCall(ctx context.Context, label string, fn func(ctx context.Context) error) error {
 	var err error
+	deadlineAttempts := 0
 	for attempt := 1; attempt <= controlRetryMax; attempt++ {
 		callCtx, cancel := d.controlContext(ctx)
 		err = fn(callCtx)
@@ -232,6 +237,19 @@ func (d *DockerExecutor) controlCall(ctx context.Context, label string, fn func(
 		}
 		if !isTransientNetErr(err) {
 			return err
+		}
+		isTimeout := errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded)
+		if !isTimeout {
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
+				isTimeout = true
+			}
+		}
+		if isTimeout {
+			deadlineAttempts++
+			if deadlineAttempts >= 2 {
+				break
+			}
 		}
 		if attempt < controlRetryMax {
 			time.Sleep(time.Duration(attempt) * time.Second)
