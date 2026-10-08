@@ -92,12 +92,8 @@ func NewDockerExecutor() (*DockerExecutor, error) {
 
 // ensureClient 惰性创建 Docker client（调用方须持有 d.mu）。
 // 配置了 host 时按 host/tlsVerify/certPath 构造；否则读取进程环境变量
-// （DOCKER_HOST / DOCKER_TLS_VERIFY / DOCKER_CERT_PATH / DOCKER_API_VERSION）。
-func (d *DockerExecutor) ensureClient() error {
-	if d.client != nil {
-		return nil
-	}
-
+// buildOpts 构建 docker client 选项（host/TLS/环境变量回退）
+func (d *DockerExecutor) buildOpts() ([]client.Opt, error) {
 	opts := []client.Opt{client.WithAPIVersionNegotiation()}
 	if d.host != "" {
 		opts = append(opts, client.WithHost(d.host))
@@ -106,7 +102,7 @@ func (d *DockerExecutor) ensureClient() error {
 			if certDir == "" {
 				home, err := os.UserHomeDir()
 				if err != nil {
-					return fmt.Errorf("tlsVerify requires certPath (failed to locate home dir): %w", err)
+					return nil, fmt.Errorf("tlsVerify requires certPath (failed to locate home dir): %w", err)
 				}
 				certDir = filepath.Join(home, ".docker")
 			}
@@ -119,6 +115,19 @@ func (d *DockerExecutor) ensureClient() error {
 	} else {
 		opts = append([]client.Opt{client.FromEnv}, opts...)
 	}
+	return opts, nil
+}
+
+// （DOCKER_HOST / DOCKER_TLS_VERIFY / DOCKER_CERT_PATH / DOCKER_API_VERSION）。
+func (d *DockerExecutor) ensureClient() error {
+	if d.client != nil {
+		return nil
+	}
+
+	opts, err := d.buildOpts()
+	if err != nil {
+		return err
+	}
 
 	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
@@ -128,23 +137,40 @@ func (d *DockerExecutor) ensureClient() error {
 	return nil
 }
 
-// pingAndNegotiate 首次实际使用时 Ping + 立即协商 API 版本（幂等）。
-// SDK v28.5 默认 API 1.51，高于 Docker 27.x daemon 的 1.47；惰性协商的 ping
-// 一旦被隧道瞬断吞掉，后续请求就带着过高版本被 daemon 拒绝（client version
-// too new，exec 503/504）。主动 Ping 还有"daemon 不可达早报锶"的副作用。
+// pingAndNegotiate 首次实际使用时探活 + 钉定 API 版本（幂等）。
+// 不用 SDK 的 Ping/NegotiateAPIVersion：它们先发 HEAD /_ping，传输层失败
+// （EOF/连接重置）不走 GET 回退，而 cpolar 免费隧道恰好大面积丢 HEAD
+// （实测 HEAD 2/8 vs GET 8/8）。改用 GET /version（ServerVersion）探活，
+// 拿到 daemon 的 APIVersion 后用 WithVersion 重建客户端钉版本——
+// 同时解决 SDK 默认 1.51 高于旧 daemon（Docker 27.x = 1.47）被拒的问题
+// （client version too new，exec 503/504）。
 func (d *DockerExecutor) pingAndNegotiate() error {
 	if d.negotiated {
 		return nil
 	}
-	if err := d.controlCall(context.Background(), "docker ping", func(ctx context.Context) error {
-		_, err := d.client.Ping(ctx)
-		return err
+	var apiVersion string
+	if err := d.controlCall(context.Background(), "docker version probe", func(ctx context.Context) error {
+		ver, err := d.client.ServerVersion(ctx)
+		if err != nil {
+			return err
+		}
+		apiVersion = ver.APIVersion
+		return nil
 	}); err != nil {
-		return d.daemonErrHint(fmt.Errorf("docker ping failed (host=%q): %w", d.host, err))
+		return d.daemonErrHint(fmt.Errorf("docker daemon probe failed (host=%q): %w", d.host, err))
 	}
-	negCtx, negCancel := context.WithTimeout(context.Background(), d.daemonResponseTimeout())
-	defer negCancel()
-	d.client.NegotiateAPIVersion(negCtx)
+	if apiVersion != "" {
+		opts, err := d.buildOpts()
+		if err != nil {
+			return err
+		}
+		opts = append(opts, client.WithVersion(apiVersion))
+		cli, err := client.NewClientWithOpts(opts...)
+		if err != nil {
+			return fmt.Errorf("failed to rebuild docker client with version %s: %w", apiVersion, err)
+		}
+		d.client = cli
+	}
 	d.negotiated = true
 	return nil
 }
