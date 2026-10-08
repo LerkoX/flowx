@@ -815,12 +815,19 @@ func (d *DockerExecutor) attachExec(ctx context.Context, execID string) (types.H
 func (d *DockerExecutor) attachExecWithRetry(ctx context.Context, execID string) (types.HijackedResponse, error) {
 	var resp types.HijackedResponse
 	var err error
-	for attempt := 1; attempt <= 4; attempt++ {
+	for attempt := 1; attempt <= 6; attempt++ {
 		resp, err = d.attachExec(ctx, execID)
 		if err == nil {
 			return resp, nil
 		}
-		if attempt < 4 {
+		if attempt == 6 {
+			break
+		}
+		// "already running" = daemon 还没感知旧连接断开（实测残留 ~40s），
+		// 需要长退避轮询；EOF/超时等瞬断用短退避
+		if strings.Contains(err.Error(), "already running") {
+			time.Sleep(15 * time.Second)
+		} else {
 			time.Sleep(time.Duration(attempt) * 2 * time.Second)
 		}
 	}
