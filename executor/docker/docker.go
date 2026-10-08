@@ -772,7 +772,7 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 
 // execStreamMaxReattach docker exec 输出流被中断后的最大重挂次数
 // （退避 0.5s/1s/2s，每次重挂能继续读到之后的输出）。
-const execStreamMaxReattach = 6
+const execStreamMaxReattach = 30 // 长任务（SDXL+InstantID ~40min）下穿隧道的截断周期远多于 6 次
 
 // attachResultContainerExecAttach 结果（供带超时的 attachExec 与延迟回收使用）
 type attachResult struct {
