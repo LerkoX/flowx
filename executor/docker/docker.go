@@ -37,6 +37,7 @@ const defaultDaemonTimeout = 15 * time.Second
 // DockerExecutor Docker执行器实现
 type DockerExecutor struct {
 	client            *client.Client
+	negotiated        bool // pingAndNegotiate 幂等标记
 	containerID       string
 	image             string
 	workdir           string
@@ -123,17 +124,73 @@ func (d *DockerExecutor) ensureClient() error {
 	if err != nil {
 		return fmt.Errorf("failed to create docker client (host=%q): %w", d.host, err)
 	}
-	// 立即协商 API 版本：SDK 默认版本（1.51）可能高于旧 daemon（如 Docker 27.x = 1.47）；
-	// 惰性协商的 ping 一旦被隧道瞬断吞掉，后续请求就带着过高版本被 daemon 拒绝
-	// （cpolar 免费隧道瞬断病，exec 503/504 实测复现）
-	pingCtx, cancel := context.WithTimeout(context.Background(), d.daemonResponseTimeout())
-	defer cancel()
-	if _, err := cli.Ping(pingCtx); err != nil {
-		return d.daemonErrHint(fmt.Errorf("docker ping failed (host=%q): %w", d.host, err))
-	}
-	cli.NegotiateAPIVersion(pingCtx)
 	d.client = cli
 	return nil
+}
+
+// pingAndNegotiate 首次实际使用时 Ping + 立即协商 API 版本（幂等）。
+// SDK v28.5 默认 API 1.51，高于 Docker 27.x daemon 的 1.47；惰性协商的 ping
+// 一旦被隧道瞬断吞掉，后续请求就带着过高版本被 daemon 拒绝（client version
+// too new，exec 503/504）。主动 Ping 还有"daemon 不可达早报锶"的副作用。
+func (d *DockerExecutor) pingAndNegotiate() error {
+	if d.negotiated {
+		return nil
+	}
+	if err := d.controlCall(context.Background(), "docker ping", func(ctx context.Context) error {
+		_, err := d.client.Ping(ctx)
+		return err
+	}); err != nil {
+		return d.daemonErrHint(fmt.Errorf("docker ping failed (host=%q): %w", d.host, err))
+	}
+	negCtx, negCancel := context.WithTimeout(context.Background(), d.daemonResponseTimeout())
+	defer negCancel()
+	d.client.NegotiateAPIVersion(negCtx)
+	d.negotiated = true
+	return nil
+}
+
+// controlRetryMax 控制面调用最大重试次数（cpolar 免费隧道 ~50% 瞬断率，
+// 单次调用在多点握手下必然炸；仅重试瞬断类错误，API 错误立即返回）
+const controlRetryMax = 4
+
+// isTransientNetErr 判定可重试的隧道/网络瞬断错误
+func isTransientNetErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "EOF") ||
+		strings.Contains(msg, "network is unreachable")
+}
+
+// controlCall 带退避重试的控制面调用：每次尝试独立派生超时 ctx，
+// 瞬断重试、确定性错误（镜像不存在/权限等）直接返回
+func (d *DockerExecutor) controlCall(ctx context.Context, label string, fn func(ctx context.Context) error) error {
+	var err error
+	for attempt := 1; attempt <= controlRetryMax; attempt++ {
+		callCtx, cancel := d.controlContext(ctx)
+		err = fn(callCtx)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		if !isTransientNetErr(err) {
+			return err
+		}
+		if attempt < controlRetryMax {
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("%s: %w", label, err)
 }
 
 // daemonResponseTimeout 返回 daemon 控制面请求响应超时（未配置时用默认值）
@@ -191,6 +248,11 @@ func (d *DockerExecutor) Prepare(ctx context.Context) error {
 		return err
 	}
 
+	// 首次使用：Ping + API 版本协商（含瞬断重试），daemon 不可达在此早失败
+	if err := d.pingAndNegotiate(); err != nil {
+		return err
+	}
+
 	// 如果没有指定镜像，使用默认镜像
 	if d.image == "" {
 		d.image = "alpine:latest"
@@ -228,26 +290,28 @@ func (d *DockerExecutor) Prepare(ctx context.Context) error {
 		hostConfig.NetworkMode = container.NetworkMode(d.network)
 	}
 
-	// 创建/启动/等待容器属于控制面握手：daemon 无响应时必须有界失败，
-	// 否则节点会永远停在 running（exec 407 事故）
-	controlCtx, cancel := d.controlContext(ctx)
-	defer cancel()
-
-	// 创建容器
-	resp, err := d.client.ContainerCreate(controlCtx, containerConfig, hostConfig, nil, nil, fmt.Sprintf("flowx-%d", time.Now().UnixNano()))
-	if err != nil {
+	// 创建容器（瞬断重试：隧道闪断自动恢复，幂等性由唯一容器名保证——
+	// 重试时换一个新名字，旧尝试若实际成功会遗留孤儿容器，由 Destruction/定期清理兜底）
+	var resp container.CreateResponse
+	if err := d.controlCall(ctx, "create container", func(cctx context.Context) error {
+		var cerr error
+		resp, cerr = d.client.ContainerCreate(cctx, containerConfig, hostConfig, nil, nil, fmt.Sprintf("flowx-%d", time.Now().UnixNano()))
+		return cerr
+	}); err != nil {
 		return fmt.Errorf("failed to create container: %w", d.daemonErrHint(err))
 	}
 
 	d.containerID = resp.ID
 
 	// 启动容器
-	if err := d.client.ContainerStart(controlCtx, d.containerID, container.StartOptions{}); err != nil {
+	if err := d.controlCall(ctx, "start container", func(cctx context.Context) error {
+		return d.client.ContainerStart(cctx, d.containerID, container.StartOptions{})
+	}); err != nil {
 		return fmt.Errorf("failed to start container: %w", d.daemonErrHint(err))
 	}
 
 	// 等待容器启动完成
-	if err := d.waitForContainer(controlCtx); err != nil {
+	if err := d.waitForContainer(ctx); err != nil {
 		return fmt.Errorf("container failed to start: %w", err)
 	}
 
@@ -754,20 +818,22 @@ func (d *DockerExecutor) execRunningSettled(ctx context.Context, execID string, 
 
 // execRunning 查询 exec 是否仍在运行
 func (d *DockerExecutor) execRunning(ctx context.Context, execID string) (bool, error) {
-	inspectCtx, cancel := d.controlContext(ctx)
-	defer cancel()
-	resp, err := d.client.ContainerExecInspect(inspectCtx, execID)
+	resp, err := d.execInspect(ctx, execID)
 	if err != nil {
 		return false, err
 	}
 	return resp.Running, nil
 }
 
-// execInspect 查询 exec 终态（退出码）
+// execInspect 查询 exec 终态（退出码）；瞬断重试（轮询路径被隧道闪断杀死过多次）
 func (d *DockerExecutor) execInspect(ctx context.Context, execID string) (container.ExecInspect, error) {
-	inspectCtx, cancel := d.controlContext(ctx)
-	defer cancel()
-	return d.client.ContainerExecInspect(inspectCtx, execID)
+	var resp container.ExecInspect
+	err := d.controlCall(ctx, "inspect exec", func(cctx context.Context) error {
+		var ierr error
+		resp, ierr = d.client.ContainerExecInspect(cctx, execID)
+		return ierr
+	})
+	return resp, err
 }
 
 // detectShell 检测容器中的shell
@@ -790,9 +856,23 @@ func (d *DockerExecutor) pullImageIfNeeded(ctx context.Context, imageName string
 	if _, err := d.client.ImageInspect(inspectCtx, imageName); err == nil {
 		return nil
 	} else if !isImageNotFound(err) {
-		// daemon 不可达/无响应/鉴权失败等：直接失败，不再误入"拉取"分支
-		//（误入会让同样的超时再叠加一次，并把错误误导成"拉取失败"）
-		return fmt.Errorf("failed to inspect image %s: %w", imageName, d.daemonErrHint(err))
+		// 瞬断重试一轮：隧道闪断不应被误判成 daemon 故障（cpolar 免费版高发）
+		if isTransientNetErr(err) {
+			if rerr := d.controlCall(ctx, "retry inspect image "+imageName, func(cctx context.Context) error {
+				_, ierr := d.client.ImageInspect(cctx, imageName)
+				return ierr
+			}); rerr == nil {
+				return nil
+			} else if isImageNotFound(rerr) {
+				err = rerr // 确认为不存在，落入拉取分支
+			} else {
+				return fmt.Errorf("failed to inspect image %s: %w", imageName, d.daemonErrHint(rerr))
+			}
+		} else {
+			// daemon 不可达/无响应/鉴权失败等：直接失败，不再误入"拉取"分支
+			//（误入会让同样的超时再叠加一次，并把错误误导成"拉取失败"）
+			return fmt.Errorf("failed to inspect image %s: %w", imageName, d.daemonErrHint(err))
+		}
 	}
 
 	// 镜像确实不存在才拉取。拉取进度流可能持续很久，不能用控制面超时约束
@@ -875,8 +955,19 @@ func isImageNotFound(err error) bool {
 // waitForContainer 等待容器启动完成
 func (d *DockerExecutor) waitForContainer(ctx context.Context) error {
 	for i := 0; i < 30; i++ {
-		containerJSON, err := d.client.ContainerInspect(ctx, d.containerID)
+		inspectCtx, cancel := d.controlContext(ctx)
+		containerJSON, err := d.client.ContainerInspect(inspectCtx, d.containerID)
+		cancel()
 		if err != nil {
+			if isTransientNetErr(err) {
+				// 隧道瞬断：等待后重试，不判启动失败
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(500 * time.Millisecond):
+					continue
+				}
+			}
 			return err
 		}
 
