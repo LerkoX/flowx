@@ -688,8 +688,11 @@ func isNodeExecuted(node dag.Node) bool {
 	if status == nil {
 		return false
 	}
+	// 仅 SUCCESS/RUNNING 视为"已执行"（不可改删）；FAILED/CANCELLED 允许经
+	// UpdateConfig 改参后在续跑中重跑——失败节点无有效产出，冻结修改等于
+	// 永久冻死（既不能重跑也不能改参，exec 498 事故链的一环）
 	switch status.Status {
-	case core.StatusSuccess, core.StatusFailed, core.StatusCancelled, core.StatusRunning:
+	case core.StatusSuccess, core.StatusRunning:
 		return true
 	default:
 		return false
