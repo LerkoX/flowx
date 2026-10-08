@@ -2,6 +2,7 @@ package flowx
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -653,7 +654,12 @@ func nodeConfigEqual(a, b core.NodeConfig) bool {
 	// 忽略运行时状态
 	aCopy.Runtime = nil
 	bCopy.Runtime = nil
-	// 忽略 Config（interface{} 类型的 map DeepEqual 不稳定）
+	// Config（env/params 等）规范化后比较：encoding/json 序列化 map 键有序，
+	// 结果确定。原先整体忽略（注释称 DeepEqual 不稳定）导致改 env/params
+	// 不产生修改集——continue --file 修失败节点参数静默无效（exec 498 调试链）
+	if configCanonical(aCopy.Config) != configCanonical(bCopy.Config) {
+		return false
+	}
 	aCopy.Config = nil
 	bCopy.Config = nil
 	// 忽略 Description、Id 和 Name（不影响执行，Name 从 map key 派生）
@@ -667,6 +673,19 @@ func nodeConfigEqual(a, b core.NodeConfig) bool {
 	aCopy.Steps = stripStepIDs(aCopy.Steps)
 	bCopy.Steps = stripStepIDs(bCopy.Steps)
 	return reflect.DeepEqual(aCopy, bCopy)
+}
+
+// configCanonical 把节点 Config map 规范化为确定性字符串（map 键有序 JSON）；
+// 空/nil 归一化为空串，避免 nil 与空 map 误判差异
+func configCanonical(c map[string]any) string {
+	if len(c) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return fmt.Sprintf("%#v", c)
+	}
+	return string(b)
 }
 
 // stripStepIDs 返回清空 Id 的步骤副本；空切片归一化为 nil 保证 DeepEqual 稳定
