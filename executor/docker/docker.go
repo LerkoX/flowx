@@ -725,7 +725,7 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 			}
 			time.Sleep(execStreamReattachBackoff(truncated))
 
-			newResp, aerr := d.attachExec(ctx, execResp.ID)
+			newResp, aerr := d.attachExecWithRetry(ctx, execResp.ID)
 			if aerr != nil {
 				close(done)
 				wg.Wait()
@@ -771,7 +771,7 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 
 // execStreamMaxReattach docker exec 输出流被中断后的最大重挂次数
 // （退避 0.5s/1s/2s，每次重挂能继续读到之后的输出）。
-const execStreamMaxReattach = 3
+const execStreamMaxReattach = 6
 
 // attachResultContainerExecAttach 结果（供带超时的 attachExec 与延迟回收使用）
 type attachResult struct {
@@ -807,6 +807,24 @@ func (d *DockerExecutor) attachExec(ctx context.Context, execID string) (types.H
 		return types.HijackedResponse{}, fmt.Errorf(
 			"docker exec attach timed out after %s (host=%q, daemon not responding)", timeout, d.host)
 	}
+}
+
+// attachExecWithRetry 重挂专用：旧连接刚死时 daemon 还认为 exec 在跑
+//（"Exec command ... is already running" 竞态，exec 511 实测），需多次退避
+// 等 daemon 感知旧连接断开；EOF/超时等瞬断同样重试
+func (d *DockerExecutor) attachExecWithRetry(ctx context.Context, execID string) (types.HijackedResponse, error) {
+	var resp types.HijackedResponse
+	var err error
+	for attempt := 1; attempt <= 4; attempt++ {
+		resp, err = d.attachExec(ctx, execID)
+		if err == nil {
+			return resp, nil
+		}
+		if attempt < 4 {
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+		}
+	}
+	return types.HijackedResponse{}, err
 }
 
 // closeLateAttach 回收超时后才返回的 attach 连接（等 attach 的 goroutine
