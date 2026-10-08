@@ -198,7 +198,7 @@ func (d *DockerExecutor) pingAndNegotiate() error {
 
 // controlRetryMax 控制面调用最大重试次数（cpolar 免费隧道 ~50% 瞬断率，
 // 单次调用在多点握手下必然炸；仅重试瞬断类错误，API 错误立即返回）
-const controlRetryMax = 4
+const controlRetryMax = 6
 
 // isTransientNetErr 判定可重试的隧道/网络瞬断错误
 func isTransientNetErr(err error) bool {
@@ -234,7 +234,7 @@ func (d *DockerExecutor) controlCall(ctx context.Context, label string, fn func(
 			return err
 		}
 		if attempt < controlRetryMax {
-			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+			time.Sleep(time.Duration(attempt) * time.Second)
 		}
 	}
 	return fmt.Errorf("%s: %w", label, err)
