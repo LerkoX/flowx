@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,23 +139,43 @@ func (d *DockerExecutor) ensureClient() error {
 }
 
 // pingAndNegotiate 首次实际使用时探活 + 钉定 API 版本（幂等）。
-// 不用 SDK 的 Ping/NegotiateAPIVersion：它们先发 HEAD /_ping，传输层失败
-// （EOF/连接重置）不走 GET 回退，而 cpolar 免费隧道恰好大面积丢 HEAD
-// （实测 HEAD 2/8 vs GET 8/8）。改用 GET /version（ServerVersion）探活，
-// 拿到 daemon 的 APIVersion 后用 WithVersion 重建客户端钉版本——
-// 同时解决 SDK 默认 1.51 高于旧 daemon（Docker 27.x = 1.47）被拒的问题
-// （client version too new，exec 503/504）。
+// 不用 SDK：①Ping/NegotiateAPIVersion 先发 HEAD /_ping，传输层失败不走 GET
+// 回退，而 cpolar 免费隧道大面积丢 HEAD（实测 HEAD 2/8 vs GET 8/8）；
+// ②ServerVersion 走带版本前缀的 /v1.51/version，Docker Desktop 对高于自身
+// （1.47）的版本前缀直接丢连接（EOF，exec 507）。故用裸 HTTP GET /version
+// （无版本前缀）探活，拿到 ApiVersion 后 WithVersion 重建客户端钉版本。
+// 非 tcp 端点（unix socket 等）跳过探活，保持 SDK 惰性协商。
 func (d *DockerExecutor) pingAndNegotiate() error {
 	if d.negotiated {
 		return nil
 	}
+	base := strings.TrimPrefix(d.host, "tcp://")
+	if base == "" || base == d.host || !strings.Contains(base, ":") {
+		d.negotiated = true
+		return nil
+	}
+	httpClient := &http.Client{Timeout: d.daemonResponseTimeout()}
 	var apiVersion string
 	if err := d.controlCall(context.Background(), "docker version probe", func(ctx context.Context) error {
-		ver, err := d.client.ServerVersion(ctx)
-		if err != nil {
-			return err
+		req, rerr := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+base+"/version", nil)
+		if rerr != nil {
+			return rerr
 		}
-		apiVersion = ver.APIVersion
+		resp, rerr := httpClient.Do(req)
+		if rerr != nil {
+			return rerr
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("GET /version returned %s", resp.Status)
+		}
+		var body struct {
+			APIVersion string `json:"ApiVersion"`
+		}
+		if derr := json.NewDecoder(resp.Body).Decode(&body); derr != nil {
+			return derr
+		}
+		apiVersion = body.APIVersion
 		return nil
 	}); err != nil {
 		return d.daemonErrHint(fmt.Errorf("docker daemon probe failed (host=%q): %w", d.host, err))
