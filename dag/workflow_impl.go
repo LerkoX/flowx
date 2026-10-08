@@ -179,13 +179,28 @@ func (p *WorkflowImpl) shouldSkipNode(node Node) bool {
 	if runtimeStatus == nil {
 		return false
 	}
-	// SUCCESS、FAILED、CANCELLED 状态的节点都跳过
-	// RUNNING 状态的节点需要恢复（不跳过）
+	// 仅 SUCCESS 跳过；FAILED/CANCELLED 节点视为未成功完成，由调用方重置
+	// 运行时状态后重跑（Rerun/continue 语义：重跑所有未成功节点——失败节点
+	// 无有效输出，跳过它等于续跑空跑）。RUNNING 状态的节点需要恢复（不跳过）
 	switch runtimeStatus.Status {
-	case core.StatusSuccess, core.StatusFailed, core.StatusCancelled:
+	case core.StatusSuccess:
 		return true
 	default:
 		return false
+	}
+}
+
+// clearNodeRuntime 重置节点运行时状态与历史提取（供失败节点重跑与循环迭代
+// 重置复用）；否则 step 级跳过会让节点空跑并保留 failed 状态与陈旧输出
+func (p *WorkflowImpl) clearNodeRuntime(nodeID string, node Node) {
+	node.SetRuntimeStatus(nil)
+	if p.metadata != nil {
+		prefix := nodeID + "."
+		for k := range p.metadata {
+			if len(k) > len(prefix) && k[:len(prefix)] == prefix {
+				delete(p.metadata, k)
+			}
+		}
 	}
 }
 

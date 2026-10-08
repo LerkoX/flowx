@@ -101,9 +101,19 @@ func (p *WorkflowImpl) Run(ctx context.Context) error {
 		return err
 	}
 
-	// 通知流水线完成
+	// 通知流水线完成。收尾状态按节点终态推导（不再无条件 SUCCESS）：
+	// 续跑/重跑场景下被保留的 FAILED/CANCELLED 节点必须让整体 FAILED，
+	// 否则出现"节点 failed、执行 success"的假阳性（exec 498 事故）
+	final := core.StatusSuccess
+	for _, node := range p.graph.Nodes() {
+		if rs := node.GetRuntimeStatus(); rs != nil &&
+			(rs.Status == core.StatusFailed || rs.Status == core.StatusCancelled) {
+			final = core.StatusFailed
+			break
+		}
+	}
 	p.mu.Lock()
-	p.status = core.StatusSuccess
+	p.status = final
 	p.mu.Unlock()
 	p.NotifyEvent(WorkflowFinish)
 	return nil
@@ -300,18 +310,9 @@ func (p *WorkflowImpl) resetLoopNodes(dgaGraph *DGAGraph, loopNodes map[string]b
 		if !exists {
 			continue
 		}
-		// 重置节点运行时状态为 nil，使 shouldSkipNode 不再跳过
-		node.SetRuntimeStatus(nil)
-
-		// 清理节点提取的 metadata（避免旧数据影响后续迭代）
-		if p.metadata != nil {
-			prefix := nodeID + "."
-			for k := range p.metadata {
-				if len(k) > len(prefix) && k[:len(prefix)] == prefix {
-					delete(p.metadata, k)
-				}
-			}
-		}
+		// 重置节点运行时状态为 nil，使 shouldSkipNode 不再跳过，
+		// 并清理节点提取的 metadata（避免旧数据影响后续迭代）
+		p.clearNodeRuntime(nodeID, node)
 	}
 }
 
@@ -329,6 +330,16 @@ func (p *WorkflowImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
+	}
+
+	// FAILED/CANCELLED 节点重跑前重置运行时状态与历史提取（Rerun/continue
+	// 语义：重跑所有未成功节点；不重置则 step 级跳过会让节点空跑、保留
+	// failed 状态与陈旧的部分输出）。SUCCESS 跳过、RUNNING 恢复不受影响
+	if rs := node.GetRuntimeStatus(); rs != nil &&
+		(rs.Status == core.StatusFailed || rs.Status == core.StatusCancelled) {
+		p.mu.Lock()
+		p.clearNodeRuntime(node.Id(), node)
+		p.mu.Unlock()
 	}
 
 	// 检查是否应该跳过此节点
