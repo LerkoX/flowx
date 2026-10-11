@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- 取消/超时终止改为**优雅终止**：先向整棵进程树发 SIGTERM（发信号前快照 pid 列表，避免根进程退出后后代被 reparent 而无法回收），等待可配置宽限期 `interruptGrace`（local 执行器 config，默认 10s，`0` 表示立即强杀）内进程退出，超时才 SIGKILL。节点脚本据此可回收自己在第三方服务上的后台任务（如推理服务上 running 的 job），解决“终止流水线后远程任务变孤儿继续占 GPU”的问题；三条取消路径（`killCurrentProcess`、`prepareCmd` 的 `cmd.Cancel`、`executeCommandWithStreaming` 的 ctx 取消分支）统一走该逻辑，不再各自立即强杀；僵尸进程不再被误判为存活（否则白等满宽限期，`/proc/<pid>/stat` 状态判定）
 - 修复 docker 执行器在 daemon 不可达时永久挂起的问题：host 端口能 TCP 连上但 daemon 不响应（隧道断开后中间设备仍接受连接）时，docker client 只设了拨号超时、没有响应头超时，控制面请求会一直等下去，节点永远停在 running（exec 407 事故）。现对镜像探测/容器创建启动、exec 创建与探测、镜像拉取、exec attach 等控制面调用统一加 daemon 响应超时（配置键 `daemonTimeout`，默认 15s，支持 `"15s"`/秒数），超时即失败并给出 `docker daemon not responding (host=...)` 提示；daemon 不可达时不再误入镜像拉取分支。响应体/流式输出读取不受该超时限制。
 - 新增 `LoadWorkflow`：加载流水线配置（含 `ExportConfig` 快照中的节点运行时状态）但不运行，按节点状态推导流水线状态（FAILED > STOPPED > SUCCESS），随后可 `UpdateConfig` 改图、`Rerun` 增量续跑——支持进程重启后从快照恢复已完成的流水线
 - 新增 `Rerun`：重新运行处于可修改状态的流水线，已终结状态（SUCCESS/FAILED/CANCELLED）的节点自动跳过，仅执行新增/未运行节点
