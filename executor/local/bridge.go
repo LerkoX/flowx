@@ -60,6 +60,15 @@ func applyConfigToExecutor(config map[string]any, executor *LocalExecutor) error
 		}
 	}
 
+	// 应用interruptGrace配置：取消/超时终止节点进程时的优雅退出宽限期
+	// （SIGTERM → 宽限期 → SIGKILL；0 表示立即强杀）。
+	// 节点脚本据此信号回收自己在第三方服务上的后台任务（如推理服务 job）。
+	if grace, ok := config["interruptGrace"]; ok {
+		if duration, err := parseTimeout(grace); err == nil {
+			executor.setInterruptGrace(duration)
+		}
+	}
+
 	// 应用env配置
 	if env, ok := config["env"]; ok {
 		if envMap, ok := env.(map[string]string); ok {

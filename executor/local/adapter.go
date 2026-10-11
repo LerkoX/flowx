@@ -29,6 +29,9 @@ func NewLocalAdapter() *LocalAdapter {
 //   - pty: 是否启用伪终端 bool
 //   - ptyWidth: 终端宽度 int（默认 80）
 //   - ptyHeight: 终端高度 int（默认 24）
+//   - interruptGrace: 取消/超时终止进程时的优雅退出宽限期 string（如 "10s"）或秒数
+//     数值（默认 10s，0 表示立即强杀）：先发 SIGTERM 给整棵进程树，宽限期内进程
+//     未退出才 SIGKILL。用于让节点脚本有机会优雅退出并回收后台/远程任务
 func (a *LocalAdapter) Config(ctx context.Context, config map[string]any) error {
 	a.config = config
 	return nil

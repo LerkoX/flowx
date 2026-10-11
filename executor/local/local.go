@@ -25,30 +25,37 @@ type activeCmd struct {
 	pid     int           // 进程 ID，用于 kill 路径避免与 Wait 竞争
 }
 
+// defaultInterruptGrace 取消/超时终止节点进程时的默认优雅退出宽限期：
+// 先发 SIGTERM（节点脚本据此回收后台/远程任务），超过宽限期仍未退出才 SIGKILL。
+// 取值需覆盖节点向第三方服务发一次中断请求的耗时（含隧道抖动重试）。
+const defaultInterruptGrace = 10 * time.Second
+
 // LocalExecutor 本地执行器实现
 type LocalExecutor struct {
-	workdir    string            // 工作目录
-	env        map[string]string // 环境变量
-	shell      string            // 使用的shell
-	timeout    time.Duration     // 默认超时时间
-	usePTY     bool              // 是否使用伪终端（支持交互式命令）
-	ptyWidth   int               // 终端宽度
-	ptyHeight  int               // 终端高度
-	mu         sync.RWMutex
-	configMu   sync.RWMutex // 保护配置字段（workdir/env/shell/timeout/usePTY/ptySize）
-	cmdMu      sync.Mutex   // 保护当前命令的生命周期
-	currentCmd *activeCmd   // 当前执行的命令（用于取消）
+	workdir        string            // 工作目录
+	env            map[string]string // 环境变量
+	shell          string            // 使用的shell
+	timeout        time.Duration     // 默认超时时间
+	usePTY         bool              // 是否使用伪终端（支持交互式命令）
+	ptyWidth       int               // 终端宽度
+	ptyHeight      int               // 终端高度
+	interruptGrace time.Duration     // 优雅退出宽限期（SIGTERM→SIGKILL 之间）
+	mu             sync.RWMutex
+	configMu       sync.RWMutex // 保护配置字段（workdir/env/shell/timeout/usePTY/ptySize/interruptGrace）
+	cmdMu          sync.Mutex   // 保护当前命令的生命周期
+	currentCmd     *activeCmd   // 当前执行的命令（用于取消）
 }
 
 // NewLocalExecutor 创建新的本地执行器
 func NewLocalExecutor() *LocalExecutor {
 	return &LocalExecutor{
-		env:       make(map[string]string),
-		shell:     detectDefaultShell(),
-		timeout:   0, // 默认无超时
-		usePTY:    false,
-		ptyWidth:  80,
-		ptyHeight: 24,
+		env:            make(map[string]string),
+		shell:          detectDefaultShell(),
+		timeout:        0, // 默认无超时
+		usePTY:         false,
+		ptyWidth:       80,
+		ptyHeight:      24,
+		interruptGrace: defaultInterruptGrace,
 	}
 }
 
@@ -161,20 +168,16 @@ func (l *LocalExecutor) killCurrentProcess() {
 		return
 	}
 
-	// 使用本地保存的 pid 终止进程（Linux 为整棵进程树，含 shell/script 包裹的孙进程）
-	// 先尝试发送中断信号（Unix 进程组 SIGINT）或 Ctrl+Break（Windows）
-	if err := interruptProcess(ac.pid); err != nil {
-		_ = killProcess(ac.pid)
-	} else {
-		// 发送信号成功，等待进程退出（最多2秒）
-		select {
-		case <-ac.done:
-			// 进程已退出
-		case <-time.After(2 * time.Second):
-			// 超时，强制终止
-			_ = killProcess(ac.pid)
-		}
-	}
+	// 优雅终止：SIGTERM 整棵进程树 → 等宽限期（节点脚本在此窗口内优雅退出并
+	// 回收后台任务）→ 仍未退出才 SIGKILL 兜底。
+	terminateProcessTreeGracefully(ac.pid, l.interruptGraceValue())
+}
+
+// interruptGraceValue 读取优雅退出宽限期（并发安全）
+func (l *LocalExecutor) interruptGraceValue() time.Duration {
+	l.configMu.RLock()
+	defer l.configMu.RUnlock()
+	return l.interruptGrace
 }
 
 // executeCommandStreaming 执行命令并实时流式输出
@@ -403,9 +406,11 @@ func (l *LocalExecutor) executeCommandWithStreaming(ctx context.Context, command
 	case err = <-waitErr:
 		// 命令正常退出
 	case <-ctx.Done():
-		// 上下文取消，强制终止整棵进程树（使用本地保存的 PID 避免竞争）
+		// 上下文取消（用户终止/超时）：先优雅终止（SIGTERM + 宽限期），
+		// 让节点脚本有机会回收自己在第三方服务上的后台任务，宽限期内仍未
+		// 退出才强杀整棵进程树（使用本地保存的 PID 避免竞争）
 		if ac.pid > 0 {
-			_ = killProcess(ac.pid)
+			terminateProcessTreeGracefully(ac.pid, l.interruptGraceValue())
 		}
 		// 等待 Wait 返回，避免 goroutine 泄漏
 		<-waitErr
@@ -538,15 +543,15 @@ func (l *LocalExecutor) createCommand(ctx context.Context, command string) *exec
 	case "windows":
 		// Windows使用cmd.exe
 		if shell == "powershell" || shell == "pwsh" {
-			return prepareCmd(exec.CommandContext(ctx, shell, "-Command", command))
+			return l.prepareCmd(exec.CommandContext(ctx, shell, "-Command", command))
 		}
-		return prepareCmd(exec.CommandContext(ctx, "cmd", "/C", command))
+		return l.prepareCmd(exec.CommandContext(ctx, "cmd", "/C", command))
 	default:
 		// Unix-like系统使用sh或bash
 		if shell == "" {
 			shell = "/bin/sh"
 		}
-		return prepareCmd(exec.CommandContext(ctx, shell, "-c", command))
+		return l.prepareCmd(exec.CommandContext(ctx, shell, "-c", command))
 	}
 }
 
@@ -560,9 +565,9 @@ func (l *LocalExecutor) createCommandWithPTY(ctx context.Context, command string
 	case "windows":
 		// Windows 不支持 PTY，回退到普通命令
 		if shell == "powershell" || shell == "pwsh" {
-			return prepareCmd(exec.CommandContext(ctx, shell, "-Command", command))
+			return l.prepareCmd(exec.CommandContext(ctx, shell, "-Command", command))
 		}
-		return prepareCmd(exec.CommandContext(ctx, "cmd", "/C", command))
+		return l.prepareCmd(exec.CommandContext(ctx, "cmd", "/C", command))
 	default:
 		// Unix-like 系统使用 script 命令模拟 PTY
 		if shell == "" {
@@ -573,7 +578,7 @@ func (l *LocalExecutor) createCommandWithPTY(ctx context.Context, command string
 		quoted := "'" + strings.ReplaceAll(command, "'", `'\''`) + "'"
 		// 使用 script 命令创建伪终端；-e 透传子进程退出码（util-linux），
 		// 否则节点脚本 exit 非零会被 script 吞掉导致失败节点误报成功
-		return prepareCmd(exec.CommandContext(ctx, "script", "-q", "-e", "-c", shell+" -c "+quoted, "/dev/null"))
+		return l.prepareCmd(exec.CommandContext(ctx, "script", "-q", "-e", "-c", shell+" -c "+quoted, "/dev/null"))
 	}
 }
 
@@ -655,6 +660,13 @@ func (l *LocalExecutor) setPTYSize(width, height int) {
 	defer l.configMu.Unlock()
 	l.ptyWidth = width
 	l.ptyHeight = height
+}
+
+// setInterruptGrace 设置取消/超时终止时的优雅退出宽限期（0 表示立即强杀）
+func (l *LocalExecutor) setInterruptGrace(grace time.Duration) {
+	l.configMu.Lock()
+	defer l.configMu.Unlock()
+	l.interruptGrace = grace
 }
 
 // GetWorkdir 获取工作目录
