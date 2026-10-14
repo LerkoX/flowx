@@ -1389,6 +1389,11 @@ func wrapCommandForCapture(command, tag string) string {
 // tee 的同一次读取，故流内容恒为日志的前缀（tee 先写文件后写 stdout）。用
 // `tail -c +N` 从该前缀之后开始输出；若已送达字节数已超过日志长度（进程仍在运行、
 // tee 尚未 flush），tail 输出为空 —— 只少补、不重复。顺带清理临时文件。
+//
+// 补发按行逐条回调（与 scanRound 一致），不把整段尾部合成一次回调：下游日志管道
+// 以一次回调为一条 entry（dag handleResult 的 case []byte），entry 级的前缀拦截
+// （如 Studio 的 FLOWX_PREVIEW 标记剥离）会把"首行是标记"的多行 blob 整段吞掉，
+// 其中的普通行（进度/traceback/输出块）随之丢失（exec 767 事故）。
 func (d *DockerExecutor) replayCapturedTail(ctx context.Context, tag string, streamBytes int, outputCallback func([]byte)) {
 	if tag == "" {
 		return
@@ -1410,7 +1415,9 @@ func (d *DockerExecutor) replayCapturedTail(ctx context.Context, tag string, str
 		if outputCallback != nil {
 			outputCallback([]byte(
 				"[flowx] docker exec 流曾中断，以下为从容器内日志补齐的缺失输出：\n"))
-			outputCallback([]byte(out))
+			for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
+				outputCallback(append([]byte(strings.TrimSuffix(line, "\r")), '\n'))
+			}
 		}
 		fmt.Printf("docker exec captured tail replayed: tag=%s from=%d bytes=%d\n",
 			tag, streamBytes, len(out))

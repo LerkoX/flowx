@@ -568,6 +568,53 @@ func TestCapture_ReplaysMissingTailAfterTruncation(t *testing.T) {
 	}
 }
 
+// 补齐的尾部必须按行逐条回调（与 scanRound 一致）：下游以一次回调为一条日志 entry
+// （dag handleResult 的 case []byte），整段 blob 一次回调会让 entry 级前缀拦截
+// （Studio 的 FLOWX_PREVIEW 标记剥离）把首行之后的普通行一起吞掉（exec 767 事故）
+func TestCapture_ReplayTailPerLine(t *testing.T) {
+	marker := `FLOWX_PREVIEW {"url":"http://inference:8100/preview/job1","progress":0.5}`
+	full := "progress 1/2\n" + marker + "\ntraceback line\n```flowx-yaml\nlatent: abc\n```\n"
+	d := &fakeDaemon{
+		rounds:          [][]string{{"progress 1/2"}, {}}, // 重挂没拿到任何字节
+		exitAfterAttach: 2,
+		captureLog:      full,
+	}
+	exec := newFakeExecutor(t, d)
+
+	var chunks []string
+	_, err := exec.executeCommandInContainerStreaming(context.Background(),
+		"python main.py", nil, "unit-lines", func(b []byte) { chunks = append(chunks, string(b)) }, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	headerIdx := -1
+	for i, c := range chunks {
+		if strings.Contains(c, "流曾中断") {
+			headerIdx = i
+		}
+	}
+	if headerIdx < 0 {
+		t.Fatalf("缺补齐 header: %q", chunks)
+	}
+	tail := chunks[headerIdx+1:]
+	want := []string{
+		marker + "\n",
+		"traceback line\n",
+		"```flowx-yaml\n",
+		"latent: abc\n",
+		"```\n",
+	}
+	if len(tail) != len(want) {
+		t.Fatalf("补齐块数 = %d, want %d（每行一个回调）: %q", len(tail), len(want), tail)
+	}
+	for i := range want {
+		if tail[i] != want[i] {
+			t.Errorf("补齐块[%d] = %q, want %q", i, tail[i], want[i])
+		}
+	}
+}
+
 // 重挂用尽（直接失败）：仍尽量补齐尾部，失败现场要完整
 func TestCapture_ReplaysOnGiveUp(t *testing.T) {
 	d := &fakeDaemon{
