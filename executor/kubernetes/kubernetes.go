@@ -210,10 +210,16 @@ func (k *KubernetesExecutor) buildPodSpec() *corev1.Pod {
 	}
 
 	// 构建容器配置
+	//
+	// 保活命令用 `tail -f /dev/null`（任意时长）而不是 `sleep 3600`：单次 sleep 把 Pod
+	// 寿命钉死在 1 小时，与节点实际运行时长无关 —— 长任务（FLUX 采样、批量换装等）跑过
+	// 1 小时，容器 PID 1 自然退出，容器内节点进程被一并杀掉，而 attach 流在隧道/端口转发上
+	// 收不到 FIN，节点永久停在 running（与 docker 执行器 exec 826 事故同一形态）。
+	// Pod 生命周期由 Destruction 负责删除；这里只做保活，不设上限。
 	container := corev1.Container{
 		Name:    "executor",
 		Image:   image,
-		Command: []string{"sleep", "3600"},
+		Command: []string{"tail", "-f", "/dev/null"},
 		Env:     envVars,
 	}
 
