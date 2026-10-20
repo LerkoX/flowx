@@ -36,6 +36,23 @@ import (
 // 这里给控制面请求一个上限，让这类异常快速失败（见 controlContext / attachExec）。
 const defaultDaemonTimeout = 15 * time.Second
 
+// defaultExecStreamIdleTimeout exec 输出流"多久没收到字节就主动探测进程状态"的默认阈值。
+//
+// 动机（exec 826 事故）：容器退出时 cpolar 隧道不会把 FIN 传到本端，attach 流的
+// scanner.Scan() 永久阻塞在 Read 上，既不会 EOF 也不会报错 —— 断流兜底逻辑永远
+// 没有机会执行，节点停在 running（执行卡住不动、日志停在最后一次心跳）。
+// 看门狗在阈值到期时主动 inspect exec：仍运行则只是"静默"（继续等），已停止则
+// 关闭连接打断阻塞读、交给 classifyStreamEnd 收尾。阈值不影响真实长任务，
+// 只影响探测频率。
+const defaultExecStreamIdleTimeout = 3 * time.Minute
+
+// execStreamIdleProbeInterval 看门狗轮询间隔（检查"是否已超过空闲阈值"）
+const execStreamIdleProbeInterval = 15 * time.Second
+
+// execStreamIdleMaxProbeFailures 空闲探测中 inspect 连续失败（daemon 无响应）
+// 达到该次数后不再等待：关闭连接让节点尽快失败，而不是又一个僵尸 running。
+const execStreamIdleMaxProbeFailures = 3
+
 // DockerExecutor Docker执行器实现
 type DockerExecutor struct {
 	client            *client.Client
@@ -54,6 +71,7 @@ type DockerExecutor struct {
 	ttyHeight         uint               // TTY 终端高度
 	ttyWidth          uint               // TTY 终端宽度
 	daemonTimeout     time.Duration      // daemon 控制面请求响应超时（0 表示 defaultDaemonTimeout）
+	streamIdleTimeout time.Duration      // exec 输出流空闲探测阈值（0 表示 defaultExecStreamIdleTimeout）
 	currentExecCancel context.CancelFunc // 用于取消当前执行的命令
 	mu                sync.RWMutex
 }
@@ -334,9 +352,15 @@ func (d *DockerExecutor) Prepare(ctx context.Context) error {
 
 	// 构建容器配置
 	// 当启用 TTY 时，容器本身也需要开启 TTY，以保证 exec attach 的 TTY 模式能正常工作
+	//
+	// 保活命令用 `tail -f /dev/null`（任意时长）而不是 `sleep 3600`：单次 sleep 会把
+	// 容器寿命钉死在 1 小时，与节点实际运行时长无关 —— 长任务（FLUX 采样、批量换装等）
+	// 跑过 1 小时，容器 PID 1 自然退出，容器内节点进程被一并杀掉，而 attach 流在隧道上
+	// 收不到 FIN，节点永久停在 running（exec 826 事故）。容器生命周期由 Destruction
+	// 负责 stop+remove；这里只做保活，不再设上限。
 	containerConfig := &container.Config{
 		Image:        fullImage,
-		Cmd:          []string{"sleep", "3600"},
+		Cmd:          []string{"tail", "-f", "/dev/null"},
 		WorkingDir:   d.workdir,
 		Env:          d.buildEnvList(),
 		AttachStdout: true,
@@ -394,17 +418,17 @@ func (d *DockerExecutor) Destruction(ctx context.Context) error {
 		return nil
 	}
 
-	// 停止容器
+	// 停止容器（尽力而为：瞬断重试，失败不阻断后续 force remove）
 	timeout := 10
-	_ = d.client.ContainerStop(ctx, d.containerID, container.StopOptions{
-		Timeout: &timeout,
+	_ = d.controlCall(ctx, "stop container", func(cctx context.Context) error {
+		return d.client.ContainerStop(cctx, d.containerID, container.StopOptions{Timeout: &timeout})
 	})
 
-	// 删除容器
-	if err := d.client.ContainerRemove(ctx, d.containerID, container.RemoveOptions{
-		Force: true,
+	// 删除容器（瞬断重试：隧道抖一下就留一个残留容器，今天已人工清过两个）
+	if err := d.controlCall(ctx, "remove container", func(cctx context.Context) error {
+		return d.client.ContainerRemove(cctx, d.containerID, container.RemoveOptions{Force: true})
 	}); err != nil {
-		return fmt.Errorf("failed to remove container: %w", err)
+		return fmt.Errorf("failed to remove container: %w", d.daemonErrHint(err))
 	}
 
 	d.containerID = ""
@@ -538,12 +562,17 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 		execConfig.Env = envList
 	}
 
-	// 控制面调用（创建 exec）：daemon 无响应时有界失败，避免节点卡在 running
-	createCtx, createCancel := d.controlContext(ctx)
-	execResp, err := d.client.ContainerExecCreate(createCtx, containerID, execConfig)
-	createCancel()
-	if err != nil {
-		return 0, fmt.Errorf("failed to create exec: %w", err)
+	// 控制面调用（创建 exec）：daemon 无响应时有界失败，且瞬断（EOF/RST）自动重试。
+	// 穿隧道时这条 POST 是纯粹的新建连接，被中间设备/代理掐断的概率最高（exec 831：
+	// VaeDecode 卡在 `Post .../exec: EOF`，而此处此前是唯一没有重试的控制面调用）。
+	// 重试幂等：exec create 只创建不运行，重复创建最多留下一个未启动的 exec，随容器一同销毁。
+	var execResp container.ExecCreateResponse
+	if err := d.controlCall(ctx, "exec create", func(cctx context.Context) error {
+		var cerr error
+		execResp, cerr = d.client.ContainerExecCreate(cctx, containerID, execConfig)
+		return cerr
+	}); err != nil {
+		return 0, fmt.Errorf("failed to create exec: %w", d.daemonErrHint(err))
 	}
 
 	attachResp, err := d.attachExec(ctx, execResp.ID)
@@ -646,6 +675,10 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 	// 已送达的前缀，只补发缺失的尾部（避免整段重复）。重挂提示行不计入（它不在日志里）。
 	streamBytes := 0
 
+	// 最近一次收到输出流字节的时间（纳秒）：空闲看门狗的判定依据。
+	var lastOutput atomic.Int64
+	lastOutput.Store(time.Now().UnixNano())
+
 	scanRound := func(reader io.Reader) error {
 		var outputReader io.Reader = reader
 		if !d.tty {
@@ -662,6 +695,7 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 		for scanner.Scan() {
 			line := scanner.Text()
 			streamBytes += len(line) + 1 // ≈ 该行在容器内日志中占用的字节数
+			lastOutput.Store(time.Now().UnixNano())
 
 			if strings.TrimSpace(line) == "```flowx-input" {
 				inInputBlock = true
@@ -691,6 +725,59 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 	}
 
 	truncated := 0
+
+	// 空闲看门狗：容器退出/隧道静默死锁时，scanner 会永久阻塞在 Read 上
+	// （穿隧道时对端退出不传 FIN，既无 EOF 也无错误），下面的 classifyStreamEnd
+	// 永远没机会执行，节点就停在 running（exec 826 事故：容器 1h 保活到期退出，
+	// 执行卡片永远"运行中"）。这里在"距上次活动超过阈值"时主动 inspect exec：
+	//   - exec 已停止 ⇒ 关闭当前连接打断阻塞读，交给 classifyStreamEnd 收尾
+	//   - exec 仍在运行 ⇒ 只是静默长任务（编译/下载/无日志采样），续等
+	//   - inspect 连续失败 ⇒ daemon 无响应，同样关闭连接让节点尽快失败
+	idleTimeout := d.streamIdleTimeoutValue()
+	go func() {
+		ticker := time.NewTicker(execStreamIdleProbeInterval)
+		defer ticker.Stop()
+		probeFailures := 0
+		for {
+			select {
+			case <-done:
+				return
+			case <-execCtx.Done():
+				return
+			case <-ticker.C:
+				idleReached := time.Since(time.Unix(0, lastOutput.Load())) >= idleTimeout
+				if !idleReached {
+					continue
+				}
+				running, ierr := d.execRunning(execCtx, execResp.ID)
+				action, failures := classifyIdleProbe(idleReached, running, ierr, probeFailures)
+				probeFailures = failures
+				if action == execIdleWait {
+					if ierr == nil && running {
+						// 静默但确实在跑：视为已确认活跃，重新计时
+						lastOutput.Store(time.Now().UnixNano())
+					}
+					continue
+				}
+				if outputCallback != nil {
+					reason := "exec 已不在运行"
+					if ierr != nil {
+						reason = fmt.Sprintf("daemon 探测失败: %v", ierr)
+					}
+					outputCallback([]byte(fmt.Sprintf(
+						"[flowx] exec 输出流空闲 %s，%s，终止等待\n", idleTimeout, reason)))
+				}
+				connMu.Lock()
+				conn := curConn
+				connMu.Unlock()
+				if conn != nil {
+					_ = conn.Close()
+				}
+				return
+			}
+		}
+	}()
+
 	for {
 		scanErr := scanRound(attachResp.Reader)
 
@@ -773,6 +860,42 @@ func (d *DockerExecutor) executeCommandInContainerStreaming(ctx context.Context,
 // execStreamMaxReattach docker exec 输出流被中断后的最大重挂次数
 // （退避 0.5s/1s/2s，每次重挂能继续读到之后的输出）。
 const execStreamMaxReattach = 30 // 长任务（SDXL+InstantID ~40min）下穿隧道的截断周期远多于 6 次
+
+// execIdleAction 空闲探测的处置结果
+// （抽成纯函数便于单测：看门狗判定不依赖真 docker）。
+type execIdleAction int
+
+const (
+	// execIdleWait 继续等待（未到阈值 / 静默但进程仍在运行 / 探测失败次数未达上限）
+	execIdleWait execIdleAction = iota
+	// execIdleAbort 关闭连接打断阻塞读：exec 已停止或 daemon 探测一直失败
+	execIdleAbort
+)
+
+// classifyIdleProbe 判定一次"空闲到期"探测的处置。
+//
+// 背景：容器退出/隧道静默死锁时 attach 流的 Read 会永久阻塞（既无 EOF 也无错误），
+// 靠它把节点从 running 里拉出来。判定规则：
+//   - 未到阈值：继续等
+//   - 探测到 exec 仍在运行：只是静默长任务，继续等（不重挂，避免日志重复）
+//   - exec 已停止：立即收尾（让 classifyStreamEnd 走正常结束/取退出码）
+//   - 探测失败（daemon 无响应）：容忍连续 maxFailures 次后收尾，不留僵尸
+func classifyIdleProbe(idleReached, running bool, probeErr error, failures int) (execIdleAction, int) {
+	if !idleReached {
+		return execIdleWait, failures
+	}
+	if probeErr == nil && running {
+		// 静默但确实在跑：清零失败计数，继续等
+		return execIdleWait, 0
+	}
+	if probeErr != nil {
+		failures++
+		if failures < execStreamIdleMaxProbeFailures {
+			return execIdleWait, failures
+		}
+	}
+	return execIdleAbort, failures
+}
 
 // attachResultContainerExecAttach 结果（供带超时的 attachExec 与延迟回收使用）
 type attachResult struct {
@@ -1231,6 +1354,23 @@ func (d *DockerExecutor) setDaemonTimeout(timeout time.Duration) {
 	d.daemonTimeout = timeout
 }
 
+// setStreamIdleTimeout 设置 exec 输出流空闲探测阈值（<=0 表示用默认值）
+func (d *DockerExecutor) setStreamIdleTimeout(timeout time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.streamIdleTimeout = timeout
+}
+
+// streamIdleTimeoutValue 返回 exec 输出流空闲探测阈值（并发安全）
+func (d *DockerExecutor) streamIdleTimeoutValue() time.Duration {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if d.streamIdleTimeout > 0 {
+		return d.streamIdleTimeout
+	}
+	return defaultExecStreamIdleTimeout
+}
+
 // GetContainerID 获取容器ID
 func (d *DockerExecutor) GetContainerID() string {
 	d.mu.RLock()
@@ -1445,16 +1585,19 @@ func (d *DockerExecutor) runContainerCommand(ctx context.Context, command string
 		return "", fmt.Errorf("container not prepared")
 	}
 
-	// 创建 exec 是控制面调用：daemon 无响应时有界失败
-	createCtx, createCancel := d.controlContext(ctx)
-	execResp, err := d.client.ContainerExecCreate(createCtx, containerID, container.ExecOptions{
-		Cmd:          []string{d.detectShell(), "-c", command},
-		AttachStdout: true,
-		AttachStderr: true,
-	})
-	createCancel()
-	if err != nil {
-		return "", fmt.Errorf("failed to create exec: %w", err)
+	// 创建 exec 是控制面调用：daemon 无响应时有界失败，瞬断（EOF/RST）自动重试
+	// （与主执行路径一致：穿隧道时这条 POST 最易被掐断）
+	var execResp container.ExecCreateResponse
+	if err := d.controlCall(ctx, "exec create", func(cctx context.Context) error {
+		var cerr error
+		execResp, cerr = d.client.ContainerExecCreate(cctx, containerID, container.ExecOptions{
+			Cmd:          []string{d.detectShell(), "-c", command},
+			AttachStdout: true,
+			AttachStderr: true,
+		})
+		return cerr
+	}); err != nil {
+		return "", fmt.Errorf("failed to create exec: %w", d.daemonErrHint(err))
 	}
 	attachResp, err := d.attachExec(ctx, execResp.ID)
 	if err != nil {

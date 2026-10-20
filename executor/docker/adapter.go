@@ -40,6 +40,9 @@ func NewDockerAdapter() *DockerAdapter {
 //     默认 15s）。host 能 TCP 连上但 daemon 不响应时，无超时的请求会永久挂起，
 //     节点停在 running；设置后此类异常在超时后快速失败。只限制响应头等待，
 //     不影响镜像拉取流/exec attach 长连接的响应体读取。
+//   - streamIdleTimeout: exec 输出流空闲探测阈值（如 "3m" 或秒数 int/float，默认 3m）。
+//     穿隧道时容器退出不传 FIN，attach 读会永久阻塞（既无 EOF 也无错误），节点永远
+//     停在 running；到期后主动 inspect exec：已停止则关闭连接收尾，仍运行则续等。
 func (a *DockerAdapter) Config(ctx context.Context, config map[string]any) error {
 	a.config = config
 	return nil

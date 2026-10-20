@@ -45,6 +45,56 @@ func TestClassifyStreamEnd(t *testing.T) {
 	}
 }
 
+// 空闲探测处置（纯函数，无需 docker daemon）：
+// 容器退出/隧道静默死锁时 attach 读会永久阻塞，靠它把节点从 running 里拉出来。
+func TestClassifyIdleProbe(t *testing.T) {
+	errProbe := fmt.Errorf("daemon not responding")
+	cases := []struct {
+		name        string
+		idleReached bool
+		running     bool
+		probeErr    error
+		failures    int
+		wantAction  execIdleAction
+		wantFailure int
+	}{
+		{"未到空闲阈值", false, false, nil, 0, execIdleWait, 0},
+		{"静默但进程仍在运行", true, true, nil, 0, execIdleWait, 0},
+		{"静默仍在运行且消掉历史失败计数", true, true, nil, 2, execIdleWait, 0},
+		{"进程已退出", true, false, nil, 0, execIdleAbort, 0},
+		{"探测失败首次容忍", true, false, errProbe, 0, execIdleWait, 1},
+		{"探测失败第二次容忍", true, false, errProbe, 1, execIdleWait, 2},
+		{"探测失败达上限收尾", true, false, errProbe, execStreamIdleMaxProbeFailures - 1, execIdleAbort, execStreamIdleMaxProbeFailures},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			action, failures := classifyIdleProbe(tc.idleReached, tc.running, tc.probeErr, tc.failures)
+			if action != tc.wantAction || failures != tc.wantFailure {
+				t.Fatalf("classifyIdleProbe(%v,%v,%v,%d) = (%v,%d), want (%v,%d)",
+					tc.idleReached, tc.running, tc.probeErr, tc.failures,
+					action, failures, tc.wantAction, tc.wantFailure)
+			}
+		})
+	}
+}
+
+// 空闲阈值配置：零值走默认，显式配置生效（executor 配置 streamIdleTimeout）
+func TestStreamIdleTimeoutValue(t *testing.T) {
+	d := NewDockerExecutorWithClient(nil)
+	if got := d.streamIdleTimeoutValue(); got != defaultExecStreamIdleTimeout {
+		t.Fatalf("默认阈值 = %v, want %v", got, defaultExecStreamIdleTimeout)
+	}
+	d.setStreamIdleTimeout(45 * time.Second)
+	if got := d.streamIdleTimeoutValue(); got != 45*time.Second {
+		t.Fatalf("配置后阈值 = %v, want 45s", got)
+	}
+	// <=0 回到默认
+	d.setStreamIdleTimeout(0)
+	if got := d.streamIdleTimeoutValue(); got != defaultExecStreamIdleTimeout {
+		t.Fatalf("零值应回退默认，得到 %v", got)
+	}
+}
+
 func TestExecStreamReattachBackoff(t *testing.T) {
 	want := []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second}
 	for i, w := range want {
@@ -83,6 +133,10 @@ type fakeDaemon struct {
 	// captureLog：容器内 tee 落盘的完整日志；兜底 exec 按 tail -c +N 截取后返回
 	captureLog string
 	cmds       map[string][]string // exec id → Cmd（断言命令包壳）
+	// execCreateFailTimes：前 N 次 POST /containers/{id}/exec 直接报 EOF（模拟隧道瞬断，
+	// exec 831 的真实现象）；用于验证控制面重试不会把瞬断当失败。
+	execCreateFailTimes int
+	execCreateCalls     int
 }
 
 func (f *fakeDaemon) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +173,17 @@ func (f *fakeDaemon) lastCmd(id string) []string {
 // handleExecCreate 模拟 POST /containers/{id}/exec → {Id}
 // 兜底命令（tee 日志的 tail/rm）用独立 exec id，避免干扰命令 exec 的 inspect 序列。
 func (f *fakeDaemon) handleExecCreate(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	f.execCreateCalls++
+	failThisCall := f.execCreateCalls <= f.execCreateFailTimes
+	f.mu.Unlock()
+	if failThisCall {
+		// 隧道被中间设备掐断：客户端会得到 `Post ...: EOF`（isTransientNetErr 判为瞬时）
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, "EOF")
+		return
+	}
+
 	var body struct{ Cmd []string }
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	id := "fake-exec"
@@ -334,6 +399,33 @@ func TestExecStream_TruncatedThenReattachRecovers(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("output missing %q\n---\n%s", want, got)
 		}
+	}
+}
+
+// 控制面瞬断重试：创建 exec 的 POST 被隧道提前 EOF（exec 831 事故形态），
+// 重试后应成功，而不是把瞬断当成节点失败。
+func TestExecCreate_TransientFailureRetries(t *testing.T) {
+	d := &fakeDaemon{
+		rounds:              [][]string{{"hello", "```flowx-yaml", "a: \"1\"", "```"}},
+		execCreateFailTimes: 1,
+	}
+	exec := newFakeExecutor(t, d)
+
+	var got []string
+	_, err := exec.executeCommandInContainerStreaming(context.Background(),
+		"echo hi", nil, "", func(b []byte) { got = append(got, string(b)) }, nil, nil)
+
+	if err != nil {
+		t.Fatalf("瞬断应被重试消化，got error: %v", err)
+	}
+	d.mu.Lock()
+	calls := d.execCreateCalls
+	d.mu.Unlock()
+	if calls != 2 {
+		t.Fatalf("exec create 调用次数 = %d, want 2（1 次瞬断 + 1 次成功）", calls)
+	}
+	if out := strings.Join(got, ""); !strings.Contains(out, "hello") {
+		t.Errorf("重试后应拿到输出，got %q", out)
 	}
 }
 

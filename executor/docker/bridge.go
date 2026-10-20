@@ -180,6 +180,15 @@ func applyConfigToExecutor(config map[string]any, executor *DockerExecutor) erro
 		}
 	}
 
+	// 应用 streamIdleTimeout（exec 输出流空闲探测阈值，如 "3m" / 180；
+	// 默认 3 分钟。空闲到期时主动 inspect 进程：已停止则关闭连接收尾，
+	// 避免容器退出/隧道静默后节点永久停在 running）
+	if v, ok := config["streamIdleTimeout"]; ok {
+		if dur, err := parseDaemonTimeout(v); err == nil {
+			executor.setStreamIdleTimeout(dur)
+		}
+	}
+
 	return nil
 }
 
