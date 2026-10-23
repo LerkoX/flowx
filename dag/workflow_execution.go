@@ -203,6 +203,12 @@ func (p *WorkflowImpl) executeLevels(ctx context.Context, dgaGraph *DGAGraph, ev
 	var firstErr error
 	levelIdx := startLevel
 
+	// fail-fast 上下文：同层任一节点失败即取消，让其余并行节点尽快退出
+	//（local 执行器收到取消会优雅终止进程树；docker 执行器走 ctx.Done() 路径），
+	// 而不是等所有兄弟节点跑完后流水线才失败。
+	runCtx, runCancel := context.WithCancel(ctx)
+	defer runCancel()
+
 	for levelIdx < len(levels) {
 		// 检查暂停信号
 		p.pauseMu.Lock()
@@ -255,10 +261,13 @@ func (p *WorkflowImpl) executeLevels(ctx context.Context, dgaGraph *DGAGraph, ev
 			wg.Add(1)
 			go func(n Node) {
 				defer wg.Done()
-				if err := p.executeNodeWithLifecycle(ctx, n); err != nil {
+				if err := p.executeNodeWithLifecycle(runCtx, n); err != nil {
 					errMu.Lock()
 					if firstErr == nil {
+						// 先记录真正的失败原因，再取消并行兄弟节点——
+						// 否则被取消节点返回的 ctx.Err() 可能抢先覆盖 firstErr
 						firstErr = err
+						runCancel()
 					}
 					errMu.Unlock()
 				}
@@ -374,6 +383,7 @@ func (p *WorkflowImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	exec, err := p.getOrCreateExecutor(ctx, executorName)
 	if err != nil {
 		fmt.Printf("Failed to get executor for node %s: %v\n", node.Id(), err)
+		p.pushErrorLog(ctx, node, "", fmt.Errorf("failed to get executor: %w", err))
 		// executor 获取/准备失败（如镜像拉取失败、daemon 不可达）也是节点失败，
 		// 必须触发 WorkflowNodeFailed——否则上游只能看到 node-start 没有收尾事件，
 		// 节点状态会永远停留在 running
@@ -388,13 +398,16 @@ func (p *WorkflowImpl) executeNodeWithLifecycle(ctx context.Context, node Node) 
 	// 执行节点
 	if err := p.executeNode(ctx, node, exec); err != nil {
 		fmt.Printf("Node %s execution failed: %v\n", node.Id(), err)
+		p.pushErrorLog(ctx, node, "", err)
 		// 节点执行失败时触发 WorkflowNodeFailed 事件
 		p.NotifyEventForNode(WorkflowNodeFailed, node)
 		// 清理当前节点
 		p.mu.Lock()
 		p.currentNode = nil
 		p.mu.Unlock()
-		return err
+		// 错误携带节点 ID：并行执行时多个节点同时失败，裸错误（如
+		// "command exited with code 1"）无法定位是哪个节点
+		return fmt.Errorf("node %s execution failed: %w", node.Id(), err)
 	}
 
 	// 通知节点完成
@@ -695,9 +708,13 @@ func (p *WorkflowImpl) handleResult(ctx context.Context, node Node, _ executor.E
 	case error:
 		handler.err = v
 		handler.count++
+		// 裸错误（含 executor panic 经 recover 转发的情况）也要进日志流，
+		// 否则命令未产生任何输出时失败完全静默
+		p.pushErrorLog(ctx, node, "", v)
 	case *executor.StepResult:
 		if v.Error != nil {
 			handler.err = v.Error
+			p.pushErrorLog(ctx, node, v.StepName, v.Error)
 		}
 
 		// 执行器报告输出流曾被截断（已尽力重挂/补齐）：节点可能绿灯但输出块不完整。
@@ -785,6 +802,26 @@ func (p *WorkflowImpl) handleInputRequest(node Node, event *executor.InputReques
 
 	// 触发暂停事件，通知监听器处理输入请求
 	p.NotifyEvent(WorkflowPaused)
+}
+
+// pushErrorLog 将节点/步骤失败推送到日志流（pusher）。
+// 此前失败只写入节点运行时状态，Studio 日志里看不到任何错误——
+// 尤其是命令静默失败（无 stderr 输出）或 executor 准备失败时。
+func (p *WorkflowImpl) pushErrorLog(ctx context.Context, node Node, stepName string, err error) {
+	if p.pusher == nil || err == nil {
+		return
+	}
+	msg := err.Error()
+	if stepName != "" {
+		msg = fmt.Sprintf("step %s failed: %s", stepName, msg)
+	}
+	_ = p.pusher.Push(ctx, logger.Entry{
+		Workflow: p.Id(),
+		Node:     node.Id(),
+		Level:    logger.LevelError,
+		Message:  msg,
+		Output:   msg,
+	})
 }
 
 // resultHandler 处理结果的辅助结构
