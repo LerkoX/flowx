@@ -89,9 +89,23 @@ func SetWorkflowParam(workflow dag.Workflow, param map[string]interface{}) {
 }
 
 // parseGraphEdges 解析图边关系
+// 按首行图头分派：stateDiagram(-v2) 走状态图解析；flowchart/graph 走流程图解析
+// （支持 subgraph 分组，分组仅作视觉归属，内部边递归拍平为普通边）
+func (r *RuntimeImpl) parseGraphEdges(graph dag.Graph, nodeMap map[string]dag.Node, graphStr string) {
+	firstLine, _, _ := strings.Cut(strings.TrimSpace(graphStr), "\n")
+	firstLine = strings.TrimSpace(firstLine)
+	if firstLine == "graph" || strings.HasPrefix(firstLine, "graph ") ||
+		firstLine == "flowchart" || strings.HasPrefix(firstLine, "flowchart ") {
+		r.parseFlowchartEdges(graph, nodeMap, graphStr)
+		return
+	}
+	r.parseStateDiagramEdges(graph, nodeMap, graphStr)
+}
+
+// parseStateDiagramEdges 解析 stateDiagram-v2 图边关系
 // 使用 mermaid-check 库解析 stateDiagram-v2 语法
 // 支持从边标签中解析条件表达式，例如：A --> B: label[{eq .Param}]
-func (r *RuntimeImpl) parseGraphEdges(graph dag.Graph, nodeMap map[string]dag.Node, graphStr string) {
+func (r *RuntimeImpl) parseStateDiagramEdges(graph dag.Graph, nodeMap map[string]dag.Node, graphStr string) {
 	stateParser := parser.NewStateParser()
 	diagram, err := stateParser.Parse(graphStr)
 	if err != nil {
@@ -138,6 +152,76 @@ func (r *RuntimeImpl) parseGraphEdges(graph dag.Graph, nodeMap map[string]dag.No
 			expression := r.extractExpression(transition.Label)
 
 			// 添加边关系（有条件表达式则创建条件边）
+			var edge dag.Edge
+			if expression != "" {
+				edge = dag.NewConditionalEdge(srcNode, destNode, expression)
+			} else {
+				edge = dag.NewDGAEdge(srcNode, destNode)
+			}
+			_ = graph.AddEdge(edge)
+		}
+	}
+}
+
+// flowchartStarToken flowchart 语法没有 [*] 起止伪状态，且 mermaid-check 的
+// flowchart 解析器只接受 \w+ 节点 ID；解析前把 [*] 替换为合法标识符占位
+const flowchartStarToken = "FLOWX_STAR"
+
+// parseFlowchartEdges 解析 flowchart/graph 图边关系
+// 边标签语法：A -->|{{expr}}| B（等价 stateDiagram 的 A --> B: {{expr}}）
+// 起止伪状态沿用 [*] 写法：[*] --> A 标记入口，A --> [*] 标记出口
+func (r *RuntimeImpl) parseFlowchartEdges(graph dag.Graph, nodeMap map[string]dag.Node, graphStr string) {
+	flowParser := parser.NewFlowchartParser()
+	diagram, err := flowParser.Parse(strings.ReplaceAll(graphStr, "[*]", flowchartStarToken))
+	if err != nil {
+		// 解析失败时静默返回，不建立边关系（与 stateDiagram 路径一致）
+		return
+	}
+	flowchart, ok := diagram.(*ast.Flowchart)
+	if !ok {
+		return
+	}
+	dgaGraph, isDGA := graph.(*dag.DGAGraph)
+	r.walkFlowchartStatements(flowchart.Statements, graph, nodeMap, dgaGraph, isDGA)
+}
+
+// walkFlowchartStatements 遍历 flowchart 语句提取边；subgraph 递归展开
+func (r *RuntimeImpl) walkFlowchartStatements(stmts []ast.Statement, graph dag.Graph, nodeMap map[string]dag.Node, dgaGraph *dag.DGAGraph, isDGA bool) {
+	for _, stmt := range stmts {
+		switch s := stmt.(type) {
+		case *ast.Subgraph:
+			// 分组仅作视觉归属，内部边递归拍平为普通边
+			r.walkFlowchartStatements(s.Statements, graph, nodeMap, dgaGraph, isDGA)
+		case *ast.Link:
+			from, to := s.From, s.To
+			if from == flowchartStarToken {
+				from = "[*]"
+			}
+			if to == flowchartStarToken {
+				to = "[*]"
+			}
+			// 记录入口节点（[*] --> X）
+			if from == "[*]" {
+				if isDGA && to != "[*]" {
+					dgaGraph.AddEntryNode(to)
+				}
+				continue
+			}
+			// 记录出口节点（X --> [*]）
+			if to == "[*]" {
+				if isDGA {
+					dgaGraph.AddExitNode(from)
+				}
+				continue
+			}
+
+			srcNode, srcExists := nodeMap[from]
+			destNode, destExists := nodeMap[to]
+			if !srcExists || !destExists {
+				continue
+			}
+
+			expression := r.extractExpression(s.Label)
 			var edge dag.Edge
 			if expression != "" {
 				edge = dag.NewConditionalEdge(srcNode, destNode, expression)
