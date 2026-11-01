@@ -1893,33 +1893,66 @@ func TestValidateImmutableFields_MaxLoopIterationsChanged(t *testing.T) {
 	}
 }
 
-// TestValidateImmutableFields_ParamChanged tests validation when param changes
+// TestValidateImmutableFields_ParamChanged Param 允许更新（快照是独立执行个体，
+// 未运行节点的 {{ Param.x }} 模板惰性解析；典型场景：换 service_url 后续跑）
 func TestValidateImmutableFields_ParamChanged(t *testing.T) {
 	old := &core.WorkflowConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v1"}}
 	newCfg := &core.WorkflowConfig{Version: "1.0", Name: "test", Param: map[string]interface{}{"k": "v2"}}
 
 	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when Param changed")
+	if err != nil {
+		t.Errorf("Param update should be allowed, got: %v", err)
 	}
 }
 
-// TestValidateImmutableFields_ExecutorsChanged tests validation when executors change
+// TestValidateImmutableFields_ExecutorsChanged 执行器条目：可新增、
+// 无引用可删；被修改或被节点引用时删除 → 拒绝
 func TestValidateImmutableFields_ExecutorsChanged(t *testing.T) {
+	// 仅新增条目（旧 local 保留 + 新 docker）：允许
 	old := &core.WorkflowConfig{
 		Version:   "1.0",
 		Name:      "test",
 		Executors: map[string]core.ExecutorConfig{"local": {Type: "local"}},
 	}
 	newCfg := &core.WorkflowConfig{
-		Version:   "1.0",
-		Name:      "test",
-		Executors: map[string]core.ExecutorConfig{"docker": {Type: "docker"}},
+		Version: "1.0",
+		Name:    "test",
+		Executors: map[string]core.ExecutorConfig{
+			"local":  {Type: "local"},
+			"docker": {Type: "docker"},
+		},
+	}
+	if err := validateImmutableFields(old, newCfg); err != nil {
+		t.Errorf("additive executor should be allowed, got: %v", err)
 	}
 
-	err := validateImmutableFields(old, newCfg)
-	if err == nil {
-		t.Error("Expected error when Executors changed")
+	// 删除无节点引用的条目：允许
+	if err := validateImmutableFields(old, &core.WorkflowConfig{
+		Version: "1.0", Name: "test",
+	}); err != nil {
+		t.Errorf("removing unreferenced executor should be allowed, got: %v", err)
+	}
+
+	// 删除仍被节点引用的条目：拒绝
+	oldWithNode := &core.WorkflowConfig{
+		Version:   "1.0",
+		Name:      "test",
+		Executors: map[string]core.ExecutorConfig{"local": {Type: "local"}},
+		Nodes:     map[string]core.NodeConfig{"A": {Executor: "local"}},
+	}
+	if err := validateImmutableFields(oldWithNode, &core.WorkflowConfig{
+		Version: "1.0", Name: "test",
+		Nodes: map[string]core.NodeConfig{"A": {Executor: "local"}},
+	}); err == nil {
+		t.Error("Expected error when removing referenced executor")
+	}
+
+	// 修改已有条目：拒绝
+	if err := validateImmutableFields(old, &core.WorkflowConfig{
+		Version: "1.0", Name: "test",
+		Executors: map[string]core.ExecutorConfig{"local": {Type: "local", Config: map[string]any{"shell": "bash"}}},
+	}); err == nil {
+		t.Error("Expected error when executor modified")
 	}
 }
 

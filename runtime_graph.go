@@ -321,10 +321,22 @@ func (r *RuntimeImpl) ModifyGraph(ctx context.Context, id string, modifications 
 			replacedIDs[nodeID] = true
 		}
 	}
+	// 被「纯删除」（RemoveNodes 但不在 AddNodes）的节点：其关联边随之消亡，
+	// 不再恢复——否则无法删除一个仍被已替换节点边引用的失败节点
+	// （只能改成透传节点曲线救国的教训）
+	deletedIDs := make(map[string]bool)
+	for _, nodeID := range modifications.RemoveNodes {
+		if !addNodeIDs[nodeID] {
+			deletedIDs[nodeID] = true
+		}
+	}
 	var replacedEdges []edgeSnapshot
 	if len(replacedIDs) > 0 {
 		for _, edge := range graph.Edges() {
 			sid, tid := edge.Source().Id(), edge.Target().Id()
+			if deletedIDs[sid] || deletedIDs[tid] {
+				continue
+			}
 			if replacedIDs[sid] || replacedIDs[tid] {
 				replacedEdges = append(replacedEdges, edgeSnapshot{sid, tid, edge.Expression()})
 			}
@@ -559,6 +571,16 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 	r.mu.Lock()
 	if config, ok := r.workflowConfigs[id]; ok {
 		config.Graph = newConfig.Graph
+		// Param 允许更新（validateImmutableFields 已放行）：持久化新值，
+		// 未运行节点的 {{ Param.x }} 模板按新值解析
+		config.Param = newConfig.Param
+		// 执行器条目合并：新增项补上、无引用删除项剔除
+		//（validateExecutorsAdditive 已保证已有条目未被修改、被引用的未被删除）
+		for name := range config.Executors {
+			if _, ok := newConfig.Executors[name]; !ok {
+				delete(config.Executors, name)
+			}
+		}
 		// 持久化新增执行器条目（validateExecutorsAdditive 已保证已有条目未改删），
 		// 否则 ExportExecutionConfig 导出的快照丢失新增条目
 		if len(newConfig.Executors) > 0 {
@@ -603,12 +625,10 @@ func validateImmutableFields(old, new *core.WorkflowConfig) error {
 	if old.MaxLoopIterations != new.MaxLoopIterations {
 		return fmt.Errorf("%w: MaxLoopIterations cannot be updated", core.ErrImmutableField)
 	}
-	// nil 与空 map 视为相等：首次运行经 renderConfig 后 Param 被归一化为非 nil
-	// 空 map，而新配置仅解析时为 nil，直接 DeepEqual 会误判
-	if !reflect.DeepEqual(emptyMapToNil(old.Param), emptyMapToNil(new.Param)) {
-		return fmt.Errorf("%w: Param cannot be updated", core.ErrImmutableField)
-	}
-	if err := validateExecutorsAdditive(old.Executors, new.Executors); err != nil {
+	// Param 允许更新：快照是独立执行个体，Param 模板在未运行节点的 env/params
+	// 里是惰性解析的（成功节点早已按旧值终结，不受影响）。典型场景：切换
+	// service_url/service_token 后续跑剩余节点，不必整炉重跑。
+	if err := validateExecutorsAdditive(old.Executors, new.Executors, new.Nodes); err != nil {
 		return err
 	}
 	oldLog, newLog := old.Logging, new.Logging
@@ -648,21 +668,49 @@ func emptyMapToNil(m map[string]interface{}) map[string]interface{} {
 	return m
 }
 
-// validateExecutorsAdditive 校验执行器变更：快照中已有的条目不可修改/删除，
-// 但允许新增条目（续跑追加的节点可能引入快照之外类型的执行器，如 docker）
-func validateExecutorsAdditive(old, new map[string]core.ExecutorConfig) error {
+// validateExecutorsAdditive 校验执行器变更：快照中已有的条目不可修改；
+// 允许新增条目（续跑追加的节点可能引入快照之外类型的执行器，如 docker）；
+// 允许删除**无任何节点引用**的条目（节点重写为编写态后，物化残留的
+// docker 执行器条目不应堵死快照更新）
+func validateExecutorsAdditive(old, new map[string]core.ExecutorConfig, nodes map[string]core.NodeConfig) error {
 	normOld := normalizeExecutors(old)
 	normNew := normalizeExecutors(new)
 	for name, oldExec := range normOld {
 		newExec, ok := normNew[name]
 		if !ok {
-			return fmt.Errorf("%w: executor %q cannot be removed", core.ErrImmutableField, name)
+			if executorReferenced(name, nodes) {
+				return fmt.Errorf("%w: executor %q cannot be removed (still referenced by nodes)", core.ErrImmutableField, name)
+			}
+			continue
 		}
 		if !reflect.DeepEqual(oldExec, newExec) {
 			return fmt.Errorf("%w: executor %q cannot be modified", core.ErrImmutableField, name)
 		}
 	}
 	return nil
+}
+
+// executorReferenced 检查执行器名是否被任一节点引用：物化节点的节点级
+// Executor 字段，或编写态节点 Config.executor（string 简写或 {type,ref} 对象）
+func executorReferenced(name string, nodes map[string]core.NodeConfig) bool {
+	for _, nc := range nodes {
+		if nc.Executor == name {
+			return true
+		}
+		if ex, ok := nc.Config["executor"]; ok {
+			switch v := ex.(type) {
+			case string:
+				if v == name {
+					return true
+				}
+			case map[string]any:
+				if v["ref"] == name || v["type"] == name {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // normalizeExecutors 归一化 Executors 配置：空 map 为 nil、各 entry 的 Config 空 map 为 nil
