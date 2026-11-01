@@ -560,6 +560,14 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 		}
 	}
 
+	// 配置增量（Param / Executors / Graph 字段）先应用并持久化：
+	// 这三项可以不伴随任何节点/边变更（如只改 Param 或只增删执行器条目），
+	// 若放在 mods.IsEmpty() 早退之后会被静默丢弃（exec 1126 实测：
+	// 只加一个无引用执行器再导出快照，条目消失）。
+	if err := r.applyConfigDelta(id, workflow, newConfig); err != nil {
+		return err
+	}
+
 	if mods.IsEmpty() {
 		return nil
 	}
@@ -568,41 +576,68 @@ func (r *RuntimeImpl) UpdateConfig(ctx context.Context, id string, newConfigYAML
 		return err
 	}
 
+	return nil
+}
+
+// applyConfigDelta 将新配置中的 Param / Executors / Graph 字段合并进运行中
+// workflow 并同步到运行对象（SetParam / SetExecutorProvider）。与节点和边解耦，
+// 因此在一份「仅改参数」的续跑快照上也会生效。
+func (r *RuntimeImpl) applyConfigDelta(id string, workflow dag.Workflow,
+	newConfig *core.WorkflowConfig) error {
 	r.mu.Lock()
-	if config, ok := r.workflowConfigs[id]; ok {
-		config.Graph = newConfig.Graph
-		// Param 允许更新（validateImmutableFields 已放行）：持久化新值，
-		// 未运行节点的 {{ Param.x }} 模板按新值解析
-		config.Param = newConfig.Param
-		// 执行器条目合并：新增项补上、无引用删除项剔除
-		//（validateExecutorsAdditive 已保证已有条目未被修改、被引用的未被删除）
-		for name := range config.Executors {
-			if _, ok := newConfig.Executors[name]; !ok {
-				delete(config.Executors, name)
-			}
+	config, ok := r.workflowConfigs[id]
+	if !ok {
+		r.mu.Unlock()
+		return nil
+	}
+	config.Graph = newConfig.Graph
+	// Param 允许更新（validateImmutableFields 已放行）：持久化新值，
+	// 未运行节点的 {{ Param.x }} 模板按新值解析
+	config.Param = newConfig.Param
+	// 执行器条目合并：新增项补上、无引用删除项剔除
+	//（validateExecutorsAdditive 已保证已有条目未被修改、被引用的未被删除）
+	for name := range config.Executors {
+		if _, ok := newConfig.Executors[name]; !ok {
+			delete(config.Executors, name)
 		}
-		// 持久化新增执行器条目（validateExecutorsAdditive 已保证已有条目未改删），
-		// 否则 ExportExecutionConfig 导出的快照丢失新增条目
-		if len(newConfig.Executors) > 0 {
-			if config.Executors == nil {
-				config.Executors = make(map[string]core.ExecutorConfig)
-			}
-			for name, execConfig := range newConfig.Executors {
-				if _, exists := config.Executors[name]; !exists {
-					config.Executors[name] = execConfig
-				}
+	}
+	// 持久化新增执行器条目（validateExecutorsAdditive 已保证已有条目未改删），
+	// 否则 ExportExecutionConfig 导出的快照丢失新增条目
+	if len(newConfig.Executors) > 0 {
+		if config.Executors == nil {
+			config.Executors = make(map[string]core.ExecutorConfig)
+		}
+		for name, execConfig := range newConfig.Executors {
+			if _, exists := config.Executors[name]; !exists {
+				config.Executors[name] = execConfig
 			}
 		}
 	}
+	paramNow := config.Param
+	execsNow := make(map[string]core.ExecutorConfig, len(config.Executors))
+	for k, v := range config.Executors {
+		execsNow[k] = v
+	}
 	r.mu.Unlock()
+
+	// Param 同步到运行中 workflow：节点模板（env/params/run）在**执行时**才
+	// 渲染，只改 config.Param 不同步会让未运行节点仍按旧值解析
+	// （exec 1125 实测：改 Param.mode=updated 后节点仍输出 initial）。
+	// 已终结节点不会重跑，不受影响。
+	if len(paramNow) > 0 {
+		if wf, ok := workflow.(*dag.WorkflowImpl); ok {
+			wf.SetParam(paramNow)
+		}
+	}
 
 	// 将合并后的执行器集合重新注册到运行中 workflow 的 provider：
 	// UpdateConfig 允许新增执行器条目（续跑追加异构节点，如 docker），
 	// 但 provider 是 LoadWorkflow 时按旧配置构建的，不重建会导致新节点
-	// 运行时报 executor config not found
-	if len(newConfig.Executors) > 0 {
+	// 运行时报 executor config not found；删除无引用条目时同样需要重建
+	// 才能让 provider 与快照一致。
+	if len(execsNow) > 0 {
 		execProvider := provider.NewProvider()
-		for name, execConfig := range newConfig.Executors {
+		for name, execConfig := range execsNow {
 			execProvider.RegisterExecutor(name, provider.ExecutorConfig{
 				Type:   execConfig.Type,
 				Config: execConfig.Config,

@@ -373,3 +373,123 @@ Nodes:
 		t.Error("Edge C->D should exist")
 	}
 }
+
+// UpdateConfig 改 Param 时必须同步到运行中 workflow（SetParam），否则未运行
+// 节点仍按旧值渲染模板（exec 1125 实测：Param.mode 改成 updated 后节点仍输出
+// initial）。已终结节点不重跑，不受影响。
+func TestUpdateConfig_ParamSyncedToWorkflow(t *testing.T) {
+	ctx := context.Background()
+	rt := NewRuntime(ctx).(*RuntimeImpl)
+	workflow, _ := helperSetupModifiableWorkflow(t, rt, "param-sync")
+
+	// 给存储配置一个初始 Param，模拟快照里已有值
+	rt.workflowConfigs["param-sync"].Param = map[string]interface{}{"mode": "initial"}
+
+	newYAML := `Version: "1.0"
+Name: modify-test
+Param:
+  mode: updated
+Executors:
+  local:
+    type: local
+    config: {}
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> [*]
+Nodes:
+  A:
+    name: A
+    executor: local
+    steps:
+      - name: step1
+        run: echo A
+  B:
+    name: B
+    executor: local
+    steps:
+      - name: step1
+        run: echo B
+  C:
+    name: C
+    executor: local
+    steps:
+      - name: step1
+        run: echo C
+`
+	if err := rt.UpdateConfig(ctx, "param-sync", newYAML); err != nil {
+		t.Fatalf("UpdateConfig() error = %v", err)
+	}
+
+	if got := rt.workflowConfigs["param-sync"].Param["mode"]; got != "updated" {
+		t.Errorf("stored Param.mode = %v, want updated", got)
+	}
+	// 运行对象上的 Param 必须同步（节点执行时按此渲染 {{ Param.x }}）
+	wp := workflow.(*dag.WorkflowImpl).GetParam()
+	if fi, ok := wp["mode"]; !ok {
+		t.Error("workflow Param 缺少 mode（SetParam 未同步）")
+	} else if got := core.GetValue(fi.Value); got != "updated" {
+		t.Errorf("workflow Param.mode = %v, want updated（SetParam 未同步）", got)
+	}
+}
+
+// 只改 Param / 只增删执行器条目（不涉及任何节点或边变更）时，UpdateConfig
+// 不能因为 modifications 为空而提前返回——否则变更被静默丢弃
+// （exec 1126 实测：加了无引用执行器再导出快照，条目消失）。
+func TestUpdateConfig_ConfigOnlyChangePersisted(t *testing.T) {
+	ctx := context.Background()
+	rt := NewRuntime(ctx).(*RuntimeImpl)
+	_, _ = helperSetupModifiableWorkflow(t, rt, "cfg-only")
+
+	cfgOnlyYAML := `Version: "1.0"
+Name: modify-test
+Param:
+  mode: only-param-changed
+Executors:
+  local:
+    type: local
+    config: {}
+  extra-unused:
+    type: docker
+    config:
+      host: tcp://127.0.0.1:2375
+Graph: |
+  stateDiagram-v2
+    [*] --> A
+    A --> B
+    B --> C
+    C --> [*]
+Nodes:
+  A:
+    name: A
+    executor: local
+    steps:
+      - name: step1
+        run: echo A
+  B:
+    name: B
+    executor: local
+    steps:
+      - name: step1
+        run: echo B
+  C:
+    name: C
+    executor: local
+    steps:
+      - name: step1
+        run: echo C
+`
+	if err := rt.UpdateConfig(ctx, "cfg-only", cfgOnlyYAML); err != nil {
+		t.Fatalf("UpdateConfig() error = %v", err)
+	}
+
+	cfg := rt.workflowConfigs["cfg-only"]
+	if _, ok := cfg.Executors["extra-unused"]; !ok {
+		t.Error("无节点/边变更时新增执行器条目应被持久化")
+	}
+	if got := cfg.Param["mode"]; got != "only-param-changed" {
+		t.Errorf("无节点/边变更时 Param 应被持久化，got %v", got)
+	}
+}
